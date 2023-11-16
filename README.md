@@ -46,14 +46,7 @@ sim = fp.Simulation()
 
 ### Install FARGO3D
 
-For obvious reasons `FARGO3D` is not provided with `FARGOpy`. If you already have a copy of the package in your computer you just need to configure your copy setting the path directory where the copy is:
-
-
-```python
-fp.Conf.update_fargo3d_dir('/tmp','public')
-```
-
-If you don't have a copy you may want to get one using:
+For obvious reasons `FARGO3D` is not provided with `FARGOpy`. Get and set the package using:
 
 
 ```python
@@ -78,6 +71,18 @@ sim.set_fargo3d(basedir='.')
     	Compiling FARGO3D with GPU (it may take a while)...
     	No GPU available
 
+
+If you already have a copy of `FARGO3D` you just need to set the configuration variables telling `FARGOpy` where the source code is located:
+
+```python
+  fp.Conf.update_fargo3d_dir('/tmp','public')
+  ```
+
+once the variables has been set, you should run:
+
+```python
+  sim.set_fargo3d()
+  ```
 
 ## What's new
 
