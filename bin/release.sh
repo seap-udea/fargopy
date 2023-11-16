@@ -61,8 +61,8 @@ rm -rf dist/*
 # Report version
 ##################################################################
 echo $version >> .versions
-cp montu/version.py tmp/version.py.bak
-echo "version='$version'" > montu/version.py
+cp fargopy/version.py tmp/version.py.bak
+echo "version='$version'" > fargopy/version.py
 
 ##################################################################
 # Build package
