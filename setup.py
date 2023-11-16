@@ -25,7 +25,7 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         ],
-    version='0.0.2',
+    version='0.0.3',
 
     # ######################################################################
     # FILES
@@ -38,6 +38,7 @@ setuptools.setup(
     # ######################################################################
     entry_points={
         'console_scripts': ['install=fargopy.install:main'],
+        #
     },
 
     # ######################################################################
