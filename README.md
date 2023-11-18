@@ -398,5 +398,5 @@ Version 0.0.*:
 
 ------------
 
-This package has been designed and written mostly by Jorge I. Zuluaga with advising and contributions by Matía Montesinos (C) 2023
+This package has been designed and written mostly by Jorge I. Zuluaga with advising and contributions by Matías Montesinos (C) 2023
 
