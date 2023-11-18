@@ -362,24 +362,26 @@ class Conf(object):
                      logfile='/tmp/fargo.log',
                      options='',
                      mode='async',
+                     resume=False,
                      verbose=True):
         if Conf._check_fargo(Conf.FARGO3D_FULLDIR):
 
             # Run command
-            run_cmd = f"cd {Conf.FARGO3D_FULLDIR};nohup ./{fargo3d_binary} {options} &> {logfile} & echo $!"
+            run_cmd = f"cd {Conf.FARGO3D_FULLDIR};nohup {fargo3d_binary} {options} &> {logfile} & echo $!"
             
             # Let's run
             if mode == 'sync':
                 # Run it synchronously, showing the output while running
-                run_cmd = f"cd {Conf.FARGO3D_FULLDIR};./{fargo3d_binary} {options} |tee {logfile}"
+                run_cmd = f"cd {Conf.FARGO3D_FULLDIR};{fargo3d_binary} {options} |tee {logfile}"
                 print(f"Running synchronously: {run_cmd.replace('//','/')}")
                 Util.sysrun(run_cmd,verbose=verbose)
 
             elif mode == 'async':
                 # Run asynchronously in the background
-                run_cmd = f"./{fargo3d_binary} {options}"
+                run_cmd = f"{fargo3d_binary} {options}"
                 print(f"Running asynchronously: {run_cmd.replace('//','/')}")
-                logfile_handler=open(logfile,'w')
+                logmode = 'a' if resume else 'w'
+                logfile_handler=open(logfile,logmode)
                 process = subprocess.Popen(run_cmd.split(),cwd=Conf.FARGO3D_FULLDIR,
                                            stdout=logfile_handler,stderr=logfile_handler)
                 print(f"Command is running in background")
