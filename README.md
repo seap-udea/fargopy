@@ -35,7 +35,7 @@ fp.Conf.VERBOSE = False
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.1.0
+    Running FARGOpy version 0.1.1
 
 
 ## Install FARGO3D
@@ -48,10 +48,15 @@ fp.Conf.set_fargo3d()
 ```
 
     > Checking for FARGO3D directroy:
-    	✓FARGO3D source code is available in your system at './public/'
+    FARGO3D source code is not available at './public/'
+    	Getting FARGO3D public repo...
+    	✓Package downloaded to './public/'
     > Checking for FARGO3D normal binary:
+    FARGO3D binary with options '' not compiled at './public/'
+    	Compiling FARGO3D (it may take a while)...
     	✓Binary in normal mode compiling correctly
     > Checking for FARGO3D parallel binary:
+    FARGO3D binary with options 'PARALLEL=1' not compiled at './public/'
     	✓Binary in parallel mode compiling correctly
     > Checking for FARGO3D GPU binary:
     FARGO3D binary with options 'GPU=1' not compiled at './public/'
@@ -68,7 +73,7 @@ fp.Conf.show_fargo3d_configuration()
 
     Is FARGO3D installed:  True
     Is FARGO3D compiling:  True
-    Is FARGO3D compiling in parallel:  False
+    Is FARGO3D compiling in parallel:  True
     Is FARGO3D compiling in GPU:  False
     FARGO3D clone repositoty command:  git clone https://bitbucket.org/fargo3d/public.git
     FARGO3D directories: 
@@ -109,7 +114,7 @@ fp.Conf.show_fargo3d_configuration()
     	No GPU available
     Is FARGO3D installed:  True
     Is FARGO3D compiling:  True
-    Is FARGO3D compiling in parallel:  False
+    Is FARGO3D compiling in parallel:  True
     Is FARGO3D compiling in GPU:  False
     FARGO3D clone repositoty command:  git clone https://bitbucket.org/fargo3d/public.git
     FARGO3D directories: 

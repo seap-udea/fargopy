@@ -267,9 +267,11 @@ class Conf(object):
                 #print("\tCompiling FARGO3D in parallel (it may take a while)...")
                 if Conf._compile_fargo3d(options,quiet=True):
                     Conf.FARGO3D_PARALLEL = 1
+                    Conf.FARGO3D_IS_COMPILING_PARALLEL = True
                     print(f"\t✓Binary in parallel mode compiling correctly")
         else:
             Conf.FARGO3D_PARALLEL = 1
+            Conf.FARGO3D_IS_COMPILING_PARALLEL = True
             print(f"\t✓Binary in parallel mode compiling correctly")
 
         # Check if FARGO3D can be compiled in parallel
@@ -280,12 +282,14 @@ class Conf(object):
                 print("\tCompiling FARGO3D with GPU (it may take a while)...")
                 if Conf._compile_fargo3d(options,quiet=True):
                     Conf.FARGO3D_GPU = 1
+                    Conf.FARGO3D_IS_COMPILING_GPU = True
                     print(f"\t✓Binary in GPU mode compiling correctly")
                 else:
                     print(f"\tNo GPU available")
 
         else:
             Conf.FARGO3D_GPU = 1
+            Conf.FARGO3D_IS_COMPILING_GPU = True
             print(f"\t✓Binary in GPU mode compiling correctly")
 
     @staticmethod
