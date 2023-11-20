@@ -422,6 +422,104 @@ sim.status(mode='isrunning')
     	The process has ended with termination code 0.
 
 
+### Postprocessing output
+
+Let's run another setup:
+
+
+```python
+sim = fp.Simulation(setup='p3diso')
+sim.compile()
+```
+
+    Compiling FARGO3D with options 'SETUP=p3diso PARALLEL=0 GPU=0 ' (it may take a while... go for a coffee)
+
+
+And run it:
+
+
+```python
+sim.run()
+```
+
+    Running asynchronously: mpirun -np 1 ./.fargo3d_SETUP-p3diso_PARALLEL-1_GPU-0_ -m -t setups/p3diso/p3diso.par
+    Command is running in background
+
+
+Check output:
+
+
+```python
+sim.status('progress')
+```
+
+    OUTPUTS 2 at date t = 6.283185 OK [output pace = 0.1 secs]
+    OUTPUTS 3 at date t = 9.424778 OK [output pace = 0.1 secs]
+    OUTPUTS 4 at date t = 12.566371 OK [output pace = 12.6 secs]
+    OUTPUTS 5 at date t = 15.707963 OK [output pace = 18.9 secs]
+
+
+Stop it:
+
+
+```python
+sim.stop()
+```
+
+    The process is stopped.
+
+
+Get the latest snapshot:
+
+
+```python
+sim.get_resumable_snapshot()
+```
+
+
+
+
+    6
+
+
+
+You may load data items of the simulation:
+
+- Domain: 
+
+
+```python
+sim.load_domain()
+```
+
+    Loading domain...
+    Domain size:
+    	Variable 1 (periodic): 101
+    	Variable 2: 81
+    	Variable 3: 21
+    Problem in 3 dimensions
+    Building vargrids...
+    Done.
+
+
+- Variables:
+
+
+```python
+sim.load_variables()
+```
+
+    Loading variables
+    85 variables load. See <sim>.vars
+
+
+- Load a field:
+
+
+```python
+dens = sim.load_field(fluid='gas',field='dens')
+```
+
 ## What's new
 
 
