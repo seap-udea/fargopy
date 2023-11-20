@@ -48,32 +48,24 @@ fp.Conf.set_fargo3d()
 ```
 
     > Checking for FARGO3D directroy:
-    	✓FARGO3D source code is available in your system at './public/'
+    FARGO3D source code is not available at './public/'
+    	Getting FARGO3D public repo...
+    	✓Package downloaded to './public/'
     > Checking for FARGO3D normal binary:
+    FARGO3D binary with options '' not compiled at './public/'
+    	Compiling FARGO3D (it may take a while)...
+    Compiling FARGO3D with options '' (it may take a while... go for a coffee)
     	✓Binary in normal mode compiling correctly
     > Checking for FARGO3D parallel binary:
+    FARGO3D binary with options 'PARALLEL=1' not compiled at './public/'
+    	Compiling FARGO3D in parallel (it may take a while)...
+    Compiling FARGO3D with options 'PARALLEL=1' (it may take a while... go for a coffee)
     	✓Binary in parallel mode compiling correctly
     > Checking for FARGO3D GPU binary:
     FARGO3D binary with options 'GPU=1' not compiled at './public/'
     	Compiling FARGO3D with GPU (it may take a while)...
     Compiling FARGO3D with options 'GPU=1' (it may take a while... go for a coffee)
     	No GPU available
-
-
-These are the critical configuration variables that must be setup before starting working with `FARGOpy`:
-
-
-```python
-print("FARGO3D is present: ",fp.Conf.FARGO3D_IS_HERE)
-print("Is FARGO3D compiling: ",fp.Conf.FARGO3D_IS_COMPILING)
-print("Is FARGO3D compiling in parallel: ",fp.Conf.FARGO3D_PARALLEL)
-print("Is FARGO3D compiling in GPU: ",fp.Conf.FARGO3D_GPU)
-```
-
-    FARGO3D is present:  True
-    Is FARGO3D compiling:  True
-    Is FARGO3D compiling in parallel:  1
-    Is FARGO3D compiling in GPU:  0
 
 
 If you already have a copy of `FARGO3D` you just need to set the configuration variables telling `FARGOpy` where the source code is located:
