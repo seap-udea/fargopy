@@ -140,6 +140,8 @@ class Conf(object):
     FARGO3D_BINARY = 'fargo3d'
     FARGO3D_IS_HERE = False
     FARGO3D_IS_COMPILING = False
+    FARGO3D_IS_COMPILING_PARALLEL = False
+    FARGO3D_IS_COMPILING_GPU = False
     FARGO3D_PARALLEL = 0
     FARGO3D_GPU = 0
     SYS_STDOUT = ''
@@ -237,12 +239,12 @@ class Conf(object):
                 Conf.FARGO3D_IS_HERE = True
             else:
                 options = "" if no_basedir else f"basedir='{basedir}',"
-                print(f"\tDownload it with `set_fargo3d({options}react='get')` or set variable Conf.update_fargo3d_dir('{basedir}','public').""")
+                print(f"\tDownload it with `set_fargo3d({options}react='get')` or set variable Conf.configure_fargo3d('{basedir}','public').""")
                 return
         else:
             print(f"\t✓FARGO3D source code is available in your system at '{basedir+Conf.FARGO3D_PACKDIR}'")
             Conf.FARGO3D_IS_HERE = True
-            Conf.update_fargo3d_dir(basedir,Conf.FARGO3D_PACKDIR)
+            Conf.configure_fargo3d(basedir,Conf.FARGO3D_PACKDIR)
 
         # Check if FARGO3D can be compiled normally
         print("> Checking for FARGO3D normal binary:")
@@ -250,7 +252,7 @@ class Conf(object):
         if not Conf._check_fargo_binary(basedir+Conf.FARGO3D_PACKDIR,options):
             if 'compile' in react:
                 print("\tCompiling FARGO3D (it may take a while)...")
-                if Conf._compile_fargo3d(options):
+                if Conf._compile_fargo3d(options,quiet=True):
                     Conf.FARGO3D_IS_COMPILING = True
                     print(f"\t✓Binary in normal mode compiling correctly")
         else:
@@ -262,8 +264,8 @@ class Conf(object):
         options='PARALLEL=1'
         if not Conf._check_fargo_binary(basedir+Conf.FARGO3D_PACKDIR,options):
             if 'parallel' in react:
-                print("\tCompiling FARGO3D in parallel (it may take a while)...")
-                if Conf._compile_fargo3d(options):
+                #print("\tCompiling FARGO3D in parallel (it may take a while)...")
+                if Conf._compile_fargo3d(options,quiet=True):
                     Conf.FARGO3D_PARALLEL = 1
                     print(f"\t✓Binary in parallel mode compiling correctly")
         else:
@@ -312,7 +314,7 @@ class Conf(object):
     def _get_fargo(basedir):
         error,out = Util.sysrun(f'cd {basedir};{Conf.FARGO3D_CLONE_REPO_CMD}',verbose=False)
         if Util.QERROR <= 0:
-            Conf.update_fargo3d_dir(basedir,Conf.FARGO3D_PACKDIR)
+            Conf.configure_fargo3d(basedir,Conf.FARGO3D_PACKDIR)
             print(f"\t✓Package downloaded to '{Conf.FARGO3D_FULLDIR}'")
             FARGO3D_IS_HERE = True
         else:
@@ -337,7 +339,8 @@ class Conf(object):
 
             if lets_compile:
 
-                print(f"Compiling FARGO3D with options '{options}' (it may take a while... go for a coffee)")
+                if not quiet:
+                    print(f"Compiling FARGO3D with options '{options}' (it may take a while... go for a coffee)")
 
                 # Compile with options
                 error,out = Util.sysrun(f'make -C {Conf.FARGO3D_FULLDIR} {options}',verbose=False)
@@ -392,11 +395,35 @@ class Conf(object):
         return options.replace(' ','_').replace('=','-')
     
     @staticmethod
-    def update_fargo3d_dir(basedir,packdir):
-        Conf.FARGO3D_BASEDIR = basedir
-        Conf.FARGO3D_PACKDIR = packdir
-        Conf.FARGO3D_FULLDIR = basedir + packdir
+    def configure_fargo3d(basedir='.',packdir='public',parallel=None,gpu=None):
+        
+        # Configure directories
+        Conf.FARGO3D_BASEDIR = (basedir + "/").replace('//','/')
+        Conf.FARGO3D_PACKDIR = (packdir + "/").replace('//','/')
+        Conf.FARGO3D_FULLDIR = (basedir + packdir).replace('//','/')
 
+        # Configure compiling options
+        if parallel is not None:
+            Conf.parallel = parallel
+        if gpu is not None:
+            Conf.gpu = gpu
+
+    @staticmethod
+    def show_fargo3d_configuration():
+        print("Is FARGO3D installed: ",Conf.FARGO3D_IS_HERE)
+        print("Is FARGO3D compiling: ",Conf.FARGO3D_IS_COMPILING)
+        print("Is FARGO3D compiling in parallel: ",Conf.FARGO3D_IS_COMPILING_PARALLEL)
+        print("Is FARGO3D compiling in GPU: ",Conf.FARGO3D_IS_COMPILING_GPU)
+        print("FARGO3D clone repositoty command: ",Conf.FARGO3D_CLONE_REPO_CMD)
+        print("FARGO3D directories: ")
+        print("\tBase directory: ",Conf.FARGO3D_BASEDIR)
+        print("\tPackage directory: ",Conf.FARGO3D_PACKDIR)
+        print("\tBasic package header: ",Conf.FARGO3D_HEADER)
+        print("\tSetups location: ",Conf.FARGO3D_SETUPS)
+        print("\tSetups location: ",Conf.FARGO3D_FULLDIR)
+        print("Compile in parallel: ",Conf.FARGO3D_PARALLEL)
+        print("Compile in GPU: ",Conf.FARGO3D_GPU)
+    
     @staticmethod
     def _check_setup(setup):
         setup_dir = f"{Conf.FARGO3D_SETUPS}/{setup}"

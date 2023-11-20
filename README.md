@@ -48,37 +48,79 @@ fp.Conf.set_fargo3d()
 ```
 
     > Checking for FARGO3D directroy:
-    FARGO3D source code is not available at './public/'
-    	Getting FARGO3D public repo...
-    	✓Package downloaded to './public/'
+    	✓FARGO3D source code is available in your system at './public/'
     > Checking for FARGO3D normal binary:
-    FARGO3D binary with options '' not compiled at './public/'
-    	Compiling FARGO3D (it may take a while)...
-    Compiling FARGO3D with options '' (it may take a while... go for a coffee)
     	✓Binary in normal mode compiling correctly
     > Checking for FARGO3D parallel binary:
-    FARGO3D binary with options 'PARALLEL=1' not compiled at './public/'
-    	Compiling FARGO3D in parallel (it may take a while)...
-    Compiling FARGO3D with options 'PARALLEL=1' (it may take a while... go for a coffee)
     	✓Binary in parallel mode compiling correctly
     > Checking for FARGO3D GPU binary:
     FARGO3D binary with options 'GPU=1' not compiled at './public/'
     	Compiling FARGO3D with GPU (it may take a while)...
-    Compiling FARGO3D with options 'GPU=1' (it may take a while... go for a coffee)
     	No GPU available
+
+
+Once set, check configuration:
+
+
+```python
+fp.Conf.show_fargo3d_configuration()
+```
+
+    Is FARGO3D installed:  True
+    Is FARGO3D compiling:  True
+    Is FARGO3D compiling in parallel:  False
+    Is FARGO3D compiling in GPU:  False
+    FARGO3D clone repositoty command:  git clone https://bitbucket.org/fargo3d/public.git
+    FARGO3D directories: 
+    	Base directory:  ./
+    	Package directory:  public/
+    	Basic package header:  src/fargo3d.h
+    	Setups location:  setups/
+    	Setups location:  ./public/
+    Compile in parallel:  1
+    Compile in GPU:  0
 
 
 If you already have a copy of `FARGO3D` you just need to set the configuration variables telling `FARGOpy` where the source code is located:
 
-```python
-  fp.Conf.update_fargo3d_dir('/tmp','public')
-  ```
-
-once the variables has been set, you should run:
 
 ```python
-  fp.Conf.set_fargo3d()
-  ```
+fp.Conf.configure_fargo3d(basedir='/tmp',packdir='public',parallel=1,gpu=0)
+
+```
+
+Once the variables has been set, you should set the package:
+
+
+```python
+fp.Conf.set_fargo3d()
+fp.Conf.show_fargo3d_configuration()
+```
+
+    > Checking for FARGO3D directroy:
+    	✓FARGO3D source code is available in your system at '/tmp/public/'
+    > Checking for FARGO3D normal binary:
+    	✓Binary in normal mode compiling correctly
+    > Checking for FARGO3D parallel binary:
+    	✓Binary in parallel mode compiling correctly
+    > Checking for FARGO3D GPU binary:
+    FARGO3D binary with options 'GPU=1' not compiled at '/tmp/public/'
+    	Compiling FARGO3D with GPU (it may take a while)...
+    	No GPU available
+    Is FARGO3D installed:  True
+    Is FARGO3D compiling:  True
+    Is FARGO3D compiling in parallel:  False
+    Is FARGO3D compiling in GPU:  False
+    FARGO3D clone repositoty command:  git clone https://bitbucket.org/fargo3d/public.git
+    FARGO3D directories: 
+    	Base directory:  /tmp/
+    	Package directory:  public/
+    	Basic package header:  src/fargo3d.h
+    	Setups location:  setups/
+    	Setups location:  /tmp/public/
+    Compile in parallel:  1
+    Compile in GPU:  0
+
 
 ## Quickstart
 
