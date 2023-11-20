@@ -1,5 +1,5 @@
 [build-system]
 requires = ['setuptools',
-			'scipy','matplotlib','tqdm','numpy'
+			'scipy','matplotlib','tqdm','numpy','ipython',
 	    ]
 build-backend = "setuptools.build_meta"

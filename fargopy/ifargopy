@@ -1,0 +1,5 @@
+#!/bin/sh
+cat <<EOF > /tmp/ifargopy.py
+import fargopy as fp
+EOF
+ipython -i /tmp/ifargopy.py

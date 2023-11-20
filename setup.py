@@ -50,11 +50,12 @@ setuptools.setup(
     # ######################################################################
     # DEPENDENCIES
     # ######################################################################
-    install_requires=['scipy','matplotlib','tqdm','numpy'],
+    install_requires=['scipy','matplotlib','tqdm','numpy','ipython'],
 
     # ######################################################################
     # OPTIONS
     # ######################################################################
     include_package_data=True,
     package_data={'': ['data/*.*', 'tests/*.*']},
+    scripts=['fargopy/ifargopy'],
 )

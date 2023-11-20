@@ -9,6 +9,7 @@ import fargopy
 import subprocess
 import os
 import re
+import time
 
 ###############################################################
 # Module constants
@@ -129,12 +130,22 @@ class Simulation(fargopy.Conf):
         else:
             snapshots = []
         return snapshots
+    
+    def _set_resumable_snapshot(self):
+        error,output = fargopy.Util.sysrun(f"grep OUTPUT {self.logfile}",verbose=False)
+        print(output)
+        if not error:
+            find = re.findall(r'OUTPUTS\s+(\d+)',self.output_snapshots[-2])
+            self.resumable_snapshot = int(find[0])
+        else:
+            self.resumable_snapshot = 0
         
-    def _is_running(self):
+    def _is_running(self,verbose=True):
         if self.fargo3d_process:
             poll = self.fargo3d_process.poll()
             if poll is None:
-                print(f"The process is already running with pid '{self.fargo3d_process.pid}'")
+                if verbose:
+                    print(f"The process is already running with pid '{self.fargo3d_process.pid}'")
                 return True
             else:
                 return False
@@ -147,6 +158,10 @@ class Simulation(fargopy.Conf):
         if not self._is_setup():
             return
         
+        if not self._is_running():
+            print("The process is stopped.")
+            return
+        
         if self.fargo3d_process:
             poll = self.fargo3d_process.poll()
             if poll is None:
@@ -156,8 +171,6 @@ class Simulation(fargopy.Conf):
                 self.fargo3d_process = None
             else:
                 print("The process has already finished.")    
-        else:
-            print("No running process.")
 
     def _is_setup(self):
         if self.setup is None:
@@ -230,6 +243,7 @@ class Simulation(fargopy.Conf):
             vprint(bar+"Snapshots:")
             self.output_snapshots = self._get_snapshots()
             nsnapshots = len(self.output_snapshots)
+            self.resumable_snapshot = None
             if nsnapshots:
                 vprint(f"\tNumber of available snapshots: {nsnapshots}")
                 if nsnapshots > 1:
@@ -240,6 +254,51 @@ class Simulation(fargopy.Conf):
                     vprint(f"\tNo resumable snapshot")
             else:
                 vprint("No snapshots yet")
+
+        if 'progress' in mode:
+            self._status_progress()
+
+    def _status_progress(self,minfreq =0.1):
+        """Show a progress of the execution
+
+        Parameters:
+            minfreq: float, default = 0.1:
+                Minimum amount of seconds between status check.
+        """
+        # Prepare
+        frequency = minfreq
+        previous_output = ''
+        previous_resumable_snapshot = 1e100
+        time_previous = time.time()
+
+        # Infinite loop checking for output
+        while True:
+            if not self._is_running(verbose=False):
+                print("The simulation is not running anymore")
+                return
+            error,output = fargopy.Util.sysrun(f"grep OUTPUT {self.logfile} |tail -n 1",verbose=False)
+            if not error:
+                # Get the latest output
+                latest_output = output[-2]
+                if latest_output != previous_output:
+                    print(f"{latest_output} [output pace = {frequency:.1f} secs]")
+                    # Fun the number of the output
+                    find = re.findall(r'OUTPUTS\s+(\d+)',latest_output)
+                    resumable_snapshot = int(find[0])
+                    # Get the time elapsed since last status check
+                    time_now = time.time()
+                    frequency = max(time_now - time_previous,minfreq)/2
+                    if (resumable_snapshot - previous_resumable_snapshot)>1:
+                        # Reduce frequency if snapshots are accelerating
+                        frequency = frequency/2
+                    previous_resumable_snapshot = resumable_snapshot
+                    time_previous = time_now
+
+                previous_output = latest_output
+            try:
+                time.sleep(frequency)
+            except KeyboardInterrupt:
+                return
 
     def clean_output(self):
         """
