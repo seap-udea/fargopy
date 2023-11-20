@@ -35,8 +35,7 @@ fp.Conf.VERBOSE = False
 %autoreload 2
 ```
 
-    The autoreload extension is already loaded. To reload it, use:
-      %reload_ext autoreload
+    Running FARGOpy version 0.1.0
 
 
 ## Install FARGO3D
@@ -144,7 +143,7 @@ sim.clean_output()
 ```
 
     Cleaning simulation outputs...
-    Output directory is clean already.
+    Done.
 
 
 You may compile the simulation:
@@ -183,6 +182,21 @@ sim.status(mode='isrunning')
 
 There are several status modes:
 
+- Show progress of the simulation
+
+
+```python
+sim.status(mode='progress')
+```
+
+    OUTPUTS 0 at date t = 0.000000 OK [output pace = 0.1 secs]
+    OUTPUTS 1 at date t = 6.283185 OK [output pace = 0.1 secs]
+    OUTPUTS 2 at date t = 12.566371 OK [output pace = 1.5 secs]
+    OUTPUTS 3 at date t = 18.849556 OK [output pace = 3.0 secs]
+    OUTPUTS 4 at date t = 25.132741 OK [output pace = 3.0 secs]
+    OUTPUTS 5 at date t = 31.415927 OK [output pace = 3.0 secs]
+
+
 - Check the latest lines of the `logfile`: 
 
 
@@ -204,7 +218,7 @@ sim.status(mode='logfile')
     ..............
     ..............
     ..............
-    ...........
+    ...
 
 - Check (and return) the output files:
 
@@ -217,20 +231,14 @@ sim.status(mode='outputs')
     ################################################################################
     Output content:
     
-    118 available datafiles:
+    58 available datafiles:
     
-    bigplanet0.dat, dims.dat, domain_x.dat, domain_y.dat, domain_z.dat, gasdens0.dat, gasdens0_2d.dat, gasdens1.dat, gasdens10.dat, gasdens11.dat, 
-    gasdens12.dat, gasdens13.dat, gasdens14.dat, gasdens15.dat, gasdens16.dat, gasdens17.dat, gasdens18.dat, gasdens19.dat, gasdens2.dat, gasdens20.dat, 
-    gasdens3.dat, gasdens4.dat, gasdens5.dat, gasdens6.dat, gasdens7.dat, gasdens8.dat, gasdens9.dat, gasenergy0.dat, gasenergy1.dat, gasenergy10.dat, 
-    gasenergy11.dat, gasenergy12.dat, gasenergy13.dat, gasenergy14.dat, gasenergy15.dat, gasenergy16.dat, gasenergy17.dat, gasenergy18.dat, gasenergy19.dat, gasenergy2.dat, 
-    gasenergy20.dat, gasenergy3.dat, gasenergy4.dat, gasenergy5.dat, gasenergy6.dat, gasenergy7.dat, gasenergy8.dat, gasenergy9.dat, gasvx0.dat, gasvx0_2d.dat, 
-    gasvx1.dat, gasvx10.dat, gasvx11.dat, gasvx12.dat, gasvx13.dat, gasvx14.dat, gasvx15.dat, gasvx16.dat, gasvx17.dat, gasvx18.dat, 
-    gasvx19.dat, gasvx2.dat, gasvx20.dat, gasvx3.dat, gasvx4.dat, gasvx5.dat, gasvx6.dat, gasvx7.dat, gasvx8.dat, gasvx9.dat, 
-    gasvy0.dat, gasvy0_2d.dat, gasvy1.dat, gasvy10.dat, gasvy11.dat, gasvy12.dat, gasvy13.dat, gasvy14.dat, gasvy15.dat, gasvy16.dat, 
-    gasvy17.dat, gasvy18.dat, gasvy19.dat, gasvy2.dat, gasvy20.dat, gasvy3.dat, gasvy4.dat, gasvy5.dat, gasvy6.dat, gasvy7.dat, 
-    gasvy8.dat, gasvy9.dat, orbit0.dat, outputgas.dat, planet0.dat, summary0.dat, summary1.dat, summary10.dat, summary11.dat, summary12.dat, 
-    summary13.dat, summary14.dat, summary15.dat, summary16.dat, summary17.dat, summary18.dat, summary19.dat, summary2.dat, summary20.dat, summary3.dat, 
-    summary4.dat, summary5.dat, summary6.dat, summary7.dat, summary8.dat, summary9.dat, tqwk0.dat, used_rad.dat, 
+    bigplanet0.dat, dims.dat, domain_x.dat, domain_y.dat, domain_z.dat, gasdens0.dat, gasdens0_2d.dat, gasdens1.dat, gasdens2.dat, gasdens3.dat, 
+    gasdens4.dat, gasdens5.dat, gasdens6.dat, gasdens7.dat, gasdens8.dat, gasenergy0.dat, gasenergy1.dat, gasenergy2.dat, gasenergy3.dat, gasenergy4.dat, 
+    gasenergy5.dat, gasenergy6.dat, gasenergy7.dat, gasenergy8.dat, gasvx0.dat, gasvx0_2d.dat, gasvx1.dat, gasvx2.dat, gasvx3.dat, gasvx4.dat, 
+    gasvx5.dat, gasvx6.dat, gasvx7.dat, gasvx8.dat, gasvy0.dat, gasvy0_2d.dat, gasvy1.dat, gasvy2.dat, gasvy3.dat, gasvy4.dat, 
+    gasvy5.dat, gasvy6.dat, gasvy7.dat, gasvy8.dat, orbit0.dat, outputgas.dat, planet0.dat, summary0.dat, summary1.dat, summary2.dat, 
+    summary3.dat, summary4.dat, summary5.dat, summary6.dat, summary7.dat, summary8.dat, tqwk0.dat, used_rad.dat, 
 
 
 - Check the available snapshots:
@@ -243,8 +251,8 @@ sim.status(mode='snapshots')
     
     ################################################################################
     Snapshots:
-    	Number of available snapshots: 25
-    	Latest resumable snapshot: 23
+    	Number of available snapshots: 10
+    	Latest resumable snapshot: 8
 
 
 You may also combine them:
@@ -261,8 +269,8 @@ sim.status(mode='isrunning snapshots')
     
     ################################################################################
     Snapshots:
-    	Number of available snapshots: 30
-    	Latest resumable snapshot: 28
+    	Number of available snapshots: 11
+    	Latest resumable snapshot: 9
 
 
 Or ran all of them:
@@ -281,44 +289,34 @@ sim.status(mode='all')
     Logfile content:
     The latest 10 lines of the logfile:
     
-    .............
-    .............
-    .............
-    .............
-    .............
-    .............
-    .............
-    .............
-    .............
-    ....
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    ..............
+    
     ################################################################################
     Output content:
     
-    178 available datafiles:
+    68 available datafiles:
     
-    bigplanet0.dat, dims.dat, domain_x.dat, domain_y.dat, domain_z.dat, gasdens0.dat, gasdens0_2d.dat, gasdens1.dat, gasdens10.dat, gasdens11.dat, 
-    gasdens12.dat, gasdens13.dat, gasdens14.dat, gasdens15.dat, gasdens16.dat, gasdens17.dat, gasdens18.dat, gasdens19.dat, gasdens2.dat, gasdens20.dat, 
-    gasdens21.dat, gasdens22.dat, gasdens23.dat, gasdens24.dat, gasdens25.dat, gasdens26.dat, gasdens27.dat, gasdens28.dat, gasdens29.dat, gasdens3.dat, 
-    gasdens30.dat, gasdens31.dat, gasdens32.dat, gasdens4.dat, gasdens5.dat, gasdens6.dat, gasdens7.dat, gasdens8.dat, gasdens9.dat, gasenergy0.dat, 
-    gasenergy1.dat, gasenergy10.dat, gasenergy11.dat, gasenergy12.dat, gasenergy13.dat, gasenergy14.dat, gasenergy15.dat, gasenergy16.dat, gasenergy17.dat, gasenergy18.dat, 
-    gasenergy19.dat, gasenergy2.dat, gasenergy20.dat, gasenergy21.dat, gasenergy22.dat, gasenergy23.dat, gasenergy24.dat, gasenergy25.dat, gasenergy26.dat, gasenergy27.dat, 
-    gasenergy28.dat, gasenergy29.dat, gasenergy3.dat, gasenergy30.dat, gasenergy31.dat, gasenergy32.dat, gasenergy4.dat, gasenergy5.dat, gasenergy6.dat, gasenergy7.dat, 
-    gasenergy8.dat, gasenergy9.dat, gasvx0.dat, gasvx0_2d.dat, gasvx1.dat, gasvx10.dat, gasvx11.dat, gasvx12.dat, gasvx13.dat, gasvx14.dat, 
-    gasvx15.dat, gasvx16.dat, gasvx17.dat, gasvx18.dat, gasvx19.dat, gasvx2.dat, gasvx20.dat, gasvx21.dat, gasvx22.dat, gasvx23.dat, 
-    gasvx24.dat, gasvx25.dat, gasvx26.dat, gasvx27.dat, gasvx28.dat, gasvx29.dat, gasvx3.dat, gasvx30.dat, gasvx31.dat, gasvx32.dat, 
-    gasvx4.dat, gasvx5.dat, gasvx6.dat, gasvx7.dat, gasvx8.dat, gasvx9.dat, gasvy0.dat, gasvy0_2d.dat, gasvy1.dat, gasvy10.dat, 
-    gasvy11.dat, gasvy12.dat, gasvy13.dat, gasvy14.dat, gasvy15.dat, gasvy16.dat, gasvy17.dat, gasvy18.dat, gasvy19.dat, gasvy2.dat, 
-    gasvy20.dat, gasvy21.dat, gasvy22.dat, gasvy23.dat, gasvy24.dat, gasvy25.dat, gasvy26.dat, gasvy27.dat, gasvy28.dat, gasvy29.dat, 
-    gasvy3.dat, gasvy30.dat, gasvy31.dat, gasvy32.dat, gasvy4.dat, gasvy5.dat, gasvy6.dat, gasvy7.dat, gasvy8.dat, gasvy9.dat, 
-    orbit0.dat, outputgas.dat, planet0.dat, summary0.dat, summary1.dat, summary10.dat, summary11.dat, summary12.dat, summary13.dat, summary14.dat, 
-    summary15.dat, summary16.dat, summary17.dat, summary18.dat, summary19.dat, summary2.dat, summary20.dat, summary21.dat, summary22.dat, summary23.dat, 
-    summary24.dat, summary25.dat, summary26.dat, summary27.dat, summary28.dat, summary29.dat, summary3.dat, summary30.dat, summary31.dat, summary32.dat, 
+    bigplanet0.dat, dims.dat, domain_x.dat, domain_y.dat, domain_z.dat, gasdens0.dat, gasdens0_2d.dat, gasdens1.dat, gasdens10.dat, gasdens2.dat, 
+    gasdens3.dat, gasdens4.dat, gasdens5.dat, gasdens6.dat, gasdens7.dat, gasdens8.dat, gasdens9.dat, gasenergy0.dat, gasenergy1.dat, gasenergy10.dat, 
+    gasenergy2.dat, gasenergy3.dat, gasenergy4.dat, gasenergy5.dat, gasenergy6.dat, gasenergy7.dat, gasenergy8.dat, gasenergy9.dat, gasvx0.dat, gasvx0_2d.dat, 
+    gasvx1.dat, gasvx10.dat, gasvx2.dat, gasvx3.dat, gasvx4.dat, gasvx5.dat, gasvx6.dat, gasvx7.dat, gasvx8.dat, gasvx9.dat, 
+    gasvy0.dat, gasvy0_2d.dat, gasvy1.dat, gasvy10.dat, gasvy2.dat, gasvy3.dat, gasvy4.dat, gasvy5.dat, gasvy6.dat, gasvy7.dat, 
+    gasvy8.dat, gasvy9.dat, orbit0.dat, outputgas.dat, planet0.dat, summary0.dat, summary1.dat, summary10.dat, summary2.dat, summary3.dat, 
     summary4.dat, summary5.dat, summary6.dat, summary7.dat, summary8.dat, summary9.dat, tqwk0.dat, used_rad.dat, 
     
     ################################################################################
     Snapshots:
-    	Number of available snapshots: 33
-    	Latest resumable snapshot: 31
+    	Number of available snapshots: 11
+    	Latest resumable snapshot: 9
 
 
 You may stop the run at any time:
@@ -328,7 +326,8 @@ You may stop the run at any time:
 sim.stop()
 ```
 
-    Stopping FARGO3D process (pid = 8084)
+    The process is already running with pid '30287'
+    Stopping FARGO3D process (pid = 30287)
 
 
 Before resuming get the latest resumable snapshot:
@@ -341,8 +340,8 @@ sim.status(mode='snapshots')
     
     ################################################################################
     Snapshots:
-    	Number of available snapshots: 37
-    	Latest resumable snapshot: 35
+    	Number of available snapshots: 13
+    	Latest resumable snapshot: 11
 
 
 And resume since the latest resumable snapshot:
@@ -352,8 +351,8 @@ And resume since the latest resumable snapshot:
 sim.resume(since=sim.resumable_snapshot)
 ```
 
-    Resuming from snapshot 35
-    Running asynchronously: mpirun -np 1 ./.fargo3d_SETUP-fargo_PARALLEL-1_GPU-0_ -m -t -S 35 -t setups/fargo/fargo.par
+    Resuming from snapshot 11
+    Running asynchronously: mpirun -np 1 ./.fargo3d_SETUP-fargo_PARALLEL-1_GPU-0_ -m -t -S 11 -t setups/fargo/fargo.par
     Command is running in background
 
 
@@ -367,8 +366,8 @@ sim.status(mode='snapshots')
     
     ################################################################################
     Snapshots:
-    	Number of available snapshots: 41
-    	Latest resumable snapshot: 37
+    	Number of available snapshots: 16
+    	Latest resumable snapshot: 12
 
 
 Once the running is finished you will get:
@@ -389,6 +388,8 @@ sim.status(mode='isrunning')
 
 Version 0.1.*:
 
+- Package is now provided with a script 'ifargopy' to run 'ipython' with fargopy initialized.
+- A new 'progress' mode has been added to status method.
 - All the dynamics of loading/compiling/running/stoppìng/resuming FARGO3D has been developed.
 
 Version 0.0.*:
