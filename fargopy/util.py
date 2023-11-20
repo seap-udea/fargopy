@@ -441,3 +441,28 @@ class Conf(object):
             return None
         
         return setup_dir,parameters_file
+
+class Dictobj(object):
+    """Convert a dictionary to an object
+
+    Examples:
+        ob = Dictobj(a=2,b=3)
+        print(ob.a,ob.b)
+        ob = Dictobj(dict=dict(a=2,b=3))
+        print(ob.a,ob.b)
+        ob = Dictobj(dict={'a':2,'b':3})
+        print(ob.a,ob.b)
+    """
+
+    def __init__(self, **kwargs):
+        if 'dict' in kwargs.keys():
+            kwargs.update(kwargs['dict'])
+        for key, value in kwargs.items():
+            if key == 'dict':continue
+            setattr(self, key, value)
+
+    def __str__(self):
+        return str(self.__dict__)
+
+    def __repr__(self):
+        return self.__str__()

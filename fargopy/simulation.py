@@ -10,6 +10,7 @@ import subprocess
 import os
 import re
 import time
+import numpy as np
 
 ###############################################################
 # Module constants
@@ -49,6 +50,7 @@ class Simulation(fargopy.Conf):
             self.setup_directory = output[0]
             self.setup_parameters = output[1]
             self.setup_outputs = f"{self.setup_directory}/../../outputs/{self.setup}"
+            self.logfile = f"{fargopy.Conf.FARGO3D_FULLDIR}/{self.setup_directory}/{self.setup}.log"
 
     def compile(self,
                 parallel=None,gpu=None,
@@ -85,7 +87,7 @@ class Simulation(fargopy.Conf):
         if 'run_options' not in self.__dict__.keys():
             self.run_options = options
         
-        self.logfile = f"{fargopy.Conf.FARGO3D_FULLDIR}/{self.setup_outputs}/{self.setup}.log"
+        self.logfile = f"{fargopy.Conf.FARGO3D_FULLDIR}/{self.setup_directory}/{self.setup}.log"
 
         # Select command to run
         precmd=''
@@ -131,14 +133,14 @@ class Simulation(fargopy.Conf):
             snapshots = []
         return snapshots
     
-    def _set_resumable_snapshot(self):
+    def get_resumable_snapshot(self):
         error,output = fargopy.Util.sysrun(f"grep OUTPUT {self.logfile}",verbose=False)
-        print(output)
         if not error:
-            find = re.findall(r'OUTPUTS\s+(\d+)',self.output_snapshots[-2])
-            self.resumable_snapshot = int(find[0])
+            find = re.findall(r'OUTPUTS\s+(\d+)',output[-2])
+            resumable_snapshot = int(find[0])
         else:
-            self.resumable_snapshot = 0
+            resumable_snapshot = 0
+        return resumable_snapshot
         
     def _is_running(self,verbose=True):
         if self.fargo3d_process:
@@ -316,3 +318,73 @@ class Simulation(fargopy.Conf):
             print("Output directory is clean already.")
         if not error:
             print("Done.")
+
+    def load_domain(self):
+
+        # Load    
+        self.dim = 0
+        self.domains = []
+
+        print(f"Loading domain...")
+        print("Domain size:")
+        output_dir = fargopy.Conf.FARGO3D_FULLDIR + "/" + self.setup_outputs
+        file_x = output_dir + "/domain_x.dat"
+        if os.path.isfile(file_x):
+            self.domain_x = np.genfromtxt(file_x)
+            self.dim += 1
+            self.domains += [self.domain_x]
+            print(f"\tVariable 1 (periodic): {len(self.domain_x)}")
+        file_y = output_dir + "/domain_y.dat"
+        if os.path.isfile(file_y):
+            self.domain_y = np.genfromtxt(file_y)[3:-3]
+            self.dim += 1
+            self.domains += [self.domain_y]
+            print(f"\tVariable 2: {len(self.domain_y)}")
+        file_z = output_dir + "/domain_z.dat"
+        if os.path.isfile(file_z):
+            self.domain_z = np.genfromtxt(file_z)[3:-3]
+            self.dim += 1
+            self.domains += [self.domain_z]
+            print(f"\tVariable 3: {len(self.domain_z)}")
+
+        print(f"Problem in {self.dim} dimensions")
+        
+        # Get grid
+        print(f"Building vargrids...")
+        self.var1_12, self.var2_12 = np.meshgrid(self.domain_x,self.domain_y)
+        self.var1_12, self.var3_12 = np.meshgrid(self.domain_x,self.domain_z)
+        self.var2_23, self.var3_23 = np.meshgrid(self.domain_y,self.domain_z)
+        print(f"Done.")
+
+    def load_variables(self):
+        output_dir = fargopy.Conf.FARGO3D_FULLDIR + "/" + self.setup_outputs
+        variables = np.genfromtxt(output_dir+"/variables.par",
+                                    dtype={'names': ("parameters","values"),
+                                            'formats': ("|S30","|S300")}).tolist()
+        print(f"Loading variables")
+        self.vars = dict()
+        for posicion in variables:
+            self.vars[posicion[0].decode("utf-8")] = posicion[1].decode("utf-8")
+        self.vars = fargopy.Dictobj(dict=self.vars)
+        print(f"{len(self.vars.__dict__.keys())} variables load. See <sim>.vars")
+
+    def load_field(self,fluid='gas',field='dens',snapshot=None):
+        if 'vars' not in self.__dict__.keys():
+            self.load_variables()
+        if not self._is_resumable():
+            print("Simulation has not produced any output yet.")
+        if snapshot is None:
+            snapshot = self._get_resumable_snapshot()
+
+        output_dir = fargopy.Conf.FARGO3D_FULLDIR + "/" + self.setup_outputs
+        file_name = fluid+field+str(snapshot)+".dat"
+        file_field = output_dir+"/"+file_name
+        if os.path.isfile(file_field):
+            self.dim = 3 if 'NZ' in self.vars.__dict__.keys() else 2
+            if self.dim == 2:
+                field = np.fromfile(file_field).reshape(int(self.vars.NY),int(self.vars.NX))
+            else:
+                field = np.fromfile(file_field).reshape(int(self.vars.NZ),int(self.vars.NY),int(self.vars.NX))
+            return field
+        else:
+            print(f"File with field '{file_name}' not found")
