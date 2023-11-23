@@ -19,4 +19,5 @@ TODO
 - Create sim.progress
 - Create folder output according to setup
 - Disclaimer: Men at work!
-- 
+- Monitor simulation without running it.
+- Change options in .opt

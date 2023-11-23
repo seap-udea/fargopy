@@ -1,5 +1,15 @@
 #!/bin/sh
-cat <<EOF > /tmp/ifargopy.py
+FP_DOTDIR=$HOME/.fargopy/
+
+if [ ! -d $FP_DOTDIR ]
+then
+    # This is the first time that FARGOpy will be executer
+    cat <<EOF > /tmp/ifargopy_initialize.py
 import fargopy as fp
+fp.initialize('configure')
+print('We have configured fargopy for the first time. Run it again.')
 EOF
-ipython -i /tmp/ifargopy.py
+    ipython -i /tmp/ifargopy_initialize.py
+else
+    ipython -i $FP_DOTDIR/ifargopy.py $@
+fi

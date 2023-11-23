@@ -50,7 +50,7 @@ def smooth(x, window_len=9, window='hanning'):
     y = np.convolve(w/w.sum(), s, mode='same')
     return y[window_len:-window_len+1]
 
-path = "/home/matias/Dropbox/Simulations/Fargo3D/Visualizations/M1_f1_highres/"
+path = "/home/jzuluaga/public/outputs/p3diso_f0/"
 # Define the grid dimensions and Phi cut index
 variables_par = np.genfromtxt(path+"variables.par",dtype={'names': ("parametros","valores"),'formats': ("|S30","|S300")}).tolist()
 parametros_par, valores_par = [],[]
@@ -115,8 +115,8 @@ RP    = np.sqrt(((x)**2)+(y-xp)**2+(z)**2)
 
 
 # Load Fields
-density = np.fromfile(path+'gasdens25.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_density       #gr/cm3
-energy = np.fromfile(path+"gasenergy25.dat").reshape(NZ,NY,NX)*unit_energy      #erg/cm3
+density = np.fromfile(path+'gasdens2.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_density       #gr/cm3
+energy = np.fromfile(path+"gasenergy2.dat").reshape(NZ,NY,NX)*unit_energy      #erg/cm3
 temp   = energy/density/(Rgas/mu)*(float(P("GAMMA"))-1) 
 temp2 = np.copy(temp)
 temp3 = np.copy(temp)
@@ -199,9 +199,9 @@ print('')
 #####
 
 # Load the velocity data from the files
-vx = np.fromfile(path+'gasvx25.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
-vy = np.fromfile(path+'gasvy25.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
-vz = np.fromfile(path+'gasvz25.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
+vx = np.fromfile(path+'gasvx2.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
+vy = np.fromfile(path+'gasvy2.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
+vz = np.fromfile(path+'gasvz2.dat', dtype=np.float64).reshape(NZ, NY, NX)*unit_velocity
 
 # Calculate the spherical-to-Cartesian transformation for the velocity components
 v_x = (vx * np.sin(T) * np.cos(Phi) + vy * np.sin(T) * np.sin(Phi) + vz * np.cos(T)) #km/s
