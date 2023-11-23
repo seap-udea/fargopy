@@ -85,27 +85,6 @@ class Field(Fargobj):
         """Perform a slice on a field and produce as an output the 
         corresponding field slice and the associated matrices of
         coordinates for plotting.
-
-        Examples:
-            # Don't do nothing, but r, phi, z are matrices with the same dimensions of gasdens
-            r,phi,z,gasdens = gasdens.meshslice(slice='r,phi,z', output='cylindrical:r,phi,z')
-
-            # Make a z=0 slice and return the r and phi matrices for plotting the field.
-            r,phi,gasdens_rp = gasdens.meshslice(slice='r,phi,z=0', output='spherica:r,phi')
-            plt.pcolormesh(r,phi,gasdens_rp)
-            plt.pcolormesh(phi,r,gasdens_rp.T)
-
-            # Make a z=0, iphi = 0 slice and return r
-            r, gasdens_r = gasdens.meshslice(slice='r,iphi=0,z=0', output='cylindrical:r')
-            plt.plot(r,gasdens_r)
-
-            # Make a z = 0 slice and express the result in cartesian coordinates
-            x,y,gasdens_xy = gasdens.meshslice(slice='r,phi,z=0', output='cartesian:x,y')
-            plt.pcolormesh(x,y,gasdens_xy)
-
-            # Make a phi = 0 slice and express the result in cartesian coordinates
-            y,z,gasdens_yz = gasdens.meshslice(slice='r,phi=0,z', output='cartesian:y,z')
-            plt.pcolormesh(y,z,gasdens_yz)
         """
         # Analysis of the slice 
         if slice is None:
@@ -118,8 +97,6 @@ class Field(Fargobj):
         # Create the mesh
         if self.coordinates == 'cartesian':
             z,y,x = np.meshgrid(self.domains.z,self.domains.y,self.domains.x,indexing='ij')
-            x,y,z = r*np.cos(phi),r*np.sin(phi),z
-
             x = eval(f"x[{pattern}]")
             y = eval(f"y[{pattern}]")
             z = eval(f"z[{pattern}]")
@@ -222,6 +199,7 @@ class Field(Fargobj):
             if not quiet:
                 print(f"Slice: {slice_cmd}")
             slice = eval(slice_cmd)
+
         elif self.type == 'vector':
             slice = np.array(
                 [eval(f"self.data[0,{pattern_str}]"),
@@ -243,7 +221,16 @@ class Field(Fargobj):
                 return self
             
             if self.coordinates == 'cylindrical':
-                return self
+                z,r,phi = np.meshgrid(self.domains.z,self.domains.r,self.domains.phi,indexing='ij')
+                vphi = self.data[0]
+                vr = self.data[1]
+                vz = self.data[2]
+                vx = vr*np.cos(phi) 
+                vy = vr*np.sin(phi)
+                
+                return (Field(vx,coordinates=self.coordinates,domains=self.domains,type='scalar'),
+                        Field(vy,coordinates=self.coordinates,domains=self.domains,type='scalar'),
+                        Field(vz,coordinates=self.coordinates,domains=self.domains,type='scalar'))
             
             if self.coordinates == 'spherical':
 
@@ -252,9 +239,9 @@ class Field(Fargobj):
                 vr = self.data[1]
                 vtheta = self.data[2]
 
-                vx = vphi*np.sin(theta)*np.cos(phi) + vr*np.sin(theta)*np.sin(phi) + vtheta*np.cos(theta)
-                vy = vphi*np.cos(theta)*np.cos(phi) + vr*np.cos(theta)*np.sin(phi) - vtheta*np.sin(theta)
-                vz = -vphi*np.sin(phi) + vr*np.cos(phi)
+                vx = vr*np.sin(theta)*np.cos(phi) + vtheta*np.cos(theta)*np.cos(phi) - vphi*np.sin(phi)
+                vy = vr*np.sin(theta)*np.sin(phi) + vtheta*np.cos(theta)*np.sin(phi) + vphi*np.cos(phi)
+                vz = vr*np.cos(theta) - vtheta*np.sin(theta)
 
                 return (Field(vx,coordinates=self.coordinates,domains=self.domains,type='scalar'),
                         Field(vy,coordinates=self.coordinates,domains=self.domains,type='scalar'),
