@@ -36,18 +36,14 @@ There are three modalities for using `fargopy`:
 In the following we will explain the basic functionalities that might result useful in each modality.
 
 
-For this quickstart let's load this utilities:
+For this quickstart let's load these utilities:
 
 
 ```python
-from fargopy import DEG, RAD
 import numpy as np
 import matplotlib.pyplot as plt
 from IPython.display import HTML
 ```
-
-    Running FARGOpy version 0.1.3
-
 
 ### `FARGO3D` expert mode
 
@@ -62,9 +58,14 @@ This command will start a session of `IPython` and initialize `fargopy`. Alterna
 
 ```python
 import fargopy as fp
+from fargopy import DEG, RAD
 %load_ext autoreload
 %autoreload 2
 ```
+
+    The autoreload extension is already loaded. To reload it, use:
+      %reload_ext autoreload
+
 
 When you run `fargopy` from the command line using `ifargopy` the previous import command is included in the initialization script.
 
@@ -225,7 +226,7 @@ fields.item('0').keys(), fields.size
     27, 28, 29, 3, 30, 31, 32, 33, 34, 35, 
     36, 37, 38, 39, 4, 40, 41, 42, 43, 44, 
     45, 46, 47, 48, 49, 5, 50, 6, 7, 8, 
-    9, size
+    9, snapshots, size
 
 
 
@@ -285,18 +286,16 @@ And plot:
 
 
 ```python
+plt.ioff()
 fig,ax = plt.subplots()
 ax.semilogy(sim.domains.r,gasdens_r)
 ax.set_xlabel(r"$r$ [cu]")
 ax.set_ylabel(r"$\rho$ [cu]")
 fp.Util.fargopy_mark(ax);
+fig.savefig('gallery/example-dens_r.png')
 ```
 
-
-    
-![png](README_files/README_46_0.png)
-    
-
+<p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_r.png?raw=true" alt="Animation""/></p>
 
 We can do this in a single step with `fargopy`:
 
@@ -323,18 +322,16 @@ If you are plotting `r` vs. `gasdens` the plot will be:
 
 
 ```python
+plt.ioff()
 fig,ax = plt.subplots()
 ax.semilogy(mesh.r,gasdens)
 ax.set_xlabel(r"$r$ [cu]")
 ax.set_ylabel(r"$\rho$ [cu]")
-fp.Util.fargopy_mark(ax);
+fp.Util.fargopy_mark(ax)
+fig.savefig('gallery/example-dens_r.png')
 ```
 
-
-    
-![png](README_files/README_52_0.png)
-    
-
+<p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_r.png?raw=true" alt="Animation""/></p>
 
 This simple procedure reduce considerably the creation of more complex plots, for instance, a map of the density in different planes:
 
@@ -347,6 +344,7 @@ And plot it:
 
 
 ```python
+plt.ioff()
 fig,axs = plt.subplots(1,2,figsize=(12,6))
 
 ax = axs[0]
@@ -362,25 +360,16 @@ ax.set_xlabel('$x$ [au]')
 ax.set_ylabel('$y$ [au]')
 fp.Util.fargopy_mark(ax)
 ax.axis('equal')
+fig.savefig('gallery/example-dens_disk.png')
 ```
 
-
-
-
-    (-2.5002509788199982, 2.499916334793502, -2.499916334793502, 2.499916334793502)
-
-
-
-
-    
-![png](README_files/README_56_1.png)
-    
-
+<p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_disk.png?raw=true" alt="Animation""/></p>
 
 Let's create an animation for illustrating how easy `FARGOpy` make life:
 
 
 ```python
+plt.ioff()
 from celluloid import Camera
 from tqdm import tqdm
 
@@ -390,7 +379,6 @@ sim.load_properties()
 
 gasdens_all = sim.load_allfields('gasdens')
 fig,axs = plt.subplots(1,2,figsize=(12,6))
-plt.ioff()
 
 cmap = 'prism'
 camera = Camera(fig)
@@ -426,14 +414,10 @@ animation.save('gallery/fargo-animation.gif')
     Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
-      0%|          | 0/51 [00:00<?, ?it/s]100%|██████████| 51/51 [00:01<00:00, 36.37it/s]
+    100%|██████████| 51/51 [00:01<00:00, 38.16it/s]
 
 
-
-    
-![png](README_files/README_58_2.png)
-    
-
+<p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
 
 ### `FARGO3D` newbie
 
