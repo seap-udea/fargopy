@@ -469,7 +469,8 @@ class Simulation(Fargo3d):
         else:
             raise ValueError(f"No field found with pattern '{pattern}'. Change the fluid")
     
-        fields.snapshots = sorted([int(s) for s in fields.keys() if s != 'size'])
+        if qall:
+            fields.snapshots = sorted([int(s) for s in fields.keys() if s != 'size'])
         fields.size = size/1024**2
         return fields
 
