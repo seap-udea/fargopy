@@ -75,12 +75,13 @@ class Field(Fargobj):
                 density.slice(phi=30*RAD,interp='nearest') # Take a slice interpolating to the nearest
     """
 
-    def __init__(self,data=None,coordinates='cartesian',domains=None):
+    def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar'):
         self.data = data
         self.coordinates = coordinates
         self.domains = domains
+        self.type = type
 
-    def meshslice(self,slice='x,y,z',output='cartesian:x,y,z'):
+    def meshslice(self,slice=None,component=0):
         """Perform a slice on a field and produce as an output the 
         corresponding field slice and the associated matrices of
         coordinates for plotting.
@@ -107,6 +108,8 @@ class Field(Fargobj):
             plt.pcolormesh(y,z,gasdens_yz)
         """
         # Analysis of the slice 
+        if slice is None:
+            raise ValueError("You must provide a slice option.")
 
         # Perform the slice
         slice_cmd = f"self.slice({slice},pattern=True)"
@@ -157,6 +160,9 @@ class Field(Fargobj):
             quiet: boolean, default = False:
                 If True extract the slice quietly.
                 Else, print some control messages.
+
+            pattern: boolean, default = False:
+                If True return the pattern of the slice, eg. [:,:,:]
 
             ir, iphi, itheta, ix, iy, iz: string or integer:
                 Index or range of indexes of the corresponding coordinate.
@@ -210,17 +216,52 @@ class Field(Fargobj):
                     ivar[COORDS_MAP[self.coordinates][key]] = find.argmin()
                     
         pattern_str = f"{ivar['z']},{ivar['y']},{ivar['x']}"
-        slice_cmd = f"self.data[{pattern_str}]"
-        if not quiet:
-            print(f"Slice: {slice_cmd}")
-        slice = eval(slice_cmd)
+
+        if self.type == 'scalar':
+            slice_cmd = f"self.data[{pattern_str}]"
+            if not quiet:
+                print(f"Slice: {slice_cmd}")
+            slice = eval(slice_cmd)
+        elif self.type == 'vector':
+            slice = np.array(
+                [eval(f"self.data[0,{pattern_str}]"),
+                 eval(f"self.data[1,{pattern_str}]"),
+                 eval(f"self.data[2,{pattern_str}]")]
+            )
 
         if pattern:
             return slice,pattern_str
         return slice
 
+    def to_cartesian(self):
+        if self.type == 'scalar':
+            # Scalar fields are invariant under coordinate transformations
+            return self
+        elif self.type == 'vector':
+            # Vector fields must be transformed according to domain
+            if self.coordinates == 'cartesian':
+                return self
+            
+            if self.coordinates == 'cylindrical':
+                return self
+            
+            if self.coordinates == 'spherical':
+
+                theta,r,phi = np.meshgrid(self.domains.theta,self.domains.r,self.domains.phi,indexing='ij')
+                vphi = self.data[0]
+                vr = self.data[1]
+                vtheta = self.data[2]
+
+                vx = vphi*np.sin(theta)*np.cos(phi) + vr*np.sin(theta)*np.sin(phi) + vtheta*np.cos(theta)
+                vy = vphi*np.cos(theta)*np.cos(phi) + vr*np.cos(theta)*np.sin(phi) - vtheta*np.sin(theta)
+                vz = -vphi*np.sin(phi) + vr*np.cos(phi)
+
+                return (Field(vx,coordinates=self.coordinates,domains=self.domains,type='scalar'),
+                        Field(vy,coordinates=self.coordinates,domains=self.domains,type='scalar'),
+                        Field(vz,coordinates=self.coordinates,domains=self.domains,type='scalar'))
+            
     def get_size(self):
-        return self.data.nbytes
+        return self.data.nbytes/1024**2
 
     def __str__(self):
         return str(self.data)
@@ -284,7 +325,6 @@ class Simulation(Fargo3d):
             self.dims = dims 
         
         print("Configuration variables and domains load into the object. See e.g. <sim>.vars")
-        return vars, domains
     
     def _load_dims(self,dimsfile):
         """Parse the dim directory
@@ -388,7 +428,7 @@ class Simulation(Fargo3d):
 
         if not self.has('vars'):
             # If the simulation has not loaded the variables
-            dims, vars, domains = sim.load_properties()
+            dims, vars, domains = self.load_properties()
         
         # In case no snapshot has been provided use 0
         snapshot = 0 if snapshot is None else snapshot
@@ -410,7 +450,7 @@ class Simulation(Fargo3d):
         else:
             raise ValueError(f"Field type '{type}' not recognized.")
 
-        field = Field(data=np.array(field_data), coordinates=self.vars.COORDINATES, domains=self.domains)
+        field = Field(data=np.array(field_data), coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
         return field
     
     def _load_field_scalar(self,file):
@@ -429,8 +469,8 @@ class Simulation(Fargo3d):
             return field_data
         else:
             raise AssertionError(f"File with field '{file}' not found")
-
-    def load_allfields(self,fluid,snapshot=None):
+        
+    def load_allfields(self,fluid,snapshot=None,type='scalar'):
         """Load all fields in the output
         """
         qall = False
@@ -453,18 +493,47 @@ class Simulation(Fargo3d):
                         # Store all snapshots
                         field_name = comps[0]
                         field_snap = int(comps[1])
-                        field_data = self._load_field_scalar(file_field)
+
+                        if type == 'scalar':
+                            field_data = self._load_field_scalar(file_field)
+                        elif type == 'vector':
+                            field_data = []
+                            variables = ['x','y'] 
+                            if self.vars.DIM == 3:
+                                variables += ['z'] 
+                            for i,variable in enumerate(variables):
+                                file_name = f"{fluid}{variable}{str(field_snap)}.dat"
+                                file_field = f"{self.output_dir}/{file_name}".replace('//','/')
+                                field_data += [self._load_field_scalar(file_field)]
+                            field_data = np.array(field_data)
+                            field_name = field_name[:-1]
+
                         if str(field_snap) not in fields.keys():
                             fields.__dict__[str(field_snap)] = fargopy.Dictobj()
                         size += field_data.nbytes
-                        (fields.__dict__[str(field_snap)]).__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains)
+                        (fields.__dict__[str(field_snap)]).__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
+
                     else:
                         # Store a specific snapshot
                         if int(comps[1]) == snapshot:
                             field_name = comps[0]
-                            field_data = self._load_field_scalar(file_field)
+
+                            if type == 'scalar':
+                                field_data = self._load_field_scalar(file_field)
+                            elif type == 'vector':
+                                field_data = []
+                                variables = ['x','y'] 
+                                if self.vars.DIM == 3:
+                                    variables += ['z'] 
+                                for i,variable in enumerate(variables):
+                                    file_name = f"{fluid}{variable}{str(field_snap)}.dat"
+                                    file_field = f"{self.output_dir}/{file_name}".replace('//','/')
+                                    field_data += [self._load_field_scalar(file_field)]
+                                field_data = np.array(field_data)
+                                field_name = field_name[:-1]
+
                             size += field_data.nbytes
-                            fields.__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains)
+                            fields.__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
 
         else:
             raise ValueError(f"No field found with pattern '{pattern}'. Change the fluid")
