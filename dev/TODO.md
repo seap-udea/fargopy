@@ -1,6 +1,11 @@
 TODO
 ====
 
+- Slices using coordinates variables
+- Slices using cartesian or cylindrical relative measurements
+- Size of the planet
+- SLices in cartesian for fields defined in cph/cyl
+
 - Test fargopy in 'ipython'
 - When run, compile automatically 
 - For mpi: --allow-run-as-root

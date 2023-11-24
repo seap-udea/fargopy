@@ -25,7 +25,7 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         ],
-    version='0.2.0',
+    version='0.2.1',
 
     # ######################################################################
     # FILES
@@ -50,7 +50,7 @@ setuptools.setup(
     # ######################################################################
     # DEPENDENCIES
     # ######################################################################
-    install_requires=['scipy','matplotlib','tqdm','numpy','ipython','celluloid'],
+    install_requires=['scipy','matplotlib','tqdm','numpy','ipython','celluloid','psutil'],
 
     # ######################################################################
     # OPTIONS
