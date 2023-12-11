@@ -46,3 +46,6 @@ cleangit:
 
 readme:
 	python3 -m nbconvert README.ipynb --to markdown
+
+%.md:%.ipynb
+	python3 -m nbconvert $^ --to markdown

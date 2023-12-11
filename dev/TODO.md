@@ -3,14 +3,17 @@ TODO
 
 Release of version 1.0.0:
 
+- Create example datasets.
+  - Created in Google Drive personal repository.
 - Full documentation.
 - Control module.
 - Refactor basic components.
-- Full tetst battery.
+- Full battery tests.
 - Documentation with MkDocs in ReadTheDocs repository.
   - Tutorials:
     - ReadTheDocs instructions: https://docs.readthedocs.io/en/stable/index.html
     - Useful Mkdocs tutorial: https://realpython.com/python-project-documentation-with-mkdocs/
+    - Google docstyle: https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings
 
 Development 
 ===========
@@ -27,9 +30,6 @@ Development
 - Migration planet.
 - fondam.h
 - global.h
-- Use uppercase sustained.
-- Check public is not different from fargo 
-- Check leading characters
 - Create sim.progress
 - Create folder output according to setup
 - Disclaimer: Men at work!
@@ -39,11 +39,14 @@ Development
 Already done
 ============
 
-- Video.
-- Load all fields.
-- Load range fields.
-- Test fargopy in 'ipython'
+- Video [READY]
+- Load all fields [READY]
+- Load range fields [READY]
+- Test fargopy in 'ipython' [READY]
 
 Deprecated
 ==========
 
+- Use uppercase sustained.
+- Check public is not different from fargo 
+- Check leading characters
