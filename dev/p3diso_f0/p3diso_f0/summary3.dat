@@ -1,0 +1,194 @@
+==============================
+SUMMARY:
+==============================
+SETUP 'p3diso_f0' of FARGO3D git version 2.0-24-gae0fcdc6-dirty
+Spherical mesh of size 128 x 64 x 32 (262144 cells in total)
+1000 outputs scheduled
+LONGSUMMARY sticky flag not activated: no source file archive
+1 planet
+
+==============================
+COMPILATION OPTION SECTION:
+==============================
+-DBIGMEM -DGPU -DNFLUIDS=1 -DX -DY -DZ -DSPHERICAL -DISOTHERMAL -DSTOCKHOLM -DVISCOSITY -DPOTENTIAL -DHALFDISK -DBLOCK_X=16 -DBLOCK_Y=8 -DBLOCK_Z=4
+Ghost layer sizes: NGHX=0	NGHY=3	NGHZ=3
+
+==============================
+RUNTIME GENERAL SECTION:
+==============================
+Current Working Directory is 
+Command line: ./fargo3d setups/p3diso_f0/p3diso_f0.par 
+Parameter file: setups/p3diso_f0/p3diso_f0.par
+Run on 1 process
+Hosts:
+   Rank 0 on ip-172-31-60-116 (device 0)
+
+==============================
+OUTPUT SPECIFIC SECTION:
+==============================
+OUTPUT 3 at simulation time 188.496 (2023-11-21 00:07:56)
+
+==============================
+PREPROCESSOR MACROS SECTION:
+==============================
+R0 = (1.0) = 1
+R_MU = (1.0) = 1
+MU0 = (1.0) = 1
+MSTAR = (1.0) = 1
+G = (1.0) = 1
+STEFANK = (5.6705e-5*pow((1.0)/36149835.0,4.0)*pow((1.0)/6.674e-8,-2.5)*pow((1.0)/1.9891e33,-1.5)*pow((1.0)/(5.2*1.49597871e13),-0.5)) = 29895.8
+C0 = (2.99792458e10*sqrt((1.0)/6.674e-8*(1.0)/1.9891e33/(1.0)*(5.2*1.49597871e13))) = 22949
+TCMB = (2.73*((1.0)*(1.0)/(1.0)/(1.0))/(6.674e-8*1.9891e33/(5.2*1.49597871e13)/36149835.0)) = 5.78302e-05
+THRESHOLD_STELLAR_MASS = 0.05*(1.0) = 0.05
+
+==============================
+PARAMETERS SECTION:
+==============================
+   ALPHA	0
+   AMBIPOLARDIFFUSIONCOEFF	0
+   ASPECT	auto
+   ASPECTRATIO	0.05
+   AUTOCOLOR	1
+   BETA	0
+   CFL	0.44
+   CMAP	magma
+   COLORBAR	1
+   COORDINATES	spherical
+   CS	1
+   DAMPINGZONE	1.15
+   DISK	1
+   DT	3.14159265359
+   ECCENTRICITY	0
+   EXCLUDEHILL	0
+   FIELD	gasdens
+   FLARINGINDEX	0
+   FRAME	C
+   FUNCARCHFILE	std/func_arch.cfg
+   GAMMA	1.4
+   HALLEFFECTCOEFF	0
+   INCLINATION	0
+   INDIRECTTERM	0
+   KILLINGBCCOLATITUDE	-0.2
+   MASSTAPER	0
+   NINTERM	20
+   NOISE	0
+   NSNAP	0
+   NTOT	20001
+   NU	1e-05
+   NX	128
+   NY	64
+   NZ	32
+   OHMICDIFFUSIONCOEFF	0
+   OMEGAFRAME	1.00041867946217
+   OORTA	-0.75
+   ORBITALRADIUS	0
+   OUTPUTDIR	./outputs/p3diso_f0/
+   PERIODICY	0
+   PERIODICZ	0
+   PLANETCONFIG	planets/jupiter.cfg
+   PLANETMASS	0
+   PLOTLINE	field[:,:,0]
+   PLOTLOG	0
+   REALTYPE	float64
+   RELEASEDATE	0
+   RELEASERADIUS	0
+   RESONANCE	0.5
+   ROCHESMOOTHING	0
+   SEMIMAJORAXIS	0
+   SETUP	p3diso_f0
+   SIGMA0	0.0006
+   SIGMASLOPE	0.5
+   SPACING	Lin
+   TAUDAMP	0.3
+   THICKNESSSMOOTHING	0.1
+   VERTICALDAMPING	0
+   VMAX	1
+   VMIN	0
+   VTK	0
+   WRITEBX	0
+   WRITEBY	0
+   WRITEBZ	0
+   WRITEDENSITY	0
+   WRITEDIVERGENCE	0
+   WRITEENERGY	0
+   WRITEENERGYRAD	1
+   WRITETAU	1
+   WRITEVX	0
+   WRITEVY	0
+   WRITEVZ	0
+   XMA	0
+   XMAX	3.14159265358979
+   XMB	0
+   XMC	0
+   XMIN	-3.14159265358979
+   YMA	0
+   YMAX	1.5
+   YMB	0
+   YMC	0
+   YMIN	0.5
+   YMY0	1
+   ZMAX	1.5707963267949
+   ZMIN	1.44116998679489
+*** Input file: setups/p3diso_f0/p3diso_f0.par
+#-----------
+Setup			p3diso_f0
+
+### Disk parameters
+
+AspectRatio     	0.05            Thickness over Radius in the disc
+Sigma0			6.0e-4	Surface Density at r=1
+Nu			1.0e-5		Uniform kinematic viscosity
+SigmaSlope		0.5		Slope of surface
+FlaringIndex		0.0
+Gamma			1.4
+
+### Planet parameters
+
+PlanetConfig		planets/jupiter.cfg
+ThicknessSmoothing 	0.1		Smoothing parameters in disk thickness
+
+### Numerical method parameters
+
+Disk			YES
+OmegaFrame     		1.0
+Frame			C
+IndirectTerm		No
+
+### Mesh parameters
+
+Nx			128		Azimuthal number of zones 
+Ny               	64		Radial number of zones
+Nz			32		Number of zones in colatitude
+Ymin			0.5		Inner boundary radius
+Ymax			1.5		Outer boundary radius
+Zmin			1.44116998679489
+Zmax			1.57079632679489661922
+Xmin			-3.141592653589793
+Xmax			3.141592653589793
+
+### Output control parameters
+
+Ntot			20001		Total number of time steps
+Ninterm	 		20		Time steps between outputs
+DT			3.14159265359  Time step length. 2PI = 1 orbit
+OutputDir		@outputs/p3diso_f0
+
+
+#-----------
+
+==============================
+PLANETARY SYSTEM SECTION:
+==============================
+#### (X,Y,Z,VX,VY,VZ,mass)
+#### Planet 0 out of 1
+1.00003980430751	3.98986399474666e-17	0	-0.000279319897429102	1.0004600524429	0	0.001
+*** Planetary system config file: planets/jupiter.cfg
+#-----------
+###########################################################
+#   Planetary system initial configuration
+###########################################################
+
+# Planet Name 	Distance	Mass	 Accretion	Feels Disk	Feels Others
+Jupiter		1.0		0.001	 0.0	  	NO		NO
+
+#-----------
