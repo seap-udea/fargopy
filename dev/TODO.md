@@ -1,19 +1,28 @@
 TODO
 ====
 
+Release of version 1.0.0:
+
+- Full documentation.
+- Control module.
+- Refactor basic components.
+- Full tetst battery.
+- Documentation with MkDocs in ReadTheDocs repository.
+  - Tutorials:
+    - ReadTheDocs instructions: https://docs.readthedocs.io/en/stable/index.html
+    - Useful Mkdocs tutorial: https://realpython.com/python-project-documentation-with-mkdocs/
+
+Development 
+===========
+
 - Slices using coordinates variables
 - Slices using cartesian or cylindrical relative measurements
 - Size of the planet
 - SLices in cartesian for fields defined in cph/cyl
-
-- Test fargopy in 'ipython'
 - When run, compile automatically 
 - For mpi: --allow-run-as-root
 - Check cancel when progress
 - '_get_resumable_snapshot'
-- Load all fields.
-- Load range fields.
-- Video.
 - Get a new field from other fields: pre created formulae or custom formulae.
 - Migration planet.
 - fondam.h
@@ -26,3 +35,15 @@ TODO
 - Disclaimer: Men at work!
 - Monitor simulation without running it.
 - Change options in .opt
+
+Already done
+============
+
+- Video.
+- Load all fields.
+- Load range fields.
+- Test fargopy in 'ipython'
+
+Deprecated
+==========
+
