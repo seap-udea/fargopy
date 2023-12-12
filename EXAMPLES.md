@@ -1,29 +1,7 @@
 # FARGOpy
 ## Wrapping FRAGO3D
 
-<!-- This are visual tags that you may add to your package at the beginning with useful information on your package --> 
-[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/)
-[![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/)
-
-`FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html)., the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to ensue the interaction with FARGO3D especially for those starting using the code, for instance for teaching and training purposes, but also provide functionalities for most advanced users in tasks related to the postprocessing of output files and plotting.
-
-<p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
-
-## Download and install FARGO3D
-
-For using `FARGOpy` you first need to download and install `FARGO3D` and all its prerequisites. For a detailed guide please see the [FARGO documentation](https://fargo3d.bitbucket.io/index.html) or the [project repo at bitbucket](https://bitbucket.org/fargo3d/public/src/ae0fcdc67bb7c83aed85fc9a4d4a2d5061324597/?at=release%2Fpublic). Still, `FARGOpy` provides some useful commands and tools to test the platform on which you are working and check if it is prepared to use the whole functionalities of the packages or part of them.
-
-> **NOTE**: It is important to understand that `FARGO3D` works especially well on Linux plaforms (including `MacOS`). The same condition applies for `FARGOpy`. Because of that, most internal as well as public features of the packages are designed to work in a `Linux` environment. For working in another operating systems, for instance for teaching or training purposes, please consider to use virtual machines.
-
-Still, `fargopy` provides a simple way to get the latest version of `FARGO3D`. For this just run in the terminal:
-
- ```shell
-$ ifargopy download
-```
-
-A copy of `FARGO3D` will be download in the directory where the command is executed with the name `./fargo3d/`
-
-## Quickstart
+## Detailed examples
 
 There are three modalities for using `fargopy`:
 
@@ -296,7 +274,7 @@ fig.savefig('gallery/example-dens_r.png')
 
 
     
-![png](EXAMPLES_files/EXAMPLES_46_0.png)
+![png](EXAMPLES_files/EXAMPLES_40_0.png)
     
 
 
