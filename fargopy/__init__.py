@@ -148,7 +148,7 @@ FP_CONFIGURATION = f"""# This is the configuration variables for FARGOpy
 # Package
 FP_VERSION = '{version}'
 # System
-FP_HOME = '{FP_HOME}'
+FP_HOME = '{FP_HOME}/'
 # Directories
 FP_DOTDIR = '{FP_DOTDIR}'
 FP_RCFILE = '{FP_RCFILE}'
@@ -156,7 +156,7 @@ FP_RCFILE = '{FP_RCFILE}'
 FP_VERBOSE = False
 # FARGO3D variablles
 FP_FARGO3D_CLONECMD = 'git clone https://bitbucket.org/fargo3d/public.git'
-FP_FARGO3D_BASEDIR = './'
+FP_FARGO3D_BASEDIR = '{FP_HOME}'
 FP_FARGO3D_PACKDIR = 'fargo3d/'
 FP_FARGO3D_BINARY = 'fargo3d'
 FP_FARGO3D_HEADER = 'src/fargo3d.h'
@@ -181,14 +181,14 @@ def initialize(options='', force=False):
                 'all': all actions.
 
         force: bool, default = False:
-            If True force any action that depends on a previous condition.
+            If True, force any action that depends on a previous condition.
             For instance if options = 'configure' and force = True it will
             override FARGOpy directory.
     """
     if ('configure' in options) or ('all' in options):
         # Create configuration directory
         if not os.path.isdir(FP_DOTDIR) or force:
-            Debug.trace(f"Configuring FARGOpy...")
+            Debug.trace(f"Configuring FARGOpy at {FP_DOTDIR}...")
             # Create directory
             os.system(f"mkdir -p {FP_DOTDIR}")
             # Create configuration variables
@@ -205,8 +205,8 @@ def initialize(options='', force=False):
     if ('download' in options) or ('all' in options):
         print("Downloading FARGOpy...")
         fargo_dir = f"{FP_FARGO3D_BASEDIR}/{FP_FARGO3D_PACKDIR}".replace('//','/')
-        if not os.path.isdir(fargo_dir):
-            fargopy.Sys.simple(f"{FP_FARGO3D_CLONECMD} {FP_FARGO3D_PACKDIR}")
+        if not os.path.isdir(fargo_dir) or force:
+            fargopy.Sys.simple(f"cd {FP_FARGO3D_BASEDIR};{FP_FARGO3D_CLONECMD} {FP_FARGO3D_PACKDIR}")
             print(f"\tFARGO3D downloaded to {fargo_dir}")
         else:
             print(f"\tFARGO3D directory already present in '{fargo_dir}'")
@@ -214,6 +214,8 @@ def initialize(options='', force=False):
         fargo_header = f"{fargo_dir}/{FP_FARGO3D_HEADER}"
         if not os.path.isfile(fargo_header):
             print(f"No header file for fargo found in '{fargo_header}'")
+        else:
+            print(f"Header file for FARGO3D is in the fargo directory {fargo_dir}")
         
     if ('compile' in options) or ('all' in options):
         print("Test compilation")
@@ -232,6 +234,7 @@ if not os.path.isdir(FP_DOTDIR):
 Debug.trace(f"::Reading configuration variables")
 exec(open(f"{FP_RCFILE}").read())
 Debug.VERBOSE = FP_VERBOSE
+FP_FARGO3D_DIR = (FP_FARGO3D_BASEDIR + '/' + FP_FARGO3D_PACKDIR).replace('//','/')
 
 # Check if version in RCFILE is different from installed FARGOpy version
 if FP_VERSION != version:

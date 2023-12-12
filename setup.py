@@ -50,7 +50,8 @@ setuptools.setup(
     # ######################################################################
     # DEPENDENCIES
     # ######################################################################
-    install_requires=['scipy','matplotlib','tqdm','numpy','ipython','celluloid','psutil'],
+    install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
+                      'celluloid','psutil','gdown'],
 
     # ######################################################################
     # OPTIONS

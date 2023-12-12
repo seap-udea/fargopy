@@ -293,7 +293,7 @@ class Simulation(Fargo3d):
                         dimsfile='dims.dat'
                         ):
         if self.output_dir is None:
-            print(f"You have to set forst the outputs directory with <sim>.set_outputs('<directory>')")
+            print(f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')")
 
         # Read variables
         vars = self._load_variables(varfile)
@@ -310,9 +310,25 @@ class Simulation(Fargo3d):
         dims = self._load_dims(dimsfile)
         if len(dims):
             self.dims = dims 
-        
-        print("Configuration variables and domains load into the object. See e.g. <sim>.vars")
+
+        # Read the summary files
+        self.nsnaps = self._get_nsnaps()
+        print(f"Number of snapshots in output directory: {self.nsnaps}")
     
+        print("Configuration variables and domains load into the object. See e.g. <sim>.vars")
+
+    def _get_nsnaps(self):
+        """Get the number of snapshots in an output directory
+        """
+        error,output = fargopy.Sys.run(f"ls {self.output_dir}/summary[0-9]*.dat")
+        if error == 0:
+            files = output[:-1]
+            nsnaps = len(files)
+            return nsnaps
+        else:
+            print(f"No summary file in {self.output_dir}")
+            return 0
+
     def _load_dims(self,dimsfile):
         """Parse the dim directory
         """
