@@ -74,9 +74,9 @@ fp.initialize('download')
 
 > **NOTE**: As you may see the default directory where FARGO3D is download is `~/` and the name of the directory is `fargo3d`. You may change this by setting the configuration variables `FP_FARGO3D_BASEDIR` or `FP_FARGO3D_PACKDIR` brefore downloading the package.
 
-## Minimal usage
+## Quickstart
 
-Here we will illustrate the minimal commands you may run to test the package. A more detail Quickstart guide can be found in [this file](). 
+Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this file](EXAMPLES.md). 
 
 For this example we will assume that you already have a set of FARGO3D simulation results. You may download a precomputed set of results prepared by the developers of `FARGOpy` using the command: 
 
@@ -173,7 +173,7 @@ And plot it:
 
 
 ```python
-plt.ioff()
+plt.ioff() # Drop this out of this tutorial
 fig,axs = plt.subplots(1,2,figsize=(12,6))
 
 ax = axs[0]
@@ -188,12 +188,13 @@ ax.set_xlabel('$x$ [UL]')
 ax.set_ylabel('$y$ [UL]')
 fp.Util.fargopy_mark(ax)
 ax.axis('equal')
-fig.savefig('gallery/example-dens_disk.png')
+fig.savefig('gallery/example-dens_disk.png') # Drop this out of this tutorial
 ```
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_disk.png?raw=true" alt="Animation""/></p>
 
 ## What's new
+
 
 Version 0.3.*:
 
