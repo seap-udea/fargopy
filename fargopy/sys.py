@@ -27,6 +27,7 @@ class Sys(object):
     QERROR = True
     STDERR = ''
     STDOUT = ''
+    OUT = ''
 
     @staticmethod
     def run(cmd,quiet=True):
@@ -35,8 +36,8 @@ class Sys(object):
         Parameters:
             cmd: string:
                 Command to run
-            verbose: boolean, default = True:
-                When True the output of the command is shown.
+            quiet: boolean, default = True:
+                When False the output of the command is shown.
             
         Output:
             error: integer:
@@ -82,6 +83,7 @@ class Sys(object):
             elif Sys.QERROR==0:
                 fargopy.Debug.trace(f"sysrun::Done. You're great. Check Sys.STDOUT for details.")
         
+        Sys.OUT = out
         return Sys.QERROR,out
 
     @staticmethod
@@ -100,22 +102,43 @@ class Sys(object):
         return os.system(cmd)
 
     @staticmethod
-    def compile_fargo3d(self,clean=True):
-        if Conf._check_fargo(Conf.FARGO3D_FULLDIR):    
-            if clean:
-                Sys.sysrun(f'make -C {Conf.FARGO3D_FULLDIR} clean mrproper')
-            
-            error,out = Sys.sysrun(f'make -C {Conf.FARGO3D_FULLDIR} PARALLEL={self.parallel} GPU={self.gpu}',verbose=False)
-            if error:
-                if not Conf._check_fargo_binary(Conf.FARGO3D_FULLDIR,quiet=True):
-                    print("An error compiling the code arose. Check dependencies.")
-                    print(Sys.STDERR)
-                return False
-            
-            return True
-    
-    @staticmethod
     def get_memory():
         svmem = psutil.virtual_memory()
         return svmem
-    
+
+    @staticmethod
+    def lock(pid):
+        """Create a lock file
+        """
+        if Sys.check_lock(verbose=False):
+            print(f"You cannot lock FARGO3D because it is already locked")
+            return
+        lock_file = open(fargopy.FP_FARGO3D_LOCKFILE,"w")
+        lock_file.write(pid)
+        lock_file.close()
+        
+    @staticmethod
+    def unlock():
+        """Unlock a fargopy instance
+        """
+        if Sys.check_lock(verbose=False):
+            print(f"Unlocking FARGO3D")
+            # Kill process 
+            error,output = Sys.run(f"kill -9 {pid}")
+            if error:
+                print(f"The locking process {pid} does not exist.")
+            else:
+                print(f"The locking process {pid} has been killed.")
+            # Remove locking file 
+            print(f"Removing locking file")
+            error,output = Sys.run(f"rm -rf {fargopy.FP_FARGO3D_LOCKFIL}")
+
+    @staticmethod
+    def check_lock(verbose=True):
+        """Check if fargopy is locked by a running process
+        """
+        if os.path.isfile(fargopy.FP_FARGO3D_LOCKFILE):
+            if verbose:
+                print(f"There is a lockfile in {fargopy.FP_FARGO3D_LOCKFILE}")
+            return True
+        return False

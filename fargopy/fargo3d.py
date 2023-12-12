@@ -9,6 +9,8 @@ import fargopy
 import os
 import numpy as np
 import re
+import subprocess
+import time
 
 ###############################################################
 # Constants
@@ -16,7 +18,7 @@ import re
 KB = 1.380650424e-16  # Boltzmann constant: erg/K, erg = g cm^2 / s^2
 MP = 1.672623099e-24 # Mass of the proton, g
 GCONST = 6.67259e-8 # Gravitational constant, cm^3/g/s^2 
-RGAS = 8.314472e7 # Gas constant, erg /K/mol
+RGAS = 8.314472e7 # Gas constant, erg/K/mol
 MSUN = 1.9891e33 # g
 AU = 1.49598e13 # cm
 YEAR = 31557600.0 # s
@@ -32,10 +34,36 @@ COORDS_MAP = dict(
 # Classes
 ###############################################################
 class Fargobj(object):
-    def __init__(self):
+    def __init__(self,**kwargs):
         self.fobject = True
+        self.kwargs = kwargs
 
+    def set_property(self,property,default,method=lambda prop:prop):
+        """Set a property of object using a given method
+
+        Examples:
+            >>> obj = Fargobj()
+            >>> obj.set_property('a',1)
+            >>> print(obj.a)
+            1
+        """
+        if property in self.kwargs.keys():
+            method(self.kwargs[property])
+            self.__dict__[property] = self.kwargs[property]
+            return True
+        else:
+            method(default)
+            self.__dict__[property] = default
+            return False
+        
     def has(self,key):
+        """Check if a key is an attribute of Fargobj object
+
+        Examples:
+            >>> obj = Fargobj(a=1)
+            >>> print(obj.has('a'))
+            True
+        """
         if key in self.__dict__.keys():
             return True
         else:
@@ -43,8 +71,8 @@ class Fargobj(object):
 
 class Fargo3d(Fargobj):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self,**kwargs):
+        super().__init__(**kwargs)
    
     def compile_fargo3d(self,clean=True):
         if Conf._check_fargo(Conf.FARGO3D_FULLDIR):    
@@ -75,7 +103,8 @@ class Field(Fargobj):
                 density.slice(phi=30*RAD,interp='nearest') # Take a slice interpolating to the nearest
     """
 
-    def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar'):
+    def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar',**kwargs):
+        super().__init__(**kwargs)
         self.data = data
         self.coordinates = coordinates
         self.domains = domains
@@ -258,18 +287,435 @@ class Field(Fargobj):
 
 class Simulation(Fargo3d):
 
-    def __init__(self):
-        super().__init__()
-        self.output_dir = None
+    def __init__(self,**kwargs):
+        super().__init__(**kwargs)
+        
+        # Load simulation configuration from a file
+
+        # Set units by default
         self.set_units(UL=AU,UM=MSUN)
+        
+        # Set properties
+        self.set_property('fargo3d_dir',
+                          fargopy.FP_FARGO3D_DIR,
+                          self.set_fargo3d_dir)
+        self.set_property('setup',
+                          None,
+                          self.set_setup)
+        self.set_property('output_dir',
+                          None,
+                          self.set_output_dir)
+        self.set_property('fargo3d_binary',
+                          None)
+        self.set_property('fargo3d_compilation_options',
+                          dict(parallel=0,gpu=0,options=''))
+        self.set_property('fargo3d_process',
+                          None)
+        self.set_property('logfile',
+                          None)
+        
+    # ##########################################################################
+    # Set special properties
+    # ##########################################################################  
+    def set_fargo3d_dir(self,dir=None):
+        """Set fargo3d directory
+
+        Args:
+            dir: string, default = None:
+                Directory where FARGO3D is installed.
+
+        Returns:
+            True if the FARGO3D directory exists and the file
+            'src/<fargo_header>' is found. False otherwise.
+        """
+        if dir is None:
+            return
+        if not os.path.isdir(dir):
+            print(f"FARGO3D directory '{dir}' does not exist.")
+            return
+        else:
+            fargo_header = f"{dir}/{fargopy.FP_FARGO3D_HEADER}".replace('//','/')
+            if not os.path.isfile(fargo_header):
+                print(f"No header file for FARGO3D found in '{fargo_header}'")
+            else:
+                print(f"Your simulation is now connected with '{dir}'")
+        
+        # Set derivative dirs
+        self.fargo3d_dir = dir
+        self.outputs_dir = (self.fargo3d_dir + '/outputs').replace('//','/')
+        self.setups_dir = (self.fargo3d_dir + '/setups').replace('//','/')
+    
+    def set_setup(self,setup):
+        """Connect the simulation to a given setup.
+
+        Args:
+            setup: string:
+                Name of the setup.
+        
+        Returns:
+            True if the setup_dir <faro3d_dir>/setups/<setup> is found. 
+            False otherwise.
+        """
+        if setup is None:
+            self.setup_dir = None
+            return None
+        setup_dir = f"{self.setups_dir}/{setup}".replace('//','/')
+        if self.set_setup_dir(setup_dir):
+            self.setup = setup
+        return setup
+    
+    def set_setup_dir(self,dir):
+        """Set setup directory
+
+        Args:
+            dir: string:
+                Directory where setup is available.
+
+        Returns:
+            True if the FARGO3D directory exists and the file
+            <fargo3d_dir>/src/<fargo_header> is found. False otherwise.
+        """
+        if dir is None:
+            return False
+        if not os.path.isdir(dir):
+            print(f"Setup directory '{dir}' does not exist.")
+            return False
+        else:
+            print(f"Now your simulation setup is at '{dir}'")
+        self.setup_dir = dir
+        return True
 
     def set_output_dir(self,dir):
+        if dir is None:
+            return
         if not os.path.isdir(dir):
-            print(f"Directory '{dir}' does not exist.")
+            print(f"Output directory '{dir}' does not exist.")
+            return
         else:
             print(f"Now you are connected with output directory '{dir}'")
         self.output_dir = dir
+        return
 
+    def set_units(self,UM=MSUN,UL=AU,G=1,mu=2.35):
+        """Set units of the simulation
+        """
+        # Basic
+        self.UM = UM
+        self.UL = UL
+        self.G = G
+        self.UT = (G*self.UL**3/(GCONST*self.UM))**0.5 # In seconds
+
+        # Thermodynamics
+        self.UTEMP = (GCONST*MP*mu/KB)*self.UM/self.UL # In K
+        
+        # Derivative
+        self.USIGMA = self.UM/self.UL**2 # In g/cm^2
+        self.URHO = self.UM/self.UL**3 # In kg/m^3
+        self.UEPS = self.UM/(self.UL*self.UT**2)  # In J/m^3
+        self.UV = self.UL/self.UT
+    
+    # ##########################################################################
+    # Control methods
+    # ##########################################################################  
+    def compile(self,setup=None,parallel=0,gpu=0,options='',force=False):
+        """Compile FARGO3D binary
+        """
+        if setup is not None:
+            if not self.set_setup(setup):
+                print("Failed")
+                return 
+
+        # Clean directrory
+        if force:
+            print(f"Cleaning FARGO3D directory {self.fargo3d_dir}...")
+            cmd = f"make -C {self.fargo3d_dir} clean mrproper"
+            compl = f"rm -rf {self.fargo3d_dir}/fargo3d_*"
+            error,self.output_clean = fargopy.Sys.run(cmd + '&&' + compl)
+            
+        # Prepare compilation
+        compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
+        fargo3d_binary = f"fargo3d_{compile_options.replace(' ','_').replace('=','-').strip('_')}"
+
+        # Compile binary
+        print(f"Compiling {fargo3d_binary}...")
+        cmd = f"cd {self.fargo3d_dir};make {compile_options}"
+        compl = f"mv fargo3d {fargo3d_binary}"
+        error,self.output_compilation = fargopy.Sys.run(cmd+' && '+compl)
+
+        # Check compilation result
+        if os.path.isfile(f"{self.fargo3d_dir}/{fargo3d_binary}"):
+            self.fargo3d_binary = fargo3d_binary
+            print(f"Succesful compilation of FARGO3D binary {self.fargo3d_binary}")
+            self.fargo3d_compilation_options=dict(
+                parallel=parallel,
+                gpu=gpu,
+                options=options
+            )
+            return True
+        else:
+            print(f"Something failed when compiling FARGO3D. For details check Simulation.output_compilation")
+            return False
+        
+    def run(self,
+            mode='async',
+            options='-m',
+            mpioptions='-np 1',
+            resume=False,
+            cleanrun=False,
+            test=False):
+
+        if self.fargo3d_binary is None:
+            print("You must first compile your simulation with: <simulation>.compile(<option>).")
+            return
+
+        if self._is_running():
+            print(f"There is a running process. Please stop it before running/resuming")
+            return
+
+        # Mandatory options
+        options = options + " -t"
+        if 'run_options' not in self.__dict__.keys():
+            self.fargo3d_run_options = options
+        
+        self.logfile = f"{self.setup_dir}/{self.setup}.log"
+
+        # Clean output if available
+        if cleanrun:
+            # Check if there is an output director
+            output_dir = f"{self.outputs_dir}/{self.setup}"
+            if os.path.isdir(output_dir):
+                self.output_dir = output_dir
+                self.clean_output()
+            else:
+                print(f"No output directory {output_dir} yet created.")
+        
+        # Select command to run
+        precmd=''
+        if self.fargo3d_compilation_options['parallel']:
+            precmd = f"mpirun {mpioptions} "
+
+        # Preparing command
+        run_cmd = f"{precmd} ./{self.fargo3d_binary} {options} setups/{self.setup}/{self.setup}.par"
+        
+        if mode == 'sync':
+            # Run synchronously
+            cmd = f"cd {self.fargo3d_dir};{run_cmd} |tee {self.logfile}"
+            print(f"Running synchronously: {cmd}")
+            fargopy.Sys.simple(cmd)
+            self.fargo3d_process = None
+
+        elif mode == 'async':
+            # Run asynchronously
+            
+            # Select logfile mode accroding to if the process is resuming
+            logmode = 'a' if resume else 'w'
+            logfile_handler=open(self.logfile,logmode)
+
+            # Launch process
+            print(f"Running asynchronously (test = {test}): {run_cmd}")
+            if not test:
+                process = subprocess.Popen(run_cmd.split(),cwd=self.fargo3d_dir,
+                                        stdout=logfile_handler,stderr=logfile_handler)
+                # Introduce a short delay to verify if the process has failed
+                time.sleep(1.0)
+
+                if process.poll() is None:
+                    # Check if program is effectively running
+                    self.fargo3d_process = process            
+                    
+                    # Create a lock on fargopy with the process id
+                    # fargopy.lock(self.frago3d_process.pid)
+
+                    # Setup output directory 
+                    self.set_output_dir(f"{self.outputs_dir}/{self.setup}".replace('//','/'))    
+                else:
+                    print(f"Process running failed. Please check the logfile {self.logfile}")
+                    
+    def stop(self):
+        if not self._check_process():
+            return
+
+        poll = self.fargo3d_process.poll()
+        if poll is None:
+            print(f"Stopping FARGO3D process (pid = {self.fargo3d_process.pid})")
+            subprocess.Popen.kill(self.fargo3d_process)
+            del self.fargo3d_process
+            self.fargo3d_process = None
+        else:
+            print(f"The process has already finished. Check logfile {self.logfile}.")
+
+    def _save_simultation(self):
+        """Save simulation configuration 
+        """
+        pass
+
+    def status(self,mode='isrunning',verbose=True):
+        """Check the status of the running process
+
+        Parameters:
+            mode: string, defaul='isrunning':
+                Available modes:
+                    'isrunning': Just show if the process is running.
+                    'logfile': Show the latest lines of the logfile
+                    'outputs': Show (and return) a list of outputs
+                    'snapshots': Show (and return) a list of snapshots
+                    'progress': Show progress in realtime
+
+        """
+        # Bar separating output 
+        bar = f"\n{''.join(['#']*80)}\n"
+        
+        # vprint
+        vprint = print if verbose else lambda x:x
+
+        if 'isrunning' in mode or mode=='all':
+            vprint(bar+"Running status of the process:")
+            if self.fargo3d_process:
+                poll = self.fargo3d_process.poll()
+                if poll is None:
+                    vprint("\tThe process is running.")
+                else:
+                    vprint(f"\tThe process has ended with termination code {poll}.")
+            else:
+                vprint(f"\tThe process is stopped.")
+
+        if 'logfile' in mode or mode=='all':
+            vprint(bar+"Logfile content:")
+            if 'logfile' in self.__dict__.keys() and os.path.isfile(self.logfile):
+                vprint("The latest 10 lines of the logfile:\n")
+                if verbose:
+                    os.system(f"tail -n 10 {self.logfile}")
+            else:
+                vprint("No log file created yet")
+
+        if 'outputs' in mode or mode=='all':
+            vprint(bar+"Output content:")
+            error,output = fargopy.Sys.run(f"ls {self.output_dir}/*.dat")
+            if not error:
+                files = [file.split('/')[-1] for file in output[:-1]]
+                file_list = ""
+                for i,file in enumerate(files):
+                    file_list += f"{file}, "
+                    if ((i+1)%10) == 0:
+                        file_list += "\n"
+                file_list = file_list.strip("\n,")
+                vprint(f"\n{len(files)} available datafiles:\n")
+                self.output_datafiles = files
+                vprint(file_list)
+            else:
+                vprint("No datafiles yet available")
+
+        if 'progress' in mode:
+            self._status_progress()
+
+    def _status_progress(self,minfreq=0.1):
+        """Show a progress of the execution
+
+        Parameters:
+            minfreq: float, default = 0.1:
+                Minimum amount of seconds between status check.
+        """
+        # Prepare
+        frequency = minfreq
+        previous_output = ''
+        previous_resumable_snapshot = 1e100
+        time_previous = time.time()
+
+        # Infinite loop checking for output
+        while True:
+            if not self._is_running():
+                print("The simulation is not running anymore")
+                return
+            error,output = fargopy.Sys.run(f"grep OUTPUT {self.logfile} |tail -n 1")
+            
+            if not error:
+                # Get the latest output
+                latest_output = output[-2]
+                if latest_output != previous_output:
+                    print(f"{latest_output} [output pace = {frequency:.1f} secs]")
+                    # Fun the number of the output
+                    find = re.findall(r'OUTPUTS\s+(\d+)',latest_output)
+                    resumable_snapshot = int(find[0])
+                    # Get the time elapsed since last status check
+                    time_now = time.time()
+                    frequency = max(time_now - time_previous,minfreq)/2
+                    if (resumable_snapshot - previous_resumable_snapshot)>1:
+                        # Reduce frequency if snapshots are accelerating
+                        frequency = frequency/2
+                    previous_resumable_snapshot = resumable_snapshot
+                    time_previous = time_now
+                previous_output = latest_output
+            try:
+                time.sleep(frequency)
+            except KeyboardInterrupt:
+                return
+
+    def resume(self,snapshot=-1,mpioptions='-np 1'):
+        latest_snapshot_resumable = self._is_resumable()
+        if latest_snapshot_resumable<0:
+            return
+        if self._is_running():
+            print(f"There is a running process. Please stop it before resuming")
+            return
+        if self._has_finished():
+            return
+        # Resume
+        if snapshot<0:
+            snapshot = latest_snapshot_resumable
+        print(f"Resuming from snapshot {snapshot}...")
+        self.run(mode='async',mpioptions=mpioptions,resume=True,
+                 options=self.fargo3d_run_options+f' -S {snapshot}',test=False)
+
+    def _has_finished(self):
+        if self.fargo3d_process:
+            poll = self.fargo3d_process.poll()
+            if poll is None:
+                return False
+            else:
+                print(f"The process has ended with termination code {poll}.")
+                return True
+
+    def _is_resumable(self):
+        if self.logfile is None:
+            print(f"The simulation has not been ran yet. Run <simulation>.run() before resuming")
+            return -1
+        latest_snapshot_resumable = max(self._get_nsnaps() - 2, 0)
+        return latest_snapshot_resumable
+        
+    def clean_output(self):
+        if self.output_dir is None:
+            print(f"Output directory has not been set.")
+            return
+
+        if self._is_running():
+            print(f"There is a running process. Please stop it before cleaning")
+            return
+        
+        print(f"Cleaning output directory {self.output_dir}")
+        cmd = f"rm -rf {self.output_dir}/*"
+        error,output = fargopy.Sys.run(cmd)
+
+    def _is_running(self,verbose=False):
+        if self.fargo3d_process:
+            poll = self.fargo3d_process.poll()
+            if poll is None:
+                if verbose:
+                    print(f"The process is already running with pid '{self.fargo3d_process.pid}'")
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    def _check_process(self):
+        if self.fargo3d_process is None:
+            print(f"There is no FARGO3D process handler available.")
+            return False
+        return True
+
+    # ##########################################################################
+    # Operations on the FARGO3D directories
+    # ##########################################################################  
     def list_outputs(self,quiet=False):
         if self.output_dir is None:
             print(f"You have to set forst the outputs directory with <sim>.set_outputs('<directory>')")
@@ -554,24 +1000,24 @@ class Simulation(Fargo3d):
         if match is not None:
             comps = [match.group(i) for i in range(1,match.lastindex+1)]
         return comps
-    
-    def set_units(self,UM=MSUN,UL=AU,G=1,mu=2.35):
-        """Set units of simulation
-        """
-        # Basic
-        self.UM = UM
-        self.UL = UL
-        self.G = G
-        self.UT = (G*self.UL**3/(GCONST*self.UM))**0.5 # In seconds
 
-        # Thermodynamics
-        self.UTEMP = (GCONST*MP*mu/KB)*self.UM/self.UL # In K
-        
-        # Derivative
-        self.USIGMA = self.UM/self.UL**2 # In g/cm^2
-        self.URHO = self.UM/self.UL**3 # In kg/m^3
-        self.UEPS = self.UM/(self.UL*self.UT**2)  # In J/m^3
-        self.UV = self.UL/self.UT
+    def __repr__(self):
+        repr = f"""Simulation information:
+    FARGO3D directory: {self.fargo3d_dir}
+        Outputs: {self.outputs_dir}
+        Setups: {self.setups_dir}
+    Units:
+        G = {self.G} UL^3/(UM UT^2)
+        UL, UM, UT = {self.UL} m, {self.UM} kg, {self.UT} s
+        UE = {self.UEPS} J/m^3
+        UV = {self.UV} m/s
+        URHO = {self.URHO} kg/m^3
+        USIGMA = {self.USIGMA} kg/m^2
+    Setup: {self.setup}
+    Setup directory: {self.setup_dir}
+    Output directory: {self.output_dir}
+"""
+        return repr
 
     
         

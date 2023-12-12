@@ -235,6 +235,7 @@ Debug.trace(f"::Reading configuration variables")
 exec(open(f"{FP_RCFILE}").read())
 Debug.VERBOSE = FP_VERBOSE
 FP_FARGO3D_DIR = (FP_FARGO3D_BASEDIR + '/' + FP_FARGO3D_PACKDIR).replace('//','/')
+FP_FARGO3D_LOCKFILE = f"{fargopy.FP_DOTDIR}/fargopy.lock"
 
 # Check if version in RCFILE is different from installed FARGOpy version
 if FP_VERSION != version:
