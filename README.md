@@ -195,6 +195,10 @@ fig.savefig('gallery/example-dens_disk.png')
 
 ## What's new
 
+Version 0.3.*:
+
+- Refactoring of initializing routines.
+- Improvements in documentation of basic classes in `__init__.py`.
 
 Version 0.2.*:
 
