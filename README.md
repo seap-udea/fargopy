@@ -49,7 +49,7 @@ import fargopy as fp
 
 `FARGOpy` provides a simple way to get the latest version of `FARGO3D`. In the terminal run:
 
- ```shell
+```shell
 $ ifargopy download
 ```
 
@@ -63,12 +63,7 @@ fp.initialize('download')
 ```
 
     Downloading FARGOpy...
-
-
-    Cloning into 'fargo3d'...
-
-
-    	FARGO3D downloaded to /home/jzuluaga/fargo3d/
+    	FARGO3D directory already present in '/home/jzuluaga/fargo3d/'
     Header file for FARGO3D is in the fargo directory /home/jzuluaga/fargo3d/
 
 
@@ -76,18 +71,16 @@ fp.initialize('download')
 
 ## Quickstart
 
-Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this file](EXAMPLES.md). 
+Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this file](TUTORIAL.md). 
 
 For this example we will assume that you already have a set of FARGO3D simulation results. You may download a precomputed set of results prepared by the developers of `FARGOpy` using the command: 
 
 
 ```python
-fp.Util.download_precomputed(setup='fargo')
+fp.Simulation.download_precomputed(setup='fargo')
 ```
 
-    Downloading fargo.tgz from cloud (compressed size around 55 MB) into /tmp
-    Uncompressing fargo.tgz into /tmp/fargo
-    Done.
+    Precomputed output directory '/tmp/fargo' already exist
 
 
 
@@ -103,6 +96,9 @@ Create a simulation object:
 ```python
 sim = fp.Simulation()
 ```
+
+    Your simulation is now connected with '/home/jzuluaga/fargo3d/'
+
 
 Set the output directory (in this case, the directory where the precomputed simulation has been stored):
 

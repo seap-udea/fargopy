@@ -12,6 +12,8 @@ push:cleangit
 
 #Example: make release RELMODE=release VERSION=0.2.0.2 
 release:
+	@echo "Convert README and QUICKSTART to markdown..."
+	@make README.md QUICKSTART.md
 	@echo "Releasing a new version..."
 	@bash bin/release.sh $(RELMODE) $(VERSION)
 
