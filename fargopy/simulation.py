@@ -11,6 +11,8 @@ import numpy as np
 import re
 import subprocess
 import time
+import gdown
+import os
 
 ###############################################################
 # Constants
@@ -23,269 +25,24 @@ MSUN = 1.9891e33 # g
 AU = 1.49598e13 # cm
 YEAR = 31557600.0 # s
 
-# Map of coordinates into FARGO3D coordinates
-COORDS_MAP = dict(
-    cartesian = dict(x='x',y='y',z='z'),
-    cylindrical = dict(phi='x',r='y',z='z'),
-    spherical = dict(phi='x',r='y',theta='z'),
+PRECOMPUTED_BASEURL = 'https://docs.google.com/uc?export=download&id='
+PRECOMPUTED_SIMULATIONS = dict(
+    # Download link: https://drive.google.com/file/d/1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3/view?usp=drive_link
+    fargo=dict(id='1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3',size=55),
+    # Download link: https://drive.google.com/file/d/1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6/view?usp=drive_link
+    p3diso=dict(id='1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6',size=220),
+    # Download link: https://drive.google.com/file/d/14mL2KCcCtjptChiyISGyJxAEOl4KAanI/view?usp=drive_link
+    p3disof=dict(id='14mL2KCcCtjptChiyISGyJxAEOl4KAanI',size=440),
+    # Download link: https://drive.google.com/file/d/1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7/view?usp=drive_link
+    fargo_multifluid=dict(id='1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7',size=100),
+    # Download link: https://drive.google.com/file/d/12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N/view?usp=drive_link
+    binary=dict(id='12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N',size=140),
 )
 
 ###############################################################
 # Classes
 ###############################################################
-class Fargobj(object):
-    def __init__(self,**kwargs):
-        self.fobject = True
-        self.kwargs = kwargs
-
-    def set_property(self,property,default,method=lambda prop:prop):
-        """Set a property of object using a given method
-
-        Examples:
-            >>> obj = Fargobj()
-            >>> obj.set_property('a',1)
-            >>> print(obj.a)
-            1
-        """
-        if property in self.kwargs.keys():
-            method(self.kwargs[property])
-            self.__dict__[property] = self.kwargs[property]
-            return True
-        else:
-            method(default)
-            self.__dict__[property] = default
-            return False
-        
-    def has(self,key):
-        """Check if a key is an attribute of Fargobj object
-
-        Examples:
-            >>> obj = Fargobj(a=1)
-            >>> print(obj.has('a'))
-            True
-        """
-        if key in self.__dict__.keys():
-            return True
-        else:
-            return False
-
-class Fargo3d(Fargobj):
-
-    def __init__(self,**kwargs):
-        super().__init__(**kwargs)
-   
-    def compile_fargo3d(self,clean=True):
-        if Conf._check_fargo(Conf.FARGO3D_FULLDIR):    
-            if clean:
-                Util.sysrun(f'make -C {Conf.FARGO3D_FULLDIR} clean mrproper',verbose=False)
-            
-            error,out = Util.sysrun(f'make -C {Conf.FARGO3D_FULLDIR} PARALLEL={self.parallel} GPU={self.gpu}',verbose=False)
-            if error:
-                if not Conf._check_fargo_binary(Conf.FARGO3D_FULLDIR,quiet=True):
-                    print("An error compiling the code arose. Check dependencies.")
-                    print(Util.STDERR)
-                return False
-            
-            return True
-
-class Field(Fargobj):
-    """Fields:
-
-    Attributes:
-        coordinates: type of coordinates (cartesian, cylindrical, spherical)
-        data: numpy arrays with data of the field
-
-    Methods:
-        slice: get an slice of a field along a given spatial direction.
-            Examples: 
-                density.slice(r=0.5) # Take the closest slice to r = 0.5
-                density.slice(ir=20) # Take the slice through the 20 shell
-                density.slice(phi=30*RAD,interp='nearest') # Take a slice interpolating to the nearest
-    """
-
-    def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar',**kwargs):
-        super().__init__(**kwargs)
-        self.data = data
-        self.coordinates = coordinates
-        self.domains = domains
-        self.type = type
-
-    def meshslice(self,slice=None,component=0):
-        """Perform a slice on a field and produce as an output the 
-        corresponding field slice and the associated matrices of
-        coordinates for plotting.
-        """
-        # Analysis of the slice 
-        if slice is None:
-            raise ValueError("You must provide a slice option.")
-
-        # Perform the slice
-        slice_cmd = f"self.slice({slice},pattern=True)"
-        slice,pattern = eval(slice_cmd)
-        
-        # Create the mesh
-        if self.coordinates == 'cartesian':
-            z,y,x = np.meshgrid(self.domains.z,self.domains.y,self.domains.x,indexing='ij')
-            x = eval(f"x[{pattern}]")
-            y = eval(f"y[{pattern}]")
-            z = eval(f"z[{pattern}]")
-            
-            mesh = fargopy.Dictobj(dict=dict(x=x,y=y,z=z))
-
-        if self.coordinates == 'cylindrical':
-            z,r,phi = np.meshgrid(self.domains.z,self.domains.r,self.domains.phi,indexing='ij')
-            x,y,z = r*np.cos(phi),r*np.sin(phi),z
-
-            x = eval(f"x[{pattern}]")
-            y = eval(f"y[{pattern}]")
-            z = eval(f"z[{pattern}]")
-            r = eval(f"r[{pattern}]")
-            phi = eval(f"phi[{pattern}]")
-
-            mesh = fargopy.Dictobj(dict=dict(r=r,phi=phi,x=x,y=y,z=z))
-
-        if self.coordinates == 'spherical':
-            theta,r,phi = np.meshgrid(self.domains.theta,self.domains.r,self.domains.phi,indexing='ij')
-            x,y,z = r*np.sin(theta)*np.cos(phi),r*np.sin(theta)*np.sin(phi),r*np.cos(theta)
-
-            x = eval(f"x[{pattern}]")
-            y = eval(f"y[{pattern}]")
-            z = eval(f"z[{pattern}]")
-            r = eval(f"r[{pattern}]")
-            phi = eval(f"phi[{pattern}]")
-            theta = eval(f"theta[{pattern}]")
-
-            mesh = fargopy.Dictobj(dict=dict(r=r,phi=phi,theta=theta,x=x,y=y,z=z))
-
-        return slice,mesh
-
-    def slice(self,quiet=True,pattern=False,**kwargs):
-        """Extract an slice of a 3-dimensional FARGO3D field
-
-        Parameters:
-            quiet: boolean, default = False:
-                If True extract the slice quietly.
-                Else, print some control messages.
-
-            pattern: boolean, default = False:
-                If True return the pattern of the slice, eg. [:,:,:]
-
-            ir, iphi, itheta, ix, iy, iz: string or integer:
-                Index or range of indexes of the corresponding coordinate.
-
-            r, phi, theta, x, y, z: float:
-                Value for slicing. The slicing search for the closest
-                value in the domain.
-
-        Returns:
-            slice: sliced field.
-
-        Examples:
-            # 0D: Get the value of the field in iphi = 0, itheta = -1 and close to r = 0.82
-            gasvz.slice(iphi=0,itheta=-1,r=0.82)
-
-            # 1D: Get all values of the field in radial direction at iphi = 0, itheta = -1
-            gasvz.slice(iphi=0,itheta=-1)
-
-            # 2D: Get all values of the field for values close to phi = 0
-            gasvz.slice(phi=0)
-        """
-        # By default slice
-        ivar = dict(x=':',y=':',z=':')
-
-        if len(kwargs.keys()) == 0:
-            pattern_str = f"{ivar['z']},{ivar['y']},{ivar['x']}"
-            if pattern:
-                return self.data, pattern_str
-            return self.data
-            
-        # Check all conditions
-        for key,item in kwargs.items():
-            match = re.match('^i(.+)',key)
-            if match:
-                index = item
-                coord = match.group(1)
-                if not quiet:
-                    print(f"Index condition {index} for coordinate {coord}")
-                ivar[COORDS_MAP[self.coordinates][coord]] = index
-            else:
-                if not quiet:
-                    print(f"Numeric condition found for coordinate {key}")
-                if key in self.domains.keys():
-                    # Check if value provided is in range
-                    domain = self.domains.item(key)
-                    extrema = self.domains.extrema[key]
-                    min, max = extrema[0][1], extrema[1][1]
-                    if (item<min) or (item>max):
-                        raise ValueError(f"You are attempting to get a slice in {key} = {item}, but the valid range for this variable is [{min},{max}]")
-                    find = abs(self.domains.item(key) - item)
-                    ivar[COORDS_MAP[self.coordinates][key]] = find.argmin()
-                    
-        pattern_str = f"{ivar['z']},{ivar['y']},{ivar['x']}"
-
-        if self.type == 'scalar':
-            slice_cmd = f"self.data[{pattern_str}]"
-            if not quiet:
-                print(f"Slice: {slice_cmd}")
-            slice = eval(slice_cmd)
-
-        elif self.type == 'vector':
-            slice = np.array(
-                [eval(f"self.data[0,{pattern_str}]"),
-                 eval(f"self.data[1,{pattern_str}]"),
-                 eval(f"self.data[2,{pattern_str}]")]
-            )
-
-        if pattern:
-            return slice,pattern_str
-        return slice
-
-    def to_cartesian(self):
-        if self.type == 'scalar':
-            # Scalar fields are invariant under coordinate transformations
-            return self
-        elif self.type == 'vector':
-            # Vector fields must be transformed according to domain
-            if self.coordinates == 'cartesian':
-                return self
-            
-            if self.coordinates == 'cylindrical':
-                z,r,phi = np.meshgrid(self.domains.z,self.domains.r,self.domains.phi,indexing='ij')
-                vphi = self.data[0]
-                vr = self.data[1]
-                vz = self.data[2]
-                vx = vr*np.cos(phi) 
-                vy = vr*np.sin(phi)
-                
-                return (Field(vx,coordinates=self.coordinates,domains=self.domains,type='scalar'),
-                        Field(vy,coordinates=self.coordinates,domains=self.domains,type='scalar'),
-                        Field(vz,coordinates=self.coordinates,domains=self.domains,type='scalar'))
-            
-            if self.coordinates == 'spherical':
-
-                theta,r,phi = np.meshgrid(self.domains.theta,self.domains.r,self.domains.phi,indexing='ij')
-                vphi = self.data[0]
-                vr = self.data[1]
-                vtheta = self.data[2]
-
-                vx = vr*np.sin(theta)*np.cos(phi) + vtheta*np.cos(theta)*np.cos(phi) - vphi*np.sin(phi)
-                vy = vr*np.sin(theta)*np.sin(phi) + vtheta*np.cos(theta)*np.sin(phi) + vphi*np.cos(phi)
-                vz = vr*np.cos(theta) - vtheta*np.sin(theta)
-
-                return (Field(vx,coordinates=self.coordinates,domains=self.domains,type='scalar'),
-                        Field(vy,coordinates=self.coordinates,domains=self.domains,type='scalar'),
-                        Field(vz,coordinates=self.coordinates,domains=self.domains,type='scalar'))
-            
-    def get_size(self):
-        return self.data.nbytes/1024**2
-
-    def __str__(self):
-        return str(self.data)
-    
-    def __repr__(self):
-        return str(self.data)
-
-class Simulation(Fargo3d):
+class Simulation(fargopy.Fargobj):
 
     def __init__(self,**kwargs):
         super().__init__(**kwargs)
@@ -297,7 +54,7 @@ class Simulation(Fargo3d):
         
         # Set properties
         self.set_property('fargo3d_dir',
-                          fargopy.FP_FARGO3D_DIR,
+                          fargopy.Conf.FP_FARGO3D_DIR,
                           self.set_fargo3d_dir)
         self.set_property('setup',
                           None,
@@ -313,7 +70,7 @@ class Simulation(Fargo3d):
                           None)
         self.set_property('logfile',
                           None)
-        
+
     # ##########################################################################
     # Set special properties
     # ##########################################################################  
@@ -334,7 +91,7 @@ class Simulation(Fargo3d):
             print(f"FARGO3D directory '{dir}' does not exist.")
             return
         else:
-            fargo_header = f"{dir}/{fargopy.FP_FARGO3D_HEADER}".replace('//','/')
+            fargo_header = f"{dir}/{fargopy.Conf.FP_FARGO3D_HEADER}".replace('//','/')
             if not os.path.isfile(fargo_header):
                 print(f"No header file for FARGO3D found in '{fargo_header}'")
             else:
@@ -608,12 +365,15 @@ class Simulation(Fargo3d):
         if 'progress' in mode:
             self._status_progress()
 
-    def _status_progress(self,minfreq=0.1):
+    def _status_progress(self,minfreq=0.1,numstatus=5):
         """Show a progress of the execution
 
         Parameters:
             minfreq: float, default = 0.1:
                 Minimum amount of seconds between status check.
+
+            numstatus: int, default = 5:
+                Number of status shown before automatically stopping.
         """
         # Prepare
         frequency = minfreq
@@ -622,7 +382,8 @@ class Simulation(Fargo3d):
         time_previous = time.time()
 
         # Infinite loop checking for output
-        while True:
+        i = 0
+        while True and (i<numstatus):
             if not self._is_running():
                 print("The simulation is not running anymore")
                 return
@@ -647,6 +408,7 @@ class Simulation(Fargo3d):
                 previous_output = latest_output
             try:
                 time.sleep(frequency)
+                i += 1
             except KeyboardInterrupt:
                 return
 
@@ -897,9 +659,9 @@ class Simulation(Fargo3d):
                 file_field = f"{self.output_dir}/{file_name}".replace('//','/')
                 field_data += [self._load_field_scalar(file_field)]
         else:
-            raise ValueError(f"Field type '{type}' not recognized.")
+            raise ValueError(f"fargopy.Field type '{type}' not recognized.")
 
-        field = Field(data=np.array(field_data), coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
+        field = fargopy.Field(data=np.array(field_data), coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
         return field
     
     def _load_field_scalar(self,file):
@@ -960,7 +722,7 @@ class Simulation(Fargo3d):
                         if str(field_snap) not in fields.keys():
                             fields.__dict__[str(field_snap)] = fargopy.Dictobj()
                         size += field_data.nbytes
-                        (fields.__dict__[str(field_snap)]).__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
+                        (fields.__dict__[str(field_snap)]).__dict__[f"{field_name}"] = fargopy.Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
 
                     else:
                         # Store a specific snapshot
@@ -982,7 +744,7 @@ class Simulation(Fargo3d):
                                 field_name = field_name[:-1]
 
                             size += field_data.nbytes
-                            fields.__dict__[f"{field_name}"] = Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
+                            fields.__dict__[f"{field_name}"] = fargopy.Field(data=field_data, coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
 
         else:
             raise ValueError(f"No field found with pattern '{pattern}'. Change the fluid")
@@ -1002,7 +764,10 @@ class Simulation(Fargo3d):
         return comps
 
     def __repr__(self):
-        repr = f"""Simulation information:
+        return self.__str__()
+
+    def __str__(self):
+        str = f"""Simulation information:
     FARGO3D directory: {self.fargo3d_dir}
         Outputs: {self.outputs_dir}
         Setups: {self.setups_dir}
@@ -1017,7 +782,64 @@ class Simulation(Fargo3d):
     Setup directory: {self.setup_dir}
     Output directory: {self.output_dir}
 """
-        return repr
+        return str
+
+    # ##########################################################################
+    # Static method
+    # ##########################################################################
+    @staticmethod
+    def download_precomputed(setup=None,download_dir='/tmp',quiet=True,clean=True):
+        """Download a precomputed output from Google Drive FARGOpy public repository.
+
+        Args:
+            setup: string, default = None:
+                Name of the setup. For a list see fargopu.PRECOMPUTED_SIMULATIONS dictionary.
+
+            download_dir: string, default = '/tmp':
+                Directory where the output will be downloaded and uncompressed.
+
+        Optional args:
+            quiet: bool, default = True:
+                If True download quietly (no progress bar).
+            
+            clean: bool, default = False:
+                If True remove the tgz file after uncompressing it.
+
+        Return:
+            If successful returns the output directory.
+
+        """
+        if setup is None:
+            print(f"You must provide a setup name. Available setups: {list(PRECOMPUTED_SIMULATIONS.keys())}")
+            return ''
+        if not os.path.isdir(download_dir):
+            print(f"Download directory '{download_dir}' does not exist.")
+            return ''
+        if setup not in PRECOMPUTED_SIMULATIONS.keys():
+            print(f"Precomputed setup '{setup}' is not among the available setups: {list(PRECOMPUTED_SIMULATIONS.keys())}")
+            return ''
+        
+        output_dir = (download_dir + '/' + setup).replace('//','/')
+        if os.path.isdir(output_dir):
+            print(f"Precomputed output directory '{output_dir}' already exist")
+            return output_dir
+        else:
+            filename = setup + '.tgz'
+            fileloc = download_dir + '/' + filename
+            if os.path.isfile(fileloc):
+                print(f"Precomputed file '{fileloc}' already downloaded")
+            else:
+                # Download the setups
+                print(f"Downloading {filename} from cloud (compressed size around {PRECOMPUTED_SIMULATIONS[setup]['size']} MB) into {download_dir}")
+                url = PRECOMPUTED_BASEURL + PRECOMPUTED_SIMULATIONS[setup]['id']
+                gdown.download(url,fileloc,quiet=quiet)
+            # Uncompress the setups
+            print(f"Uncompressing {filename} into {output_dir}") 
+            fargopy.Sys.simple(f"cd {download_dir};tar zxf {filename}")
+            print(f"Done.")
+            fargopy.Sys.simple(f"cd {download_dir};rm -rf {filename}")
+            return output_dir
+
 
     
         

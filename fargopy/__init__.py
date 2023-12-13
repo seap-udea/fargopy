@@ -1,25 +1,7 @@
-"""FARGOpy package.
-
-To run it with IPython run:
-
-$ ifargopy
-
-To install FARGO3D run:
-
-$ ifargopy download
-
-To import use:
-
-import fargopy as fp
-"""
-
 ###############################################################
-# Import montu modules
+# Version
 ###############################################################
 from fargopy.version import *
-from fargopy.util import *
-from fargopy.sys import *
-from fargopy.fargo3d import *
 
 ###############################################################
 # External modules
@@ -135,35 +117,72 @@ class Dictobj(object):
     def __repr__(self):
         return self.__str__()
 
+class Fargobj(object):
+    def __init__(self,**kwargs):
+        self.fobject = True
+        self.kwargs = kwargs
+
+    def set_property(self,property,default,method=lambda prop:prop):
+        """Set a property of object using a given method
+
+        Examples:
+            >>> obj = Fargobj()
+            >>> obj.set_property('a',1)
+            >>> print(obj.a)
+            1
+        """
+        if property in self.kwargs.keys():
+            method(self.kwargs[property])
+            self.__dict__[property] = self.kwargs[property]
+            return True
+        else:
+            method(default)
+            self.__dict__[property] = default
+            return False
+        
+    def has(self,key):
+        """Check if a key is an attribute of Fargobj object
+
+        Examples:
+            >>> obj = Fargobj(a=1)
+            >>> print(obj.has('a'))
+            True
+        """
+        if key in self.__dict__.keys():
+            return True
+        else:
+            return False
+
 ###############################################################
 # Package configuration
 ###############################################################
 # Basic (unmodifiable) variables
-FP_HOME = os.environ['HOME']
-FP_DOTDIR = f"{FP_HOME}/.fargopy" 
-FP_RCFILE = f"{FP_DOTDIR}/fargopyrc"
+Conf = Dictobj()
+Conf.FP_HOME = os.environ['HOME']
+Conf.FP_DOTDIR = f"{Conf.FP_HOME}/.fargopy" 
+Conf.FP_RCFILE = f"{Conf.FP_DOTDIR}/fargopyrc"
 
 # Default configuration file content
-FP_CONFIGURATION = f"""# This is the configuration variables for FARGOpy
+Conf.FP_CONFIGURATION = f"""# This is the configuration variables for FARGOpy
 # Package
 FP_VERSION = '{version}'
 # System
-FP_HOME = '{FP_HOME}/'
+FP_HOME = '{Conf.FP_HOME}/'
 # Directories
-FP_DOTDIR = '{FP_DOTDIR}'
-FP_RCFILE = '{FP_RCFILE}'
+FP_DOTDIR = '{Conf.FP_DOTDIR}'
+FP_RCFILE = '{Conf.FP_RCFILE}'
 # Behavior
 FP_VERBOSE = False
 # FARGO3D variablles
 FP_FARGO3D_CLONECMD = 'git clone https://bitbucket.org/fargo3d/public.git'
-FP_FARGO3D_BASEDIR = '{FP_HOME}'
+FP_FARGO3D_BASEDIR = '{Conf.FP_HOME}'
 FP_FARGO3D_PACKDIR = 'fargo3d/'
 FP_FARGO3D_BINARY = 'fargo3d'
 FP_FARGO3D_HEADER = 'src/fargo3d.h'
 """
 
 # Default initialization script
-FP_INITIAL_SCRIPT = """
+Conf.FP_INITIAL_SCRIPT = """
 import sys
 import fargopy as fp
 fp.initialize(' '.join(sys.argv))
@@ -187,31 +206,31 @@ def initialize(options='', force=False):
     """
     if ('configure' in options) or ('all' in options):
         # Create configuration directory
-        if not os.path.isdir(FP_DOTDIR) or force:
-            Debug.trace(f"Configuring FARGOpy at {FP_DOTDIR}...")
+        if not os.path.isdir(Conf.FP_DOTDIR) or force:
+            Debug.trace(f"Configuring FARGOpy at {Conf.FP_DOTDIR}...")
             # Create directory
-            os.system(f"mkdir -p {FP_DOTDIR}")
+            os.system(f"mkdir -p {Conf.FP_DOTDIR}")
             # Create configuration variables
-            f = open(f"{FP_DOTDIR}/fargopyrc",'w')
-            f.write(FP_CONFIGURATION)
+            f = open(f"{Conf.FP_DOTDIR}/fargopyrc",'w')
+            f.write(Conf.FP_CONFIGURATION)
             f.close()
             # Create initialization script
-            f = open(f"{FP_DOTDIR}/ifargopy.py",'w')
-            f.write(FP_INITIAL_SCRIPT)
+            f = open(f"{Conf.FP_DOTDIR}/ifargopy.py",'w')
+            f.write(Conf.FP_INITIAL_SCRIPT)
             f.close()
         else:
             Debug.trace(f"Configuration already in place.")
 
     if ('download' in options) or ('all' in options):
         print("Downloading FARGOpy...")
-        fargo_dir = f"{FP_FARGO3D_BASEDIR}/{FP_FARGO3D_PACKDIR}".replace('//','/')
+        fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
         if not os.path.isdir(fargo_dir) or force:
-            fargopy.Sys.simple(f"cd {FP_FARGO3D_BASEDIR};{FP_FARGO3D_CLONECMD} {FP_FARGO3D_PACKDIR}")
+            fargopy.Sys.simple(f"cd {Conf.FP_FARGO3D_BASEDIR};{Conf.FP_FARGO3D_CLONECMD} {Conf.FP_FARGO3D_PACKDIR}")
             print(f"\tFARGO3D downloaded to {fargo_dir}")
         else:
             print(f"\tFARGO3D directory already present in '{fargo_dir}'")
         
-        fargo_header = f"{fargo_dir}/{FP_FARGO3D_HEADER}"
+        fargo_header = f"{fargo_dir}/{Conf.FP_FARGO3D_HEADER}"
         if not os.path.isfile(fargo_header):
             print(f"No header file for fargo found in '{fargo_header}'")
         else:
@@ -228,25 +247,39 @@ def initialize(options='', force=False):
 warnings.filterwarnings("ignore")
 
 # Read FARGOpy configuration variables
-if not os.path.isdir(FP_DOTDIR):
+if not os.path.isdir(Conf.FP_DOTDIR):
     print(f"Configuring FARGOpy for the first time")
     initialize('configure')
 Debug.trace(f"::Reading configuration variables")
-exec(open(f"{FP_RCFILE}").read())
-Debug.VERBOSE = FP_VERBOSE
-FP_FARGO3D_DIR = (FP_FARGO3D_BASEDIR + '/' + FP_FARGO3D_PACKDIR).replace('//','/')
-FP_FARGO3D_LOCKFILE = f"{fargopy.FP_DOTDIR}/fargopy.lock"
+
+# Load configuration variables into Conf
+conf_dict = dict()
+exec(open(f"{Conf.FP_RCFILE}").read(),dict(),conf_dict)
+Conf.__dict__.update(conf_dict)
+
+# Derivative configuration variables
+Debug.VERBOSE = Conf.FP_VERBOSE
+Conf.FP_FARGO3D_DIR = (Conf.FP_FARGO3D_BASEDIR + '/' + Conf.FP_FARGO3D_PACKDIR).replace('//','/')
+Conf.FP_FARGO3D_LOCKFILE = f"{Conf.FP_DOTDIR}/fargopy.lock"
 
 # Check if version in RCFILE is different from installed FARGOpy version
-if FP_VERSION != version:
-    print(f"Your configuration file version '{FP_VERSION}' it is different than the installed version of FARGOpy '{version}'")
-    ans = input(f"Do you want to update configuration file '{FP_RCFILE}'? [Y/n]: ")
+if Conf.FP_VERSION != version:
+    print(f"Your configuration file version '{Conf.FP_VERSION}' it is different than the installed version of FARGOpy '{version}'")
+    ans = input(f"Do you want to update configuration file '{Conf.FP_RCFILE}'? [Y/n]: ")
     if ans and ('Y' not in ans.upper()):
         if 'N' in ans.upper():
             print("We will keeping asking you this until you update it, sorry!")
     else:
-        os.system(f"cp -rf {FP_RCFILE} {FP_RCFILE}.save")
+        os.system(f"cp -rf {Conf.FP_RCFILE} {Conf.FP_RCFILE}.save")
         initialize('configure',force=True)
+
+###############################################################
+# Import package modules
+###############################################################
+from fargopy.util import *
+from fargopy.sys import *
+from fargopy.fields import *
+from fargopy.simulation import *
 
 # Showing version 
 print(f"Running FARGOpy version {version}")

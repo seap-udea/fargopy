@@ -58,5 +58,5 @@ setuptools.setup(
     # ######################################################################
     include_package_data=True,
     package_data={'': ['data/*.*', 'tests/*.*']},
-    scripts=['fargopy/ifargopy'],
+    scripts=['fargopy/bin/ifargopy'],
 )
