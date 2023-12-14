@@ -28,15 +28,35 @@ YEAR = 31557600.0 # s
 PRECOMPUTED_BASEURL = 'https://docs.google.com/uc?export=download&id='
 PRECOMPUTED_SIMULATIONS = dict(
     # Download link: https://drive.google.com/file/d/1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3/view?usp=drive_link
-    fargo=dict(id='1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3',size=55),
+    fargo=dict(
+        id='1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3',
+        description="""Protoplanetary disk with a Jovian planet in 2D""",
+        size=55
+    ),
     # Download link: https://drive.google.com/file/d/1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6/view?usp=drive_link
-    p3diso=dict(id='1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6',size=220),
+    p3diso=dict(
+        id='1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6',
+        description="""Protoplanetary disk with a Super earth planet in 3D""",
+        size=220
+    ),
     # Download link: https://drive.google.com/file/d/14mL2KCcCtjptChiyISGyJxAEOl4KAanI/view?usp=drive_link
-    p3disof=dict(id='14mL2KCcCtjptChiyISGyJxAEOl4KAanI',size=440),
+    p3disof=dict(
+        id='14mL2KCcCtjptChiyISGyJxAEOl4KAanI',
+        description="""Protoplanetary disk with a a Super earth planet in 3D (increased resolution)""",
+        size=440
+    ),
     # Download link: https://drive.google.com/file/d/1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7/view?usp=drive_link
-    fargo_multifluid=dict(id='1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7',size=100),
+    fargo_multifluid=dict(
+        id='1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7',
+        description="""Protoplanetary disk with several fluids (dust) and a Jovian planet in 2D""",
+        size=100
+    ),
     # Download link: https://drive.google.com/file/d/12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N/view?usp=drive_link
-    binary=dict(id='12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N',size=140),
+    binary=dict(
+        id='12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N',
+        description="""Disk around a binary with the properties of Kepler-38 in 2D""",
+        size=140
+    ),
 )
 
 ###############################################################
@@ -365,6 +385,10 @@ class Simulation(fargopy.Fargobj):
         if 'progress' in mode:
             self._status_progress()
 
+        if 'summary' in mode or mode=='all':
+            nsnaps = self._get_nsnaps()
+            print(f"The simulation has been ran for {nsnaps} time steps including the initial one.")
+
     def _status_progress(self,minfreq=0.1,numstatus=5):
         """Show a progress of the execution
 
@@ -382,8 +406,8 @@ class Simulation(fargopy.Fargobj):
         time_previous = time.time()
 
         # Infinite loop checking for output
-        i = 0
-        while True and (i<numstatus):
+        n = 0
+        while True and (n<numstatus):
             if not self._is_running():
                 print("The simulation is not running anymore")
                 return
@@ -393,7 +417,8 @@ class Simulation(fargopy.Fargobj):
                 # Get the latest output
                 latest_output = output[-2]
                 if latest_output != previous_output:
-                    print(f"{latest_output} [output pace = {frequency:.1f} secs]")
+                    print(f"{n+1}:{latest_output} [output pace = {frequency:.1f} secs]")
+                    n += 1 
                     # Fun the number of the output
                     find = re.findall(r'OUTPUTS\s+(\d+)',latest_output)
                     resumable_snapshot = int(find[0])
@@ -408,9 +433,9 @@ class Simulation(fargopy.Fargobj):
                 previous_output = latest_output
             try:
                 time.sleep(frequency)
-                i += 1
             except KeyboardInterrupt:
                 return
+            
 
     def resume(self,snapshot=-1,mpioptions='-np 1'):
         latest_snapshot_resumable = self._is_resumable()
@@ -788,7 +813,14 @@ class Simulation(fargopy.Fargobj):
     # Static method
     # ##########################################################################
     @staticmethod
-    def download_precomputed(setup=None,download_dir='/tmp',quiet=True,clean=True):
+    def list_precomputed():
+        """List the available precomputed simulations
+        """
+        for key,item in PRECOMPUTED_SIMULATIONS.items():
+            print(f"{key}:\n\tDescription: {item['description']}\n\tSize: {item['size']} MB")
+    
+    @staticmethod
+    def download_precomputed(setup=None,download_dir='/tmp',quiet=False,clean=True):
         """Download a precomputed output from Google Drive FARGOpy public repository.
 
         Args:
