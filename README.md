@@ -20,7 +20,20 @@ $ pip install fargopy
 ```
 as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants.
 
-Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. 
+
+
+Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. This README, for instance, can be ran in `Google Colab` 
+
+<a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
+
+If you are running in colab use:
+
+
+```python
+#!pip install fargopy
+```
 
 If you are working in `Jupyter` or in `Google Colab`, the configuration directory and its content will be crated the first time you import the package:
 
@@ -33,7 +46,8 @@ import fargopy as fp
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.3.0
+    Configuring FARGOpy for the first time
+    Running FARGOpy version 0.3.1
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:

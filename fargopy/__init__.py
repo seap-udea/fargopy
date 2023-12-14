@@ -204,8 +204,6 @@ def initialize(options='', force=False):
             For instance if options = 'configure' and force = True it will
             override FARGOpy directory.
     """
-    fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
-    
     if ('configure' in options) or ('all' in options):
         # Create configuration directory
         if not os.path.isdir(Conf.FP_DOTDIR) or force:
@@ -224,6 +222,8 @@ def initialize(options='', force=False):
             Debug.trace(f"Configuration already in place.")
 
     if ('download' in options) or ('all' in options):
+        fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
+    
         print("Downloading FARGOpy...")
         if not os.path.isdir(fargo_dir) or force:
             if os.path.isdir(fargo_dir):
@@ -241,6 +241,8 @@ def initialize(options='', force=False):
             print(f"Header file for FARGO3D found in the fargo directory {fargo_dir}")
         
     if ('check' in options) or ('all' in options):
+        fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
+    
         print("Test compilation of FARGO3D")
         if not os.path.isdir(fargo_dir):
             print(f"Directory '{fargo_dir}' does not exist. Please download it with fargopy.initialize('download')")
