@@ -411,7 +411,7 @@ class Simulation(fargopy.Fargobj):
 
         # Infinite loop checking for output
         n = 0
-        print(f"Progress of the simulation (numstatus = {numstatus}):")
+        print(f"Progress of the simulation (numstatus = {numstatus}, interrupting may stop the process):")
         while True and (n<numstatus):
             if not self._is_running():
                 print("The simulation is not running anymore")
@@ -440,6 +440,8 @@ class Simulation(fargopy.Fargobj):
             try:
                 time.sleep(frequency)
             except KeyboardInterrupt:
+                time.sleep(1)
+                print("In some environment (IPython, Colab) stopping the progress status will stop the simulation. In that case just resume.")
                 self.status('isrunning')
                 return
             

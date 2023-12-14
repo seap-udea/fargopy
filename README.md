@@ -32,7 +32,7 @@ If you are running in colab use:
 
 
 ```python
-#!pip install fargopy
+#!pip install -Uq fargopy
 ```
 
 If you are working in `Jupyter` or in `Google Colab`, the configuration directory and its content will be crated the first time you import the package:
@@ -46,8 +46,7 @@ import fargopy as fp
 %autoreload 2
 ```
 
-    Configuring FARGOpy for the first time
-    Running FARGOpy version 0.3.1
+    Running FARGOpy version 0.3.2
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:
@@ -75,7 +74,6 @@ To download the `FARGO3D` source code execute:
 fp.initialize('download',force=True)
 ```
 
-    Running FARGOpy version 0.3.0
     Downloading FARGOpy...
     Directory '/home/jzuluaga/fargo3d/' already exists. Removing it...
 
@@ -91,23 +89,19 @@ Once download it you may check if the source code is compiling in your machine. 
 
 
 ```python
-fp.initialize('check')
+fp.initialize('check',regular=1,gpu=0,parallel=0)
 ```
 
     Test compilation of FARGO3D
     	Checking normal compilation.
     	Running 'make -C /home/jzuluaga/fargo3d/ clean mrproper all PARALLEL=0 GPU=0 2>&1 |tee /tmp/fargo_regular.log':
     		Compilation in mode regular successful.
-    	Checking normal compilation.
-    	Running 'make -C /home/jzuluaga/fargo3d/ clean mrproper all PARALLEL=0 GPU=1 2>&1 |tee /tmp/fargo_gpu.log':
-    		Compilation in mode gpu successful.
-    	Checking normal compilation.
-    	Running 'make -C /home/jzuluaga/fargo3d/ clean mrproper all PARALLEL=1 GPU=0 2>&1 |tee /tmp/fargo_parallel.log':
-    		Compilation in mode parallel successful.
+    	Skipping gpu compilation
+    	Skipping parallel compilation
     Summary of compilation modes:
     	Regular: 1
-    	GPU: 1
-    	Parallel: 1
+    	GPU: 0
+    	Parallel: 0
 
 
 If you have some error at compiling `FARGO3D` in some of the possible modes (regular, gpu and/or parallel) please check the corresponding logfile and correct the problems. Compiling problems will normally arise because of a lacking of an important dependency, for instance a compiler, a driver (in the case of GPU) or a third-party library or tool (eg. openmpi). 
@@ -153,7 +147,7 @@ Run the simulation:
 sim.run(cleanrun=True)
 ```
 
-    Cleaning output directory /home/jzuluaga/fargo3d/outputs/fargo
+    No output directory /home/jzuluaga/fargo3d/outputs/fargo yet created.
     Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t setups/fargo/fargo.par
     Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
 
@@ -178,11 +172,14 @@ Or check the progress of the simulation:
 sim.status('progress')
 ```
 
-    1:OUTPUTS 1 at date t = 6.283185 OK [output pace = 0.1 secs]
-    2:OUTPUTS 2 at date t = 12.566371 OK [output pace = 0.1 secs]
-    3:OUTPUTS 3 at date t = 18.849556 OK [output pace = 0.8 secs]
-    4:OUTPUTS 4 at date t = 25.132741 OK [output pace = 1.9 secs]
-    5:OUTPUTS 5 at date t = 31.415927 OK [output pace = 1.9 secs]
+    Progress of the simulation (numstatus = 5):
+    1:OUTPUTS 2 at date t = 12.566371 OK [output pace = 0.1 secs]
+    2:OUTPUTS 3 at date t = 18.849556 OK [output pace = 0.1 secs]
+    3:OUTPUTS 4 at date t = 25.132741 OK [output pace = 0.7 secs]
+    
+    ################################################################################
+    Running status of the process:
+    	The process is running.
 
 
 You may stop the simulation at any time using:
@@ -192,7 +189,7 @@ You may stop the simulation at any time using:
 sim.stop()
 ```
 
-    Stopping FARGO3D process (pid = 4412)
+    Stopping FARGO3D process (pid = 24648)
 
 
 Check the status of the simulation using:
@@ -202,7 +199,7 @@ Check the status of the simulation using:
 sim.status('summary')
 ```
 
-    The simulation has been ran for 7 time steps including the initial one.
+    The simulation has been ran for 7 time-steps (including the initial one).
 
 
 Once stopped you may resume the simulation at any snapshot or at the latest resumable snapshot:
@@ -227,7 +224,7 @@ sim.status()
     
     ################################################################################
     Running status of the process:
-    	The process is running.
+    	The process has ended with termination code 0.
 
 
 ### Postprocessing mode
@@ -352,7 +349,7 @@ fp.Simulation.download_precomputed(setup='fargo')
     Done.
 
 
-We have prepared a set of precomputed simulations covering some interesting scientific cases. You may see the list of precomputed simulations available in the `FARGOpy` cloud repository:
+We have prepared a set of precomputed simulations covering some interesting scientific cases. You may see the list of precomputed simulations available in the `FARGOpy` [cloud repository](https://drive.google.com/drive/folders/1NRdNOcmxRK-pHv_8vR-aAAJGWXxIOY0J?usp=sharing):
 
 
 ```python
