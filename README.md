@@ -48,7 +48,7 @@ import fargopy as fp
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.3.2
+    Running FARGOpy version 0.3.4
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:
@@ -174,14 +174,12 @@ Or check the progress of the simulation:
 sim.status('progress')
 ```
 
-    Progress of the simulation (numstatus = 5):
-    1:OUTPUTS 2 at date t = 12.566371 OK [output pace = 0.1 secs]
-    2:OUTPUTS 3 at date t = 18.849556 OK [output pace = 0.1 secs]
-    3:OUTPUTS 4 at date t = 25.132741 OK [output pace = 0.7 secs]
-    
-    ################################################################################
-    Running status of the process:
-    	The process is running.
+    Progress of the simulation (numstatus = 5, interrupting may stop the process):
+    1:OUTPUTS 0 at date t = 0.000000 OK [output pace = 0.1 secs]
+    2:OUTPUTS 1 at date t = 6.283185 OK [output pace = 0.1 secs]
+    3:OUTPUTS 2 at date t = 12.566371 OK [output pace = 1.6 secs]
+    4:OUTPUTS 3 at date t = 18.849556 OK [output pace = 4.9 secs]
+    5:OUTPUTS 4 at date t = 25.132741 OK [output pace = 4.9 secs]
 
 
 You may stop the simulation at any time using:
@@ -191,7 +189,7 @@ You may stop the simulation at any time using:
 sim.stop()
 ```
 
-    Stopping FARGO3D process (pid = 24648)
+    Stopping FARGO3D process (pid = 18717)
 
 
 Check the status of the simulation using:
@@ -201,7 +199,7 @@ Check the status of the simulation using:
 sim.status('summary')
 ```
 
-    The simulation has been ran for 7 time-steps (including the initial one).
+    The simulation has been ran for 6 time-steps (including the initial one).
 
 
 Once stopped you may resume the simulation at any snapshot or at the latest resumable snapshot:
@@ -211,8 +209,8 @@ Once stopped you may resume the simulation at any snapshot or at the latest resu
 sim.resume()
 ```
 
-    Resuming from snapshot 5...
-    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t -S 5 -t setups/fargo/fargo.par
+    Resuming from snapshot 4...
+    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t -S 4 -t -S 4 -t setups/fargo/fargo.par
     Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
 
 
@@ -344,12 +342,25 @@ fp.Simulation.download_precomputed(setup='fargo')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
-    100%|██████████| 54.7M/54.7M [00:01<00:00, 31.2MB/s]
+    100%|██████████| 54.7M/54.7M [01:14<00:00, 738kB/s] 
 
 
     Uncompressing fargo.tgz into /tmp/fargo
     Done.
 
+
+Once downloaded you may connect with simulation using:
+
+
+```python
+sim = fp.Simulation(output_dir = '/tmp/fargo')
+```
+
+    Your simulation is now connected with '/home/jzuluaga/fargo3d/'
+    Now you are connected with output directory '/tmp/fargo'
+
+
+and perform the postprocessing as explained before.
 
 We have prepared a set of precomputed simulations covering some interesting scientific cases. You may see the list of precomputed simulations available in the `FARGOpy` [cloud repository](https://drive.google.com/drive/folders/1NRdNOcmxRK-pHv_8vR-aAAJGWXxIOY0J?usp=sharing):
 
