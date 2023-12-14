@@ -7,6 +7,7 @@ import fargopy
 # Required packages
 ###############################################################
 import os
+import json
 import subprocess
 import inspect
 import signal
@@ -142,3 +143,41 @@ class Sys(object):
                 print(f"There is a lockfile in {fargopy.FP_FARGO3D_LOCKFILE}")
             return True
         return False
+    
+    @staticmethod
+    def lock(dir,content=dict()):
+        """Lock a directory using content information
+        """
+        if not os.path.isdir(dir):
+            print(f"Locking directory '{dir}' not found.")
+            return
+        filename = f"{dir}/fargopy.lock"
+
+        with open(filename,'w') as file_object:
+            file_object.write(json.dumps(content,default=lambda obj:'<not serializable>'))
+            file_object.close()
+
+    @staticmethod
+    def unlock(dir):
+        """UnLock a directory
+        """
+        if not os.path.isdir(dir):
+            print(f"Locking directory '{dir}' not found.")
+            return
+        filename = f"{dir}/fargopy.lock"
+        if os.path.isfile(filename):
+            fargopy.Sys.simple(f"rm -rf {filename}")
+    
+    @staticmethod
+    def is_locked(dir,verbose=False):
+        if not os.path.isdir(dir):
+            if verbose:
+                print(f"Locking directory '{dir}' not found.")
+            return False
+        filename = f"{dir}/fargopy.lock"
+        if os.path.isfile(filename):
+            if verbose:
+                print(f"The directory '{dir}' is locked")
+            with open(filename) as file_handler:
+                info = json.load(file_handler)
+                return info

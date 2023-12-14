@@ -16,11 +16,13 @@ This is an animation created with a few lines of code using `FARGOpy` (for the c
 `FARGOpy` is available at the `Python` package index and can be installed using:
 
 ```bash
-$ pip install fargopy
+$ sudo pip install fargopy
 ```
 as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants.
 
 
+
+> **NOTE**: If you don't have access to `sudo`, you can install `FARGOpy` in your local environmen (usually at `~/.local/`). In that case you need to add to your `PATH` environmental variable the location of the local python installation. Add to `~/.bashrc` the line `export PATH=$HOME/.local/bin:$PATH`
 
 Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. This README, for instance, can be ran in `Google Colab` 
 
@@ -32,7 +34,7 @@ If you are running in colab use:
 
 
 ```python
-#!pip install -Uq fargopy
+#!sudo pip install -Uq fargopy
 ```
 
 If you are working in `Jupyter` or in `Google Colab`, the configuration directory and its content will be crated the first time you import the package:

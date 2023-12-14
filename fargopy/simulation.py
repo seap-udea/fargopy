@@ -7,6 +7,7 @@ import fargopy
 # Required packages
 ###############################################################
 import os
+import json
 import numpy as np
 import re
 import subprocess
@@ -68,7 +69,31 @@ class Simulation(fargopy.Fargobj):
         super().__init__(**kwargs)
         
         # Load simulation configuration from a file
-
+        if ('load' in kwargs.keys()) and kwargs['load']:
+            if not 'setup' in kwargs.keys():
+                raise AssertionError(f"You must provide a setup name.")
+            else:
+                setup = kwargs['setup']
+            if 'fargo3d_dir' in kwargs.keys():
+                fargo3d_dir = kwargs['fargo3d_dir']
+            else:
+                fargo3d_dir = fargopy.Conf.FP_FARGO3D_DIR
+            
+            load_from = f"{fargo3d_dir}/setups/{setup}".replace('//','/')
+            if not os.path.isdir(load_from):
+                print(f"Directory for loading simulation '{load_from}' not found.")
+            json_file = f"{load_from}/fargopy_simulation.json"
+            print(f"Loading simulation from '{json_file}'")
+            if not os.path.isfile(json_file):
+                print(f"Loading data '{json_file}' not found.")
+            with open(json_file) as file_handler:
+                attributes = json.load(file_handler)
+                self.__dict__.update(attributes)
+                self.set_fargo3d_dir(self.fargo3d_dir)
+                self.set_setup(self.setup)
+                self.set_output_dir(self.output_dir)
+            return
+        
         # Set units by default
         self.set_units(UL=AU,UM=MSUN)
         
@@ -207,7 +232,7 @@ class Simulation(fargopy.Fargobj):
             print(f"Cleaning FARGO3D directory {self.fargo3d_dir}...")
             cmd = f"make -C {self.fargo3d_dir} clean mrproper"
             compl = f"rm -rf {self.fargo3d_dir}/fargo3d_*"
-            error,self.output_clean = fargopy.Sys.run(cmd + '&&' + compl)
+            error,output_clean = fargopy.Sys.run(cmd + '&&' + compl)
             
         # Prepare compilation
         compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
@@ -215,9 +240,10 @@ class Simulation(fargopy.Fargobj):
 
         # Compile binary
         print(f"Compiling {fargo3d_binary}...")
-        cmd = f"cd {self.fargo3d_dir};make {compile_options}"
+        cmd = f"cd {self.fargo3d_dir};make {compile_options} 2>&1 |tee {self.setup_dir}/compilation.log"
         compl = f"mv fargo3d {fargo3d_binary}"
-        error,self.output_compilation = fargopy.Sys.run(cmd+' && '+compl)
+        pipe = f""
+        error,output_compilation = fargopy.Sys.run(cmd+' && '+compl)
 
         # Check compilation result
         if os.path.isfile(f"{self.fargo3d_dir}/{fargo3d_binary}"):
@@ -229,7 +255,7 @@ class Simulation(fargopy.Fargobj):
                 options=options
             )
         else:
-            print(f"Something failed when compiling FARGO3D. For details check Simulation.output_compilation")
+            print(f"Something failed when compiling FARGO3D. For details check '{self.setup_dir}/compilation.log")
             
     def run(self,
             mode='async',
@@ -237,7 +263,8 @@ class Simulation(fargopy.Fargobj):
             mpioptions='-np 1',
             resume=False,
             cleanrun=False,
-            test=False):
+            test=False,
+            unlock=True):
 
         if self.fargo3d_binary is None:
             print("You must first compile your simulation with: <simulation>.compile(<option>).")
@@ -271,8 +298,12 @@ class Simulation(fargopy.Fargobj):
 
         # Preparing command
         run_cmd = f"{precmd} ./{self.fargo3d_binary} {options} setups/{self.setup}/{self.setup}.par"
-        
+
+        self.json_file = f"{self.setup_dir}/fargopy_simulation.json"
         if mode == 'sync':
+            # Save object 
+            self.save_object(self.json_file)
+
             # Run synchronously
             cmd = f"cd {self.fargo3d_dir};{run_cmd} |tee {self.logfile}"
             print(f"Running synchronously: {cmd}")
@@ -289,6 +320,16 @@ class Simulation(fargopy.Fargobj):
             # Launch process
             print(f"Running asynchronously (test = {test}): {run_cmd}")
             if not test:
+
+                # Check it is not locked
+                lock_info = fargopy.Sys.is_locked(dir=self.setup_dir)
+                if lock_info:
+                    if unlock:
+                        self._unlock_simulation(lock_info)
+                    else:
+                        print(f"Output directory {self.setup_dir} is locked by a running process")
+                        return
+
                 process = subprocess.Popen(run_cmd.split(),cwd=self.fargo3d_dir,
                                         stdout=logfile_handler,stderr=logfile_handler)
                 # Introduce a short delay to verify if the process has failed
@@ -298,16 +339,29 @@ class Simulation(fargopy.Fargobj):
                     # Check if program is effectively running
                     self.fargo3d_process = process            
                     
-                    # Create a lock on fargopy with the process id
-                    # fargopy.lock(self.frago3d_process.pid)
+                    # Lock
+                    fargopy.Sys.lock(
+                        dir=self.setup_dir,
+                        content=dict(pid=self.fargo3d_process.pid)
+                    )
 
                     # Setup output directory 
                     self.set_output_dir(f"{self.outputs_dir}/{self.setup}".replace('//','/'))    
+
+                    # Save object 
+                    self.save_object(self.json_file)
                 else:
                     print(f"Process running failed. Please check the logfile {self.logfile}")
+        else:
+            print(f"Mode {mode} not recognized (valid are 'sync', 'async')")
+            return
                     
     def stop(self):
+        # Check if the directory is locked
+        lock_info = fargopy.Sys.is_locked(self.setup_dir)
+        
         if not self._check_process():
+            self._unlock_simulation(lock_info)
             return
 
         poll = self.fargo3d_process.poll()
@@ -317,13 +371,16 @@ class Simulation(fargopy.Fargobj):
             del self.fargo3d_process
             self.fargo3d_process = None
         else:
-            print(f"The process has already finished. Check logfile {self.logfile}.")
+            self._unlock_simulation(lock_info)
+            print(f"The process has finished. Check logfile {self.logfile}.")
 
-    def _save_simultation(self):
-        """Save simulation configuration 
-        """
-        pass
-
+    def _unlock_simulation(self,lock_info):
+        if lock_info:
+            pid = lock_info['pid']
+            fargopy.Debug.trace(f"Unlocking simulation (pid = {pid})")
+            error,output = fargopy.Sys.run(f"kill -9 {pid}")    
+            fargopy.Sys.unlock(self.setup_dir)
+        
     def status(self,mode='isrunning',verbose=True,**kwargs):
         """Check the status of the running process
 
@@ -350,6 +407,10 @@ class Simulation(fargopy.Fargobj):
                 if poll is None:
                     vprint("\tThe process is running.")
                 else:
+                    # Unlock any remaining process
+                    lock_info = fargopy.Sys.is_locked(self.setup_dir)
+                    self._unlock_simulation(lock_info)
+                    
                     vprint(f"\tThe process has ended with termination code {poll}.")
             else:
                 vprint(f"\tThe process is stopped.")
@@ -489,6 +550,11 @@ class Simulation(fargopy.Fargobj):
         error,output = fargopy.Sys.run(cmd)
 
     def _is_running(self,verbose=False):
+        if not self.has('fargo3d_process'):
+            if verbose:
+                print("The simulation has not been run before.")
+            return False
+
         if self.fargo3d_process:
             poll = self.fargo3d_process.poll()
             if poll is None:
@@ -795,7 +861,8 @@ class Simulation(fargopy.Fargobj):
         return comps
 
     def __repr__(self):
-        return self.__str__()
+        repr = f"""FARGOPY simulation (fargo3d_dir = '{self.fargo3d_dir}', setup = '{self.setup}')"""
+        return repr
 
     def __str__(self):
         str = f"""Simulation information:

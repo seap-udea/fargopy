@@ -8,6 +8,7 @@ from fargopy.version import *
 ###############################################################
 import warnings
 import os
+import json
 import numpy as np
 
 ###############################################################
@@ -122,6 +123,24 @@ class Fargobj(object):
         self.fobject = True
         self.kwargs = kwargs
 
+    def save_object(self,filename=None,verbose=False):
+        """Save Fargobj into a filename in JSON format
+        
+        Args:
+            filename: string, default = None:
+                Path of the file where the object will be saved.
+                If None the filename will be '/tmp/fargobj_{hash}.json' 
+                where {hash} is the hash of the object attributes dictionary.
+        """
+        if filename is None:
+            object_hash = str(abs(hash(str(self.__dict__))))
+            filename = f"/tmp/fargobj_{object_hash}.json"
+        if verbose:
+            print(f"Saving object to {filename}...")
+        with open(filename,'w') as file_object:
+            file_object.write(json.dumps(self.__dict__,default=lambda obj:'<not serializable>'))
+            file_object.close()
+        
     def set_property(self,property,default,method=lambda prop:prop):
         """Set a property of object using a given method
 
