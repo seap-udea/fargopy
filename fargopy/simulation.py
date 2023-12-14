@@ -324,7 +324,7 @@ class Simulation(fargopy.Fargobj):
         """
         pass
 
-    def status(self,mode='isrunning',verbose=True):
+    def status(self,mode='isrunning',verbose=True,**kwargs):
         """Check the status of the running process
 
         Parameters:
@@ -381,11 +381,14 @@ class Simulation(fargopy.Fargobj):
                 vprint("No datafiles yet available")
 
         if 'progress' in mode:
-            self._status_progress()
+            numstatus = 5
+            if 'numstatus' in kwargs.keys():
+                numstatus = int(kwargs['numstatus'])
+            self._status_progress(numstatus=numstatus)
 
         if 'summary' in mode or mode=='all':
             nsnaps = self._get_nsnaps()
-            print(f"The simulation has been ran for {nsnaps} time steps including the initial one.")
+            print(f"The simulation has been ran for {nsnaps} time-steps (including the initial one).")
 
     def _status_progress(self,minfreq=0.1,numstatus=5):
         """Show a progress of the execution
@@ -398,13 +401,17 @@ class Simulation(fargopy.Fargobj):
                 Number of status shown before automatically stopping.
         """
         # Prepare
-        frequency = minfreq
+        if 'status_frequency' not in self.__dict__.keys():
+            frequency = minfreq
+        else:
+            frequency = self.status_frequency
         previous_output = ''
         previous_resumable_snapshot = 1e100
         time_previous = time.time()
 
         # Infinite loop checking for output
         n = 0
+        print(f"Progress of the simulation (numstatus = {numstatus}):")
         while True and (n<numstatus):
             if not self._is_running():
                 print("The simulation is not running anymore")
@@ -426,23 +433,22 @@ class Simulation(fargopy.Fargobj):
                     if (resumable_snapshot - previous_resumable_snapshot)>1:
                         # Reduce frequency if snapshots are accelerating
                         frequency = frequency/2
+                        self.status_frequency = frequency
                     previous_resumable_snapshot = resumable_snapshot
                     time_previous = time_now
                 previous_output = latest_output
             try:
                 time.sleep(frequency)
             except KeyboardInterrupt:
+                self.status('isrunning')
                 return
             
-
     def resume(self,snapshot=-1,mpioptions='-np 1'):
         latest_snapshot_resumable = self._is_resumable()
         if latest_snapshot_resumable<0:
             return
         if self._is_running():
             print(f"There is a running process. Please stop it before resuming")
-            return
-        if self._has_finished():
             return
         # Resume
         if snapshot<0:

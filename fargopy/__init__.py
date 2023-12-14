@@ -188,7 +188,7 @@ import fargopy as fp
 fp.initialize(' '.join(sys.argv))
 """
 
-def initialize(options='', force=False):
+def initialize(options='', force=False, **kwargs):
     """Initialization routine
 
     Args:
@@ -251,6 +251,12 @@ def initialize(options='', force=False):
         
         for option,mode in zip(['PARALLEL=0 GPU=0','PARALLEL=0 GPU=1','PARALLEL=1 GPU=0'],
                                  ['regular','gpu','parallel']):
+            # Verify if you want to check this mode
+            if (mode in kwargs.keys()) and (kwargs[mode]==0):
+                    print(f"\tSkipping {mode} compilation")
+                    exec(f"Conf.FP_FARGO3D_{mode.upper()} = 0")
+                    continue
+
             cmd = cmd_fun(option,mode)
             print(f"\tChecking normal compilation.\n\tRunning '{cmd}':")
             error,output = Sys.run(cmd)
