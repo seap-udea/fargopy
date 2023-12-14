@@ -196,7 +196,7 @@ def initialize(options='', force=False):
             Action(s) to be performed. Valid actions include:
                 'configure': configure the package.
                 'download': download FARGO3D directory.
-                'compile': attempt to compile FARGO3D in the machine.
+                'check': attempt to compile FARGO3D in the machine.
                 'all': all actions.
 
         force: bool, default = False:
@@ -204,6 +204,8 @@ def initialize(options='', force=False):
             For instance if options = 'configure' and force = True it will
             override FARGOpy directory.
     """
+    fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
+    
     if ('configure' in options) or ('all' in options):
         # Create configuration directory
         if not os.path.isdir(Conf.FP_DOTDIR) or force:
@@ -223,8 +225,10 @@ def initialize(options='', force=False):
 
     if ('download' in options) or ('all' in options):
         print("Downloading FARGOpy...")
-        fargo_dir = f"{Conf.FP_FARGO3D_BASEDIR}/{Conf.FP_FARGO3D_PACKDIR}".replace('//','/')
         if not os.path.isdir(fargo_dir) or force:
+            if os.path.isdir(fargo_dir):
+                print(f"Directory '{fargo_dir}' already exists. Removing it...")
+                os.system(f"rm -rf {fargo_dir}")
             fargopy.Sys.simple(f"cd {Conf.FP_FARGO3D_BASEDIR};{Conf.FP_FARGO3D_CLONECMD} {Conf.FP_FARGO3D_PACKDIR}")
             print(f"\tFARGO3D downloaded to {fargo_dir}")
         else:
@@ -234,12 +238,32 @@ def initialize(options='', force=False):
         if not os.path.isfile(fargo_header):
             print(f"No header file for fargo found in '{fargo_header}'")
         else:
-            print(f"Header file for FARGO3D is in the fargo directory {fargo_dir}")
+            print(f"Header file for FARGO3D found in the fargo directory {fargo_dir}")
         
-    if ('compile' in options) or ('all' in options):
-        print("Test compilation")
-        pass
-
+    if ('check' in options) or ('all' in options):
+        print("Test compilation of FARGO3D")
+        if not os.path.isdir(fargo_dir):
+            print(f"Directory '{fargo_dir}' does not exist. Please download it with fargopy.initialize('download')")
+          
+        cmd_fun = lambda options,mode:f"make -C {fargo_dir} clean mrproper all {options} 2>&1 |tee /tmp/fargo_{mode}.log"
+        
+        for option,mode in zip(['PARALLEL=0 GPU=0','PARALLEL=0 GPU=1','PARALLEL=1 GPU=0'],
+                                 ['regular','gpu','parallel']):
+            cmd = cmd_fun(option,mode)
+            print(f"\tChecking normal compilation.\n\tRunning '{cmd}':")
+            error,output = Sys.run(cmd)
+            if not os.path.isfile(f"{fargo_dir}/{Conf.FP_FARGO3D_BINARY}"):
+                print(f"\t\tCompilation failed for '{mode}'. Check log file '/tmp/fargo_{mode}.log'")
+                exec(f"Conf.FP_FARGO3D_{mode.upper()} = 0")
+            else:
+                print(f"\t\tCompilation in mode {mode} successful.")
+                exec(f"Conf.FP_FARGO3D_{mode.upper()} = 1")
+        
+        print(f"Summary of compilation modes:")
+        print(f"\tRegular: {Conf.FP_FARGO3D_REGULAR}")
+        print(f"\tGPU: {Conf.FP_FARGO3D_GPU}")
+        print(f"\tParallel: {Conf.FP_FARGO3D_PARALLEL}")
+        
 ###############################################################
 # Initialization
 ###############################################################

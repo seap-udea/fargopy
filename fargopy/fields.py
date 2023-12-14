@@ -13,6 +13,9 @@ import re
 # Constants
 ###############################################################
 # Map of coordinates into FARGO3D coordinates
+"""This dictionary maps the coordinates regular names (r, phi, theta, etc.) of
+different coordinate systems into the FARGO3D x, y, z
+"""
 COORDS_MAP = dict(
     cartesian = dict(x='x',y='y',z='z'),
     cylindrical = dict(phi='x',r='y',z='z'),
