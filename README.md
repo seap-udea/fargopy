@@ -7,7 +7,7 @@
 
 `FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html), the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to facillitate the interaction with FARGO3D, especially for those starting using the code. `FARGOpy` may be also useful for teaching and training purposes. For advanced users, `FARGOpy` provides useful functionalities in the postprocessing of simulation results, derivative calculations and plots.
 
-This is an animation created with a few lines of code using `FARGOpy` (for the code and other examples see [this tutorial](TUTORIAL.md)):
+This is an animation created with a few lines of code using `FARGOpy` (for the code and other examples see [this tutorial](https://github.com/seap-udea/fargopy/blob/main/TUTORIAL.ipynb)):
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
 
@@ -100,7 +100,7 @@ If you have some error at compiling `FARGO3D` in some of the possible modes (reg
 
 ## Quickstart
 
-Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this tutorial](TUTORIAL.md). In depth examples are available in the [examples directory](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository. 
+Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this tutorial](https://github.com/seap-udea/fargopy/blob/main/TUTORIAL.ipynb). In depth examples are available in the [examples directory](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository. 
 
 There are two complimentary modes when using `FARGOpy`: 
 
