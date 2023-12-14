@@ -132,13 +132,6 @@ sim.compile(parallel=0,gpu=0)
     Succesful compilation of FARGO3D binary fargo3d_SETUP-fargo_PARALLEL-0_GPU-0
 
 
-
-
-
-    True
-
-
-
 Run the simulation:
 
 

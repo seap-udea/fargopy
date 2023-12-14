@@ -228,11 +228,9 @@ class Simulation(fargopy.Fargobj):
                 gpu=gpu,
                 options=options
             )
-            return True
         else:
             print(f"Something failed when compiling FARGO3D. For details check Simulation.output_compilation")
-            return False
-        
+            
     def run(self,
             mode='async',
             options='-m',
