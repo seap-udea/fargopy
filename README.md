@@ -331,18 +331,11 @@ fp.Simulation.download_precomputed(setup='fargo')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
-    100%|██████████| 54.7M/54.7M [00:01<00:00, 31.8MB/s]
+    100%|██████████| 54.7M/54.7M [00:01<00:00, 31.2MB/s]
 
 
     Uncompressing fargo.tgz into /tmp/fargo
     Done.
-
-
-
-
-
-    '/tmp/fargo'
-
 
 
 We have prepared a set of precomputed simulations covering some interesting scientific cases. You may see the list of precomputed simulations available in the `FARGOpy` cloud repository:

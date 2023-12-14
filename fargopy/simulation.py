@@ -868,7 +868,6 @@ class Simulation(fargopy.Fargobj):
             fargopy.Sys.simple(f"cd {download_dir};tar zxf {filename}")
             print(f"Done.")
             fargopy.Sys.simple(f"cd {download_dir};rm -rf {filename}")
-            return output_dir
 
 
     
