@@ -9,6 +9,7 @@ from fargopy.version import *
 import warnings
 import os
 import json
+import sys
 import numpy as np
 
 ###############################################################
@@ -20,6 +21,9 @@ import numpy as np
 ###############################################################
 DEG = np.pi/180
 RAD = 1/DEG
+
+# Check if we are in colab
+IN_COLAB = 'google.colab' in sys.modules
 
 ###############################################################
 # Base classes

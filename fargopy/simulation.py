@@ -599,9 +599,12 @@ class Simulation(fargopy.Fargobj):
                         ):
         if self.output_dir is None:
             print(f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')")
+            return
 
         # Read variables
         vars = self._load_variables(varfile)
+        if not vars:
+            return
         print(f"Simulation in {vars.DIM} dimensions")
         
         # Read domains 
