@@ -47,7 +47,7 @@ class Field(fargopy.Fargobj):
         self.domains = domains
         self.type = type
 
-    def meshslice(self,slice=None,component=0):
+    def meshslice(self,slice=None,component=0,verbose=False):
         """Perform a slice on a field and produce as an output the 
         corresponding field slice and the associated matrices of
         coordinates for plotting.
@@ -56,8 +56,11 @@ class Field(fargopy.Fargobj):
         if slice is None:
             raise ValueError("You must provide a slice option.")
 
+        # Degrees specification
+        slice = slice.replace('deg','*fargopy.DEG')
+
         # Perform the slice
-        slice_cmd = f"self.slice({slice},pattern=True)"
+        slice_cmd = f"self.slice({slice},pattern=True,verbose={verbose})"
         slice,pattern = eval(slice_cmd)
         
         # Create the mesh
@@ -96,7 +99,7 @@ class Field(fargopy.Fargobj):
 
         return slice,mesh
 
-    def slice(self,quiet=True,pattern=False,**kwargs):
+    def slice(self,verbose=False,pattern=False,**kwargs):
         """Extract an slice of a 3-dimensional FARGO3D field
 
         Parameters:
@@ -110,7 +113,7 @@ class Field(fargopy.Fargobj):
             ir, iphi, itheta, ix, iy, iz: string or integer:
                 Index or range of indexes of the corresponding coordinate.
 
-            r, phi, theta, x, y, z: float:
+            r, phi, theta, x, y, z: float/list/tuple:
                 Value for slicing. The slicing search for the closest
                 value in the domain.
 
@@ -119,13 +122,13 @@ class Field(fargopy.Fargobj):
 
         Examples:
             # 0D: Get the value of the field in iphi = 0, itheta = -1 and close to r = 0.82
-            gasvz.slice(iphi=0,itheta=-1,r=0.82)
+            >>> gasvz.slice(iphi=0,itheta=-1,r=0.82)
 
             # 1D: Get all values of the field in radial direction at iphi = 0, itheta = -1
-            gasvz.slice(iphi=0,itheta=-1)
+            >>> gasvz.slice(iphi=0,itheta=-1)
 
             # 2D: Get all values of the field for values close to phi = 0
-            gasvz.slice(phi=0)
+            >>> gasvz.slice(phi=0)
         """
         # By default slice
         ivar = dict(x=':',y=':',z=':')
@@ -142,27 +145,41 @@ class Field(fargopy.Fargobj):
             if match:
                 index = item
                 coord = match.group(1)
-                if not quiet:
+                if verbose:
                     print(f"Index condition {index} for coordinate {coord}")
                 ivar[COORDS_MAP[self.coordinates][coord]] = index
             else:
-                if not quiet:
+                if verbose:
                     print(f"Numeric condition found for coordinate {key}")
                 if key in self.domains.keys():
-                    # Check if value provided is in range
-                    domain = self.domains.item(key)
-                    extrema = self.domains.extrema[key]
-                    min, max = extrema[0][1], extrema[1][1]
-                    if (item<min) or (item>max):
-                        raise ValueError(f"You are attempting to get a slice in {key} = {item}, but the valid range for this variable is [{min},{max}]")
-                    find = abs(self.domains.item(key) - item)
-                    ivar[COORDS_MAP[self.coordinates][key]] = find.argmin()
+                    # Check if item is a list
+                    if isinstance(item,list) or isinstance(item,tuple):
+                        if verbose:
+                            print(f"You pass the range '{item}' for coordinate {key}")
+                        min = abs(self.domains.item(key)-item[0]).argmin()
+                        max = abs(self.domains.item(key)-item[1]).argmin()
+                        if (min > max) or (min == max):
+                            extrema = self.domains.extrema[key]
+                            vmin, vmax = extrema[0][1], extrema[1][1]
+                            raise ValueError(f"The range provided for '{key}', ie. '{item}' is not valid. You must provide a valid range for the variable with range: [{vmin},{vmax}]")
+                        ivar[COORDS_MAP[self.coordinates][key]] = f"{min}:{max}"
+                    else:
+                        # Check if value provided is in range
+                        domain = self.domains.item(key)
+                        extrema = self.domains.extrema[key]
+                        min, max = extrema[0][1], extrema[1][1]
+                        if (item<min) or (item>max):
+                            raise ValueError(f"You are attempting to get a slice in {key} = {item}, but the valid range for this variable is [{min},{max}]")
+                        find = abs(self.domains.item(key) - item)
+                        ivar[COORDS_MAP[self.coordinates][key]] = find.argmin()
+                    if verbose:
+                        print(f"Range for {key}: {ivar[COORDS_MAP[self.coordinates][key]]}")
                     
         pattern_str = f"{ivar['z']},{ivar['y']},{ivar['x']}"
 
         if self.type == 'scalar':
             slice_cmd = f"self.data[{pattern_str}]"
-            if not quiet:
+            if verbose:
                 print(f"Slice: {slice_cmd}")
             slice = eval(slice_cmd)
 
@@ -190,7 +207,10 @@ class Field(fargopy.Fargobj):
                 z,r,phi = np.meshgrid(self.domains.z,self.domains.r,self.domains.phi,indexing='ij')
                 vphi = self.data[0]
                 vr = self.data[1]
-                vz = self.data[2]
+                if self.data.shape[0] == 3:
+                    vz = self.data[2]
+                else:
+                    vz = np.zeros_like(vr)
                 vx = vr*np.cos(phi) 
                 vy = vr*np.sin(phi)
                 
