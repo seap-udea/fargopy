@@ -31,20 +31,20 @@ PRECOMPUTED_SIMULATIONS = dict(
     # Download link: https://drive.google.com/file/d/1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3/view?usp=drive_link
     fargo=dict(
         id='1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3',
-        description="""Protoplanetary disk with a Jovian planet in 2D""",
+        description="""Protoplanetary disk with a Jovian planet [2D]""",
         size=55
     ),
     # Download link: https://drive.google.com/file/d/1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6/view?usp=drive_link
     p3diso=dict(
         id='1KMp_82ylQn3ne_aNWEF1T9ElX2aWzYX6',
-        description="""Protoplanetary disk with a Super earth planet in 3D""",
+        description="""Protoplanetary disk with a Super earth planet [3D]""",
         size=220
     ),
-    # Download link: https://drive.google.com/file/d/14mL2KCcCtjptChiyISGyJxAEOl4KAanI/view?usp=drive_link
-    p3disof=dict(
-        id='14mL2KCcCtjptChiyISGyJxAEOl4KAanI',
-        description="""Protoplanetary disk with a a Super earth planet in 3D (increased resolution)""",
-        size=440
+    # Download link: https://drive.google.com/file/d/1Xzgk9qatZPNX8mLmB58R9NIi_YQUrHz9/view?usp=sharing
+    p3disoj=dict(
+        id='1Xzgk9qatZPNX8mLmB58R9NIi_YQUrHz9',
+        description="""Protoplanetary disk with a Jovian planet [3D]""",
+        size=84
     ),
     # Download link: https://drive.google.com/file/d/1KSQyxH_kbAqHQcsE30GQFRVgAPhMAcp7/view?usp=drive_link
     fargo_multifluid=dict(
@@ -188,14 +188,22 @@ class Simulation(fargopy.Fargobj):
         return True
 
     def set_output_dir(self,dir):
+        """Connect a simulation with a directory where the outputs are stored.
+        """
         if dir is None:
             return
         if not os.path.isdir(dir):
             print(f"Output directory '{dir}' does not exist.")
             return
-        else:
+        else:        
             print(f"Now you are connected with output directory '{dir}'")
-        self.output_dir = dir
+            self.output_dir = dir
+            # Check if there are results 
+            par_file = f"{dir}/variables.par".replace('//','/')
+            if os.path.isfile(par_file):
+                print(f"Found a variables.par file in '{dir}', loading properties")
+                self.load_properties()
+        
         return
 
     def set_units(self,UM=MSUN,UL=AU,G=1,mu=2.35):
@@ -888,6 +896,20 @@ class Simulation(fargopy.Fargobj):
     # ##########################################################################
     # Static method
     # ##########################################################################
+    @staticmethod
+    def list_setups():
+        """List setups available in the FARGO3D directory
+        """
+        error,output = fargopy.Sys.run(f"ls -d {fargopy.Conf.FP_FARGO3D_DIR}/setups/*")
+        list = ''
+        for setup_dir in output[:-1]:
+            setup_dir = setup_dir.replace('//','/')
+            setup_name = setup_dir.split('/')[-1]
+            setup_par = f"{setup_dir}/{setup_name}.par"
+            if os.path.isfile(setup_par):
+                list += f"Setup '{setup_name}' in '{setup_dir}'\n"
+        print(list)
+                 
     @staticmethod
     def list_precomputed():
         """List the available precomputed simulations
