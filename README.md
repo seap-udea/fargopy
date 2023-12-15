@@ -10,9 +10,10 @@
 
 `FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html), the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to facillitate the interaction with FARGO3D, especially for those starting using the code. `FARGOpy` may be also useful for teaching and training purposes. For advanced users, `FARGOpy` provides useful functionalities in the postprocessing of simulation results, derivative calculations and plots.
 
-This is an animation created with a few lines of code using `FARGOpy` (for the code and other examples see the [examples repository](https://github.com/seap-udea/fargopy/blob/main/examples)):
-
+This is an animation created with a few lines of code using `FARGOpy`. 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
+
+For the code used to generate this animation see the tutorial notebook [animations with `FARGOpy`](https://github.com/seap-udea/fargopy/blob/main/examples/fargopy-tutorial-animations.ipynb). For other examples and a full tutorial see the [examples repository](https://github.com/seap-udea/fargopy/blob/main/examples).
 
 ## Installing `FARGOpy` 
 
@@ -53,7 +54,7 @@ import fargopy as fp
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.3.5
+    Running FARGOpy version 0.3.6
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:
@@ -154,9 +155,19 @@ Run the simulation:
 sim.run(cleanrun=True)
 ```
 
-    No output directory /home/jzuluaga/fargo3d/outputs/fargo yet created.
+    Cleaning output directory /home/jzuluaga/fargo3d/outputs/fargo
     Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t setups/fargo/fargo.par
     Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
+    Found a variables.par file in '/home/jzuluaga/fargo3d/outputs/fargo', loading properties
+    Loading variables
+    84 variables loaded
+    Simulation in 2 dimensions
+    Loading domain in cylindrical coordinates:
+    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
+    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
+    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
+    Number of snapshots in output directory: 1
+    Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
 You may check the status:
@@ -180,11 +191,11 @@ sim.status('progress')
 ```
 
     Progress of the simulation (numstatus = 5, interrupting may stop the process):
-    1:OUTPUTS 0 at date t = 0.000000 OK [output pace = 0.1 secs]
-    2:OUTPUTS 1 at date t = 6.283185 OK [output pace = 0.1 secs]
-    3:OUTPUTS 2 at date t = 12.566371 OK [output pace = 1.6 secs]
-    4:OUTPUTS 3 at date t = 18.849556 OK [output pace = 4.9 secs]
-    5:OUTPUTS 4 at date t = 25.132741 OK [output pace = 4.9 secs]
+    1:OUTPUTS 3 at date t = 18.849556 OK [output pace = 0.1 secs]
+    2:OUTPUTS 4 at date t = 25.132741 OK [output pace = 0.1 secs]
+    3:OUTPUTS 5 at date t = 31.415927 OK [output pace = 0.9 secs]
+    4:OUTPUTS 6 at date t = 37.699112 OK [output pace = 1.8 secs]
+    5:OUTPUTS 7 at date t = 43.982297 OK [output pace = 1.9 secs]
 
 
 You may stop the simulation at any time using:
@@ -194,7 +205,7 @@ You may stop the simulation at any time using:
 sim.stop()
 ```
 
-    Stopping FARGO3D process (pid = 18717)
+    Stopping FARGO3D process (pid = 26257)
 
 
 Check the status of the simulation using:
@@ -204,7 +215,7 @@ Check the status of the simulation using:
 sim.status('summary')
 ```
 
-    The simulation has been ran for 6 time-steps (including the initial one).
+    The simulation has been ran for 9 time-steps (including the initial one).
 
 
 Once stopped you may resume the simulation at any snapshot or at the latest resumable snapshot:
@@ -214,22 +225,29 @@ Once stopped you may resume the simulation at any snapshot or at the latest resu
 sim.resume()
 ```
 
-    Resuming from snapshot 4...
-    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t -S 4 -t -S 4 -t setups/fargo/fargo.par
+    Resuming from snapshot 7...
+    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t -S 7 -t setups/fargo/fargo.par
     Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
+    Found a variables.par file in '/home/jzuluaga/fargo3d/outputs/fargo', loading properties
+    Loading variables
+    84 variables loaded
+    Simulation in 2 dimensions
+    Loading domain in cylindrical coordinates:
+    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
+    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
+    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
+    Number of snapshots in output directory: 9
+    Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
 Once the simulation has been completed you will notice by ran:
 
 
 ```python
-sim.status()
+sim.stop()
 ```
 
-    
-    ################################################################################
-    Running status of the process:
-    	The process has ended with termination code 0.
+    The process has finished. Check logfile /home/jzuluaga/fargo3d/setups/fargo/fargo.log.
 
 
 ### Postprocessing mode
@@ -244,17 +262,33 @@ sim = fp.Simulation(output_dir = fp.Conf.FP_FARGO3D_DIR + '/outputs/fargo')
 ```
 
     Your simulation is now connected with '/home/jzuluaga/fargo3d/'
-    Output directory '/home/jzuluaga/fargo3d//outputs/fargo' does not exist.
+    Now you are connected with output directory '/home/jzuluaga/fargo3d//outputs/fargo'
+    Found a variables.par file in '/home/jzuluaga/fargo3d//outputs/fargo', loading properties
+    Loading variables
+    84 variables loaded
+    Simulation in 2 dimensions
+    Loading domain in cylindrical coordinates:
+    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
+    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
+    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
+    Number of snapshots in output directory: 21
+    Configuration variables and domains load into the object. See e.g. <sim>.vars
 
-
-Load the properties of the simulation:
 
 
 ```python
 sim.load_properties()
 ```
 
-    No file with variables named '/home/jzuluaga/fargo3d/outputs/fargo/variables.par' found.
+    Loading variables
+    84 variables loaded
+    Simulation in 2 dimensions
+    Loading domain in cylindrical coordinates:
+    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
+    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
+    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
+    Number of snapshots in output directory: 22
+    Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
 Load gas density field from a given snapshot:
@@ -283,7 +317,7 @@ ax.semilogy(mesh.r,gasdens_r)
 
 ax.set_xlabel(r"$r$ [cu]")
 ax.set_ylabel(r"$\rho$ [cu]")
-fp.Util.fargopy_mark(ax)
+fp.Plot.fargopy_mark(ax)
 if not fp.IN_COLAB:fig.savefig('gallery/example-dens_r.png') # Drop this out of this tutorial
 ```
 
@@ -309,7 +343,7 @@ ax.pcolormesh(mesh.phi,mesh.r,gasdens_plane,cmap='prism')
 
 ax.set_xlabel('$\phi$ [rad]')
 ax.set_ylabel('$r$ [UL]')
-fp.Util.fargopy_mark(ax)
+fp.Plot.fargopy_mark(ax)
 
 ax = axs[1]
 
@@ -317,7 +351,7 @@ ax.pcolormesh(mesh.x,mesh.y,gasdens_plane,cmap='prism')
 
 ax.set_xlabel('$x$ [UL]')
 ax.set_ylabel('$y$ [UL]')
-fp.Util.fargopy_mark(ax)
+fp.Plot.fargopy_mark(ax)
 ax.axis('equal')
 if not fp.IN_COLAB:fig.savefig('gallery/example-dens_disk.png') # Drop this out of this tutorial
 ```
@@ -339,7 +373,7 @@ fp.Simulation.download_precomputed(setup='fargo')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
-    100%|██████████| 54.7M/54.7M [01:14<00:00, 738kB/s] 
+    100%|██████████| 54.7M/54.7M [00:02<00:00, 19.1MB/s]
 
 
     Uncompressing fargo.tgz into /tmp/fargo
@@ -367,14 +401,14 @@ fp.Simulation.list_precomputed()
 ```
 
     fargo:
-    	Description: Protoplanetary disk with a Jovian planet in 2D
+    	Description: Protoplanetary disk with a Jovian planet [2D]
     	Size: 55 MB
     p3diso:
-    	Description: Protoplanetary disk with a Super earth planet in 3D
+    	Description: Protoplanetary disk with a Super earth planet [3D]
     	Size: 220 MB
-    p3disof:
-    	Description: Protoplanetary disk with a a Super earth planet in 3D (increased resolution)
-    	Size: 440 MB
+    p3disoj:
+    	Description: Protoplanetary disk with a Jovian planet [3D]
+    	Size: 84 MB
     fargo_multifluid:
     	Description: Protoplanetary disk with several fluids (dust) and a Jovian planet in 2D
     	Size: 100 MB
