@@ -4,10 +4,13 @@
 <!-- This are visual tags that you may add to your package at the beginning with useful information on your package --> 
 [![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/)
 [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/)
+<a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
 
 `FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html), the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to facillitate the interaction with FARGO3D, especially for those starting using the code. `FARGOpy` may be also useful for teaching and training purposes. For advanced users, `FARGOpy` provides useful functionalities in the postprocessing of simulation results, derivative calculations and plots.
 
-This is an animation created with a few lines of code using `FARGOpy` (for the code and other examples see [this tutorial](https://github.com/seap-udea/fargopy/blob/main/TUTORIAL.ipynb)):
+This is an animation created with a few lines of code using `FARGOpy` (for the code and other examples see the [examples repository](https://github.com/seap-udea/fargopy/blob/main/examples)):
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
 
@@ -24,17 +27,19 @@ as usual this command will install all dependencies (excluding `FARGO3D` which m
 
 > **NOTE**: If you don't have access to `sudo`, you can install `FARGOpy` in your local environmen (usually at `~/.local/`). In that case you need to add to your `PATH` environmental variable the location of the local python installation. Add to `~/.bashrc` the line `export PATH=$HOME/.local/bin:$PATH`
 
-Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. This README, for instance, can be ran in `Google Colab` 
+Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. This README, for instance, can be ran in `Google Colab`:
 
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
-If you are running in colab use:
+This code only works in Colab and it is intended to install the latest version of `FARGOpy`
 
 
 ```python
-#!sudo pip install -Uq fargopy
+import sys
+if 'google.colab' in sys.modules:
+    !sudo pip install -Uq fargopy
 ```
 
 If you are working in `Jupyter` or in `Google Colab`, the configuration directory and its content will be crated the first time you import the package:
@@ -48,7 +53,7 @@ import fargopy as fp
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.3.4
+    Running FARGOpy version 0.3.5
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:
@@ -110,7 +115,7 @@ If you have some error at compiling `FARGO3D` in some of the possible modes (reg
 
 ## Quickstart
 
-Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found in [this tutorial](https://github.com/seap-udea/fargopy/blob/main/TUTORIAL.ipynb). In depth examples are available in the [examples directory](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository. 
+Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found exploring [the tutorial notebooks](https://github.com/seap-udea/fargopy/blob/main/examples). Other in depth examples are also available in the [examples repository](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository. 
 
 There are two complimentary modes when using `FARGOpy`: 
 
@@ -235,11 +240,11 @@ Create the simulation and connect it to the output directory:
 
 
 ```python
-sim = fp.Simulation(output_dir = '/home/jzuluaga/fargo3d/outputs/fargo')
+sim = fp.Simulation(output_dir = fp.Conf.FP_FARGO3D_DIR + '/outputs/fargo')
 ```
 
     Your simulation is now connected with '/home/jzuluaga/fargo3d/'
-    Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
+    Output directory '/home/jzuluaga/fargo3d//outputs/fargo' does not exist.
 
 
 Load the properties of the simulation:
@@ -249,15 +254,7 @@ Load the properties of the simulation:
 sim.load_properties()
 ```
 
-    Loading variables
-    84 variables loaded
-    Simulation in 2 dimensions
-    Loading domain in cylindrical coordinates:
-    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
-    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
-    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
-    Number of snapshots in output directory: 51
-    Configuration variables and domains load into the object. See e.g. <sim>.vars
+    No file with variables named '/home/jzuluaga/fargo3d/outputs/fargo/variables.par' found.
 
 
 Load gas density field from a given snapshot:
@@ -279,7 +276,7 @@ Plot the slice:
 
 ```python
 import matplotlib.pyplot as plt
-plt.ioff() # Drop this out of this tutorial
+if not fp.IN_COLAB:plt.ioff() # Drop this out of this tutorial
 fig,ax = plt.subplots()
 
 ax.semilogy(mesh.r,gasdens_r)
@@ -287,7 +284,7 @@ ax.semilogy(mesh.r,gasdens_r)
 ax.set_xlabel(r"$r$ [cu]")
 ax.set_ylabel(r"$\rho$ [cu]")
 fp.Util.fargopy_mark(ax)
-fig.savefig('gallery/example-dens_r.png') # Drop this out of this tutorial
+if not fp.IN_COLAB:fig.savefig('gallery/example-dens_r.png') # Drop this out of this tutorial
 ```
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_r.png?raw=true" alt="Animation""/></p>
@@ -303,7 +300,7 @@ And plot it:
 
 
 ```python
-plt.ioff() # Drop this out of this tutorial
+if not fp.IN_COLAB:plt.ioff() # Drop this out of this tutorial
 fig,axs = plt.subplots(1,2,figsize=(12,6))
 
 ax = axs[0]
@@ -322,7 +319,7 @@ ax.set_xlabel('$x$ [UL]')
 ax.set_ylabel('$y$ [UL]')
 fp.Util.fargopy_mark(ax)
 ax.axis('equal')
-fig.savefig('gallery/example-dens_disk.png') # Drop this out of this tutorial
+if not fp.IN_COLAB:fig.savefig('gallery/example-dens_disk.png') # Drop this out of this tutorial
 ```
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_disk.png?raw=true" alt="Animation""/></p>
