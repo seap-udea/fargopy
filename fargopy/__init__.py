@@ -87,6 +87,9 @@ class Dictobj(object):
             if key == 'dict':continue
             setattr(self, key, value)
 
+    def __getitem__(self,key):
+        return self.item(str(key))
+
     def keys(self):
         """Show the list of attributes of Dictobj
 

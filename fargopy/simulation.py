@@ -777,14 +777,6 @@ class Simulation(fargopy.Fargobj):
         """
         if os.path.isfile(file):
             field_data = np.fromfile(file).reshape(int(self.vars.NZ),int(self.vars.NY),int(self.vars.NX))
-            """
-            if self.vars.NZ > 1:
-                # 3D field
-                field_data = np.fromfile(file).reshape(int(self.vars.NZ),int(self.vars.NY),int(self.vars.NX))
-            else:
-                # 2D field
-                field_data = np.fromfile(file).reshape(int(self.vars.NY),int(self.vars.NX))
-            """
             return field_data
         else:
             raise AssertionError(f"File with field '{file}' not found")
