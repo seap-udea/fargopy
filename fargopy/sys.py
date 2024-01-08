@@ -105,27 +105,6 @@ class Sys(object):
         return svmem
 
     @staticmethod
-    def lock(pid):
-        """Create a lock file
-        """
-        if Sys.check_lock(verbose=False):
-            print(f"You cannot lock FARGO3D because it is already locked")
-            return
-        lock_file = open(fargopy.FP_FARGO3D_LOCKFILE,"w")
-        lock_file.write(pid)
-        lock_file.close()
-        
-    @staticmethod
-    def check_lock(verbose=True):
-        """Check if fargopy is locked by a running process
-        """
-        if os.path.isfile(fargopy.FP_FARGO3D_LOCKFILE):
-            if verbose:
-                print(f"There is a lockfile in {fargopy.FP_FARGO3D_LOCKFILE}")
-            return True
-        return False
-    
-    @staticmethod
     def lock(dir,content=dict()):
         """Lock a directory using content information
         """
