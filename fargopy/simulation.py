@@ -60,7 +60,9 @@ PRECOMPUTED_SIMULATIONS = dict(
         size=140
     ),
 )
-signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+if not fargopy.IN_COLAB:
+    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 ###############################################################
 # Classes
@@ -531,7 +533,7 @@ class Simulation(fargopy.Fargobj):
 
         if 'progress' in mode:
             vprint(bar)
-            numstatus = 10
+            numstatus = 5
             if 'numstatus' in kwargs.keys():
                 numstatus = int(kwargs['numstatus'])
             self._status_progress(numstatus=numstatus)
@@ -589,9 +591,19 @@ class Simulation(fargopy.Fargobj):
                     time_previous = time_now
                 previous_output = latest_output
             
-            if fargopy.Sys.sleep_timeout(frequency):
-                return
-            
+            if fargopy.IN_COLAB:
+                # In colab the control is much more limited
+                try:
+                    time.sleep(frequency)
+                except KeyboardInterrupt:
+                    print("Interrupted by user. In some environment (IPython, Colab) stopping the progress status will stop the simulation. In that case just resume.")
+                    return
+                
+            else:
+                # Suitable for running in Jupyter and IPython
+                if fargopy.Sys.sleep_timeout(frequency):
+                    return
+                
     def resume(self,snapshot=-1,mpioptions='-np 1'):
         latest_snapshot_resumable = self._is_resumable()
         if latest_snapshot_resumable<0:
