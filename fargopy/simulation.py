@@ -14,6 +14,7 @@ import subprocess
 import time
 import gdown
 import os
+import signal
 
 ###############################################################
 # Constants
@@ -59,6 +60,7 @@ PRECOMPUTED_SIMULATIONS = dict(
         size=140
     ),
 )
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 ###############################################################
 # Classes
@@ -285,7 +287,7 @@ class Simulation(fargopy.Fargobj):
 
         # Mandatory options
         options = options + " -t"
-        if 'run_options' not in self.__dict__.keys():
+        if 'fargo3d_run_options' not in self.__dict__.keys():
             self.fargo3d_run_options = options
         
         self.logfile = f"{self.setup_dir}/{self.setup}.log"
@@ -340,7 +342,8 @@ class Simulation(fargopy.Fargobj):
                         return
 
                 process = subprocess.Popen(run_cmd.split(),cwd=self.fargo3d_dir,
-                                        stdout=logfile_handler,stderr=logfile_handler)
+                                           stdout=logfile_handler,stderr=logfile_handler,close_fds=True)
+                
                 # Introduce a short delay to verify if the process has failed
                 time.sleep(1.0)
 
@@ -450,19 +453,21 @@ class Simulation(fargopy.Fargobj):
             else:
                 vprint("No datafiles yet available")
 
+        if 'summary' in mode or mode=='all':
+            vprint(bar+"Summary:")
+            nsnaps = self._get_nsnaps()
+            print(f"The simulation has been ran for {nsnaps} time-steps (including the initial one).")
+
         if 'progress' in mode:
-            numstatus = 5
+            vprint(bar)
+            numstatus = 100
             if 'numstatus' in kwargs.keys():
                 numstatus = int(kwargs['numstatus'])
             self._status_progress(numstatus=numstatus)
 
-        if 'summary' in mode or mode=='all':
-            nsnaps = self._get_nsnaps()
-            print(f"The simulation has been ran for {nsnaps} time-steps (including the initial one).")
-
         print(f"\nOther status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'")
 
-    def _status_progress(self,minfreq=0.1,numstatus=5):
+    def _status_progress(self,minfreq=0.1,numstatus=100):
         """Show a progress of the execution
 
         Parameters:
@@ -483,7 +488,7 @@ class Simulation(fargopy.Fargobj):
 
         # Infinite loop checking for output
         n = 0
-        print(f"Progress of the simulation (numstatus = {numstatus}, interrupting may stop the process):")
+        print(f"Progress of the simulation (interrupt by pressing 'enter' or the stop button):")
         while True and (n<numstatus):
             if not self._is_running():
                 print("The simulation is not running anymore")
@@ -494,7 +499,7 @@ class Simulation(fargopy.Fargobj):
                 # Get the latest output
                 latest_output = output[-2]
                 if latest_output != previous_output:
-                    print(f"{n+1}:{latest_output} [output pace = {frequency:.1f} secs]")
+                    print(f"{n+1}:{latest_output} [output pace = {frequency:.1f} secs] <Press 'enter' to interrupt>")
                     n += 1 
                     # Fun the number of the output
                     find = re.findall(r'OUTPUTS\s+(\d+)',latest_output)
@@ -509,12 +514,8 @@ class Simulation(fargopy.Fargobj):
                     previous_resumable_snapshot = resumable_snapshot
                     time_previous = time_now
                 previous_output = latest_output
-            try:
-                time.sleep(frequency)
-            except KeyboardInterrupt:
-                time.sleep(1)
-                print("In some environment (IPython, Colab) stopping the progress status will stop the simulation. In that case just resume.")
-                self.status('isrunning')
+            
+            if fargopy.Sys.sleep_timeout(frequency):
                 return
             
     def resume(self,snapshot=-1,mpioptions='-np 1'):

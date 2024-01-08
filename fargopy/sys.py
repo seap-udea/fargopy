@@ -9,12 +9,9 @@ import fargopy
 import os
 import json
 import subprocess
-import inspect
-import signal
 import psutil
-
-# Remove zombie subprocesses
-signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+import sys
+from select import select
 
 ###############################################################
 # Classes
@@ -181,3 +178,28 @@ class Sys(object):
             with open(filename) as file_handler:
                 info = json.load(file_handler)
                 return info
+            
+    @staticmethod
+    def sleep_timeout(timeout=5,msg=None):
+        """This routine sleeps for a 'time'. In the meanwhile checks if there is a keyboard interrupt 
+        (Enter or Ctrl+C) and interrupt sleeping
+
+        Examples:
+            >>> Sys.sleep_timeout()
+            >>> Sys.sleep_timeout(10) 
+
+            >>> for i in range(10):
+                   print(f"i = {i}")
+                   if Sys.sleep_timeout():break
+        """
+        try: 
+            if msg:
+                print(msg)
+            rlist, wlist, xlist = select([sys.stdin], [], [], timeout)
+            if rlist:
+                return True
+            else:
+                return False
+        except KeyboardInterrupt:
+            print("Interrupting")
+            return True

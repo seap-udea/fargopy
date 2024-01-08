@@ -35,9 +35,9 @@ class Field(fargopy.Fargobj):
     Methods:
         slice: get an slice of a field along a given spatial direction.
             Examples: 
-                density.slice(r=0.5) # Take the closest slice to r = 0.5
-                density.slice(ir=20) # Take the slice through the 20 shell
-                density.slice(phi=30*RAD,interp='nearest') # Take a slice interpolating to the nearest
+                >>> density.slice(r=0.5) # Take the closest slice to r = 0.5
+                >>> density.slice(ir=20) # Take the slice through the 20 shell
+                >>> density.slice(phi=30*RAD,interp='nearest') # Take a slice interpolating to the nearest
     """
 
     def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar',**kwargs):

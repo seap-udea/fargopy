@@ -46,8 +46,14 @@ cleangit:
 	@-rm -rf .git/refs/remotes/origin/main.lock
 	@-rm -rf .git/refs/heads/main.lock
 
+# Run all tests
+tests:
+	python3 -m unittest discover -s fargopy/tests -p "test_*.py"
+
+# Generate markdown files from notebooks
 readme:
 	python3 -m nbconvert README.ipynb --to markdown
+
 
 %.md:%.ipynb
 	python3 -m nbconvert $^ --to markdown
