@@ -108,7 +108,10 @@ class Dictobj(object):
         if key not in self.keys():
             raise ValueError(f"Key 'key' not in Dictobj")
         return self.__dict__[key]
-
+    
+    def __getitem__(self,key):
+        return self.item(str(key))
+        
     def print_keys(self):
         """Print all the keys of a Dictobj.
         """

@@ -132,7 +132,7 @@ class Sys(object):
                 print(f"The locking process {pid} has been killed.")
             # Remove locking file 
             print(f"Removing locking file")
-            error,output = Sys.run(f"rm -rf {fargopy.FP_FARGO3D_LOCKFIL}")
+            error,output = Sys.run(f"rm -rf {fargopy.FP_FARGO3D_LOCKFILE}")
 
     @staticmethod
     def check_lock(verbose=True):
@@ -151,8 +151,8 @@ class Sys(object):
         if not os.path.isdir(dir):
             print(f"Locking directory '{dir}' not found.")
             return
+        
         filename = f"{dir}/fargopy.lock"
-
         with open(filename,'w') as file_object:
             file_object.write(json.dumps(content,default=lambda obj:'<not serializable>'))
             file_object.close()

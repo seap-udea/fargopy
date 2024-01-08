@@ -239,12 +239,13 @@ class Simulation(fargopy.Fargobj):
         if force:
             print(f"Cleaning FARGO3D directory {self.fargo3d_dir}...")
             cmd = f"make -C {self.fargo3d_dir} clean mrproper"
+            # Clean all binaries
             compl = f"rm -rf {self.fargo3d_dir}/fargo3d_*"
             error,output_clean = fargopy.Sys.run(cmd + '&&' + compl)
             
         # Prepare compilation
         compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
-        fargo3d_binary = f"fargo3d_{compile_options.replace(' ','_').replace('=','-').strip('_')}"
+        fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
 
         # Compile binary
         print(f"Compiling {fargo3d_binary}...")
@@ -459,6 +460,8 @@ class Simulation(fargopy.Fargobj):
             nsnaps = self._get_nsnaps()
             print(f"The simulation has been ran for {nsnaps} time-steps (including the initial one).")
 
+        print(f"\nOther status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'")
+
     def _status_progress(self,minfreq=0.1,numstatus=5):
         """Show a progress of the execution
 
@@ -583,7 +586,7 @@ class Simulation(fargopy.Fargobj):
     # ##########################################################################
     # Operations on the FARGO3D directories
     # ##########################################################################  
-    def list_outputs(self,quiet=False):
+    def list_fields(self,quiet=False):
         if self.output_dir is None:
             print(f"You have to set forst the outputs directory with <sim>.set_outputs('<directory>')")
         else:
