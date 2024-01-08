@@ -155,10 +155,17 @@ class Fargobj(object):
         """Set a property of object using a given method
 
         Examples:
+            Simple example
             >>> obj = Fargobj()
             >>> obj.set_property('a',1)
             >>> print(obj.a)
             1
+
+            Using a special method:
+            >>> obj = Fargobj()
+            >>> obj.set_property('a',2,lambda x:x**2)
+            >>> print(obj.a)
+            4
         """
         if property in self.kwargs.keys():
             method(self.kwargs[property])
@@ -214,6 +221,8 @@ FP_FARGO3D_HEADER = 'src/fargo3d.h'
 Conf.FP_INITIAL_SCRIPT = """
 import sys
 import fargopy as fp
+get_ipython().run_line_magic('load_ext','autoreload')
+get_ipython().run_line_magic('autoreload','2')
 fp.initialize(' '.join(sys.argv))
 """
 

@@ -68,10 +68,30 @@ signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 class Simulation(fargopy.Fargobj):
 
     def __init__(self,**kwargs):
+        """Initialize a simulation.
+
+        Examples:
+            Create an empty simulation (no setup chosen):
+            >>> sim = fargopy.Simulation()
+
+            Create a simulation using a specific base FARGO3D directory (no setup chosen):
+            >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
+
+            Create a simulation starting with setup directory: 
+            >>> sim = fargopy.Simulation(setup='fargo')
+            
+            Connect to an existing simulation:
+            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+
+            Load an already existing simulation:
+            >>> sim = fargopy.Simulation(setup='fargo',load=True)
+        """
+
         super().__init__(**kwargs)
         
         # Load simulation configuration from a file
         if ('load' in kwargs.keys()) and kwargs['load']:
+            
             if not 'setup' in kwargs.keys():
                 raise AssertionError(f"You must provide a setup name.")
             else:
@@ -81,16 +101,28 @@ class Simulation(fargopy.Fargobj):
             else:
                 fargo3d_dir = fargopy.Conf.FP_FARGO3D_DIR
             
+            # Load simulation
             load_from = f"{fargo3d_dir}/setups/{setup}".replace('//','/')
             if not os.path.isdir(load_from):
                 print(f"Directory for loading simulation '{load_from}' not found.")
             json_file = f"{load_from}/fargopy_simulation.json"
+
             print(f"Loading simulation from '{json_file}'")
             if not os.path.isfile(json_file):
                 print(f"Loading data '{json_file}' not found.")
+
             with open(json_file) as file_handler:
                 attributes = json.load(file_handler)
+
+                # Check if there are not serializable items and set to None
+                for key,item in attributes.items():
+                    if item == '<not serializable>':
+                        attributes[key] = None
+
+                # Update the object
                 self.__dict__.update(attributes)
+
+                # Set the directories
                 self.set_fargo3d_dir(self.fargo3d_dir)
                 self.set_setup(self.setup)
                 self.set_output_dir(self.output_dir)
@@ -109,15 +141,23 @@ class Simulation(fargopy.Fargobj):
         self.set_property('output_dir',
                           None,
                           self.set_output_dir)
-        self.set_property('fargo3d_binary',
-                          None)
         self.set_property('fargo3d_compilation_options',
                           dict(parallel=0,gpu=0,options=''))
+
+        # Check if binary is already compiled
+        fargo3d_binary,compile_options = self._generate_binary_name(parallel=self.fargo3d_compilation_options['parallel'],
+                                                    gpu=self.fargo3d_compilation_options['gpu'],
+                                                    options=self.fargo3d_compilation_options['options'])
+        if os.path.isfile(f"{self.fargo3d_dir}/{fargo3d_binary}"):
+            print(f"FARGO3D binary '{fargo3d_binary}' found.")
+            self.fargo3d_binary = fargo3d_binary
+        else:
+            self.fargo3d_binary = None
+
+        # Simulation process does not exist   
         self.set_property('fargo3d_process',
                           None)
-        self.set_property('logfile',
-                          None)
-
+        
     # ##########################################################################
     # Set special properties
     # ##########################################################################  
@@ -166,6 +206,7 @@ class Simulation(fargopy.Fargobj):
         setup_dir = f"{self.setups_dir}/{setup}".replace('//','/')
         if self.set_setup_dir(setup_dir):
             self.setup = setup
+            self.logfile = f"{self.setup_dir}/{self.setup}.log"
         return setup
     
     def set_setup_dir(self,dir):
@@ -186,6 +227,7 @@ class Simulation(fargopy.Fargobj):
             return False
         else:
             print(f"Now your simulation setup is at '{dir}'")
+
         self.setup_dir = dir
         return True
 
@@ -246,8 +288,9 @@ class Simulation(fargopy.Fargobj):
             error,output_clean = fargopy.Sys.run(cmd + '&&' + compl)
             
         # Prepare compilation
-        compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
-        fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
+        fargo3d_binary,compile_options = self._generate_binary_name(parallel=parallel,gpu=gpu,options=options)
+        #compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
+        #fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
 
         # Compile binary
         print(f"Compiling {fargo3d_binary}...")
@@ -268,6 +311,13 @@ class Simulation(fargopy.Fargobj):
         else:
             print(f"Something failed when compiling FARGO3D. For details check '{self.setup_dir}/compilation.log")
             
+    def _generate_binary_name(self,parallel=0,gpu=0,options=''):
+        """Generate binary name
+        """
+        compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
+        fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
+        return fargo3d_binary, compile_options
+
     def run(self,
             mode='async',
             options='-m',
@@ -285,13 +335,16 @@ class Simulation(fargopy.Fargobj):
             print(f"There is a running process. Please stop it before running/resuming")
             return
 
+        lock_info = fargopy.Sys.is_locked(self.setup_dir)        
+        if lock_info:
+            print(f"The process is locked by PID {lock_info['pid']}")
+            return
+
         # Mandatory options
         options = options + " -t"
         if 'fargo3d_run_options' not in self.__dict__.keys():
             self.fargo3d_run_options = options
         
-        self.logfile = f"{self.setup_dir}/{self.setup}.log"
-
         # Clean output if available
         if cleanrun:
             # Check if there is an output director
@@ -336,7 +389,7 @@ class Simulation(fargopy.Fargobj):
                 lock_info = fargopy.Sys.is_locked(dir=self.setup_dir)
                 if lock_info:
                     if unlock:
-                        self._unlock_simulation(lock_info)
+                        self.unlock_simulation(lock_info)
                     else:
                         print(f"Output directory {self.setup_dir} is locked by a running process")
                         return
@@ -372,21 +425,33 @@ class Simulation(fargopy.Fargobj):
         # Check if the directory is locked
         lock_info = fargopy.Sys.is_locked(self.setup_dir)
         
+        if lock_info:
+            print(f"The process is locked by PID {lock_info['pid']}")
+
+        # If not process associated unlock the simulation
         if not self._check_process():
-            self._unlock_simulation(lock_info)
+            self.unlock_simulation(lock_info)
             return
 
         poll = self.fargo3d_process.poll()
         if poll is None:
             print(f"Stopping FARGO3D process (pid = {self.fargo3d_process.pid})")
             subprocess.Popen.kill(self.fargo3d_process)
+            self.unlock_simulation(lock_info)
             del self.fargo3d_process
             self.fargo3d_process = None
         else:
-            self._unlock_simulation(lock_info)
+            self.unlock_simulation(lock_info)
             print(f"The process has finished. Check logfile {self.logfile}.")
 
-    def _unlock_simulation(self,lock_info):
+    def unlock_simulation(self,lock_info=None,force=True):
+        """Unlock a simulation
+        """
+        if lock_info is None and force:
+            lock_info = fargopy.Sys.is_locked(self.setup_dir)
+            if lock_info:
+                print(f"Unlocking simulation (pid = {lock_info['pid']})")
+                
         if lock_info:
             pid = lock_info['pid']
             fargopy.Debug.trace(f"Unlocking simulation (pid = {pid})")
@@ -404,6 +469,7 @@ class Simulation(fargopy.Fargobj):
                     'outputs': Show (and return) a list of outputs
                     'snapshots': Show (and return) a list of snapshots
                     'progress': Show progress in realtime
+                    'locking': Show if the directory is locked
 
         """
         # Bar separating output 
@@ -421,7 +487,7 @@ class Simulation(fargopy.Fargobj):
                 else:
                     # Unlock any remaining process
                     lock_info = fargopy.Sys.is_locked(self.setup_dir)
-                    self._unlock_simulation(lock_info)
+                    self.unlock_simulation(lock_info)
                     
                     vprint(f"\tThe process has ended with termination code {poll}.")
             else:
@@ -458,9 +524,14 @@ class Simulation(fargopy.Fargobj):
             nsnaps = self._get_nsnaps()
             print(f"The simulation has been ran for {nsnaps} time-steps (including the initial one).")
 
+        if 'locking' in mode or mode=='all':
+            vprint(bar+"Locking status:")
+            lock_info = fargopy.Sys.is_locked(self.setup_dir)
+            print(lock_info)
+
         if 'progress' in mode:
             vprint(bar)
-            numstatus = 100
+            numstatus = 10
             if 'numstatus' in kwargs.keys():
                 numstatus = int(kwargs['numstatus'])
             self._status_progress(numstatus=numstatus)
@@ -490,9 +561,12 @@ class Simulation(fargopy.Fargobj):
         n = 0
         print(f"Progress of the simulation (interrupt by pressing 'enter' or the stop button):")
         while True and (n<numstatus):
+            
+            # Check if the process is running locally
             if not self._is_running():
                 print("The simulation is not running anymore")
                 return
+            
             error,output = fargopy.Sys.run(f"grep OUTPUT {self.logfile} |tail -n 1")
             
             if not error:
@@ -524,6 +598,9 @@ class Simulation(fargopy.Fargobj):
             return
         if self._is_running():
             print(f"There is a running process. Please stop it before resuming")
+            return
+        if 'fargo3d_run_options' not in self.__dict__.keys():
+            print(f"The process has not been run before.")
             return
         # Resume
         if snapshot<0:
@@ -562,6 +639,13 @@ class Simulation(fargopy.Fargobj):
         error,output = fargopy.Sys.run(cmd)
 
     def _is_running(self,verbose=False):
+        lock_info = fargopy.Sys.is_locked(self.setup_dir)
+        if lock_info:
+            # Check if process is up
+            error,output = fargopy.Sys.run(f"ps -p {lock_info['pid']}")
+            if error == 0:
+                return True
+
         if not self.has('fargo3d_process'):
             if verbose:
                 print("The simulation has not been run before.")
@@ -965,6 +1049,3 @@ class Simulation(fargopy.Fargobj):
             print(f"Done.")
             fargopy.Sys.simple(f"cd {download_dir};rm -rf {filename}")
 
-
-    
-        
