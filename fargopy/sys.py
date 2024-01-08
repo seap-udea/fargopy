@@ -116,22 +116,6 @@ class Sys(object):
         lock_file.close()
         
     @staticmethod
-    def unlock():
-        """Unlock a fargopy instance
-        """
-        if Sys.check_lock(verbose=False):
-            print(f"Unlocking FARGO3D")
-            # Kill process 
-            error,output = Sys.run(f"kill -9 {pid}")
-            if error:
-                print(f"The locking process {pid} does not exist.")
-            else:
-                print(f"The locking process {pid} has been killed.")
-            # Remove locking file 
-            print(f"Removing locking file")
-            error,output = Sys.run(f"rm -rf {fargopy.FP_FARGO3D_LOCKFILE}")
-
-    @staticmethod
     def check_lock(verbose=True):
         """Check if fargopy is locked by a running process
         """

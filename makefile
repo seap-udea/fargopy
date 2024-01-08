@@ -1,3 +1,5 @@
+RELMODE = release
+
 # Version
 show:
 	@-cat montu/version.py
