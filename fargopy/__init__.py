@@ -351,6 +351,7 @@ from fargopy.sys import *
 from fargopy.fields import *
 from fargopy.simulation import *
 from fargopy.plot import *
+#from fargopy.Fsimulation
 
 # Showing version 
 print(f"Running FARGOpy version {version}")
