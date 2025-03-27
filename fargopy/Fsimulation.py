@@ -192,7 +192,7 @@ class Simulation:
         animation.save(video_filename, writer=FFMpegWriter(fps=10, codec='libx264', bitrate=5000))
 
         # Mostrar el video en el entorno interactivo
-        #return Video(video_filename, embed=True)
+        return Video(video_filename, embed=True)
     
 
 class Visualize:
