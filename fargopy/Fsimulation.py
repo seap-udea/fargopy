@@ -114,8 +114,8 @@ class Simulation:
 
     def generate_uniform_particles(self, var1_min, var1_max, var2_min, var2_max, num_particles):
         grid_size = int(np.sqrt(num_particles))
-        var1_candidates = np.linspace(var1_min + 0.05, var1_max - 0.05, grid_size)
-        var2_candidates = np.linspace(var2_min + 0.005, var2_max - 0.005, grid_size)
+        var1_candidates = np.linspace(var1_min + 0.01, var1_max - 0.01, grid_size)
+        var2_candidates = np.linspace(var2_min + 0.001, var2_max - 0.001, grid_size)
         VAR1_grid, VAR2_grid = np.meshgrid(var1_candidates, var2_candidates, indexing='ij')
 
         density_values = self.data_handler.interpolate_density(0, VAR1_grid, VAR2_grid)
@@ -145,7 +145,7 @@ class Simulation:
 
             # Determinar el label del eje y en función del plano
         plane = self.data_handler.plane
-        y_label = "Z [au]" if plane == "XZ" else r"$\phi$ [rad]"
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         fig, ax = plt.subplots(figsize=(6, 6))
         camera = Camera(fig)
@@ -178,7 +178,7 @@ class Simulation:
 
                 ax.set_xlim(var1_min, var1_max)
                 ax.set_ylim(var2_min, var2_max)
-                ax.set_xlabel(r"$r \ [au]$",size=12)
+                ax.set_xlabel(r"$r \ [AU]$",size=12)
                 ax.set_ylabel(y_label,size=12)
                 camera.snap()
 
@@ -202,6 +202,47 @@ class Visualize:
         """
         self.data_handler = data_handler
 
+    def density(self, var1_min, var1_max, var2_min, var2_max, res, time):
+        """
+        Grafica un mapa de contornos de densidad interpolada en un tiempo dado.
+        """
+        # Crear una cuadrícula regular para las coordenadas
+        var1 = np.linspace(var1_min, var1_max, res)
+        var2 = np.linspace(var2_min, var2_max, res)
+        VAR1, VAR2 = np.meshgrid(var1, var2, indexing='ij')
+
+        # Interpolar la densidad en el tiempo dado
+        density = self.data_handler.interpolate_density(time, VAR1, VAR2).T
+
+        # Determinar el label del eje y en función del plano
+        plane = self.data_handler.plane
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
+
+        # Crear el gráfico de contorno
+        fig = go.Figure(
+            data=go.Contour(
+                z=np.log10(density * self.data_handler.sim.URHO * 1e3),
+                x=var1,
+                y=var2,
+                colorscale="Spectral_r",
+                contours=dict(coloring="heatmap"),
+                colorbar=dict(title="log10(ρ) [kg/m³]")
+            )
+        )
+
+        # Configurar el diseño del gráfico
+        fig.update_layout(
+            title=f"Mapa de Contornos de Densidad (t = {time:.2f})",
+            xaxis_title="r [AU]",
+            yaxis_title=y_label,
+            width=650,
+            height=650
+        )
+
+        # Mostrar el gráfico
+        fig.show()
+
+
     def animate_density(self, var1_min, var1_max, var2_min, var2_max, res, time_array):
 
         # Crear una cuadrícula regular para las coordenadas
@@ -216,7 +257,7 @@ class Visualize:
         ]
             # Determinar el label del eje y en función del plano
         plane = self.data_handler.plane
-        y_label = "Z [au]" if plane == "XZ" else r"$\phi$ [rad]"
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Crear la figura inicial
         initial_density = precalculated_density[0]
@@ -295,8 +336,62 @@ class Visualize:
         # Mostrar la animación
         fig.show()
 
-    def animate_velocity(self, var1_min, var1_max, var2_min, var2_max, res, time_array):
+    def velocity(self, var1_min, var1_max, var2_min, var2_max, res, time):
+        """
+        Grafica un mapa de magnitud de velocidad interpolada en un tiempo dado.
+        Las zonas donde la interpolación da 0 no serán coloreadas.
+        """
+        # Crear una cuadrícula regular para las coordenadas
+        var1 = np.linspace(var1_min, var1_max, res)
+        var2 = np.linspace(var2_min, var2_max, res)
+        VAR1, VAR2 = np.meshgrid(var1, var2, indexing='ij')
 
+        # Interpolar el campo de velocidad en el tiempo dado
+        velocity_x, velocity_y = self.data_handler.interpolate_velocity(time, VAR1, VAR2)
+
+        # Calcular la magnitud de la velocidad
+        velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2).T * self.data_handler.sim.UV / (1e5)  # Convertir a km/s
+
+        # Establecer las zonas donde velocity_x y velocity_y son 0 como None
+        velocity_magnitude[velocity_magnitude==0] = None
+
+        # Determinar el label del eje y en función del plano
+        plane = self.data_handler.plane
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
+
+        # Crear el gráfico de contorno
+        fig = go.Figure(
+            data=go.Contour(
+                z=velocity_magnitude,
+                x=var1,
+                y=var2,
+                colorscale="Viridis",
+                contours=dict(coloring="heatmap"),
+                colorbar=dict(title="|v| [km/s]"),
+                zmin=np.nanmin(velocity_magnitude),
+                zmax=np.nanmax(velocity_magnitude),
+                showscale=True
+            )
+        )
+
+        # Configurar el diseño del gráfico
+        fig.update_layout(
+            title=f"Mapa de Velocidad (t = {time:.2f})",
+            xaxis_title="r [AU]",
+            yaxis_title=y_label,
+            width=650,
+            height=650,
+            plot_bgcolor="white"  # Fondo blanco para que las zonas no coloreadas sean visibles
+        )
+
+        # Mostrar el gráfico
+        fig.show()
+
+    def animate_velocity(self, var1_min, var1_max, var2_min, var2_max, res, time_array):
+        """
+        Crea una animación del mapa de magnitud de velocidad interpolada en función del tiempo.
+        Las zonas donde la magnitud de la velocidad es 0 no serán coloreadas.
+        """
         # Crear una cuadrícula regular para las coordenadas
         var1 = np.linspace(var1_min, var1_max, res)
         var2 = np.linspace(var2_min, var2_max, res)
@@ -304,13 +399,15 @@ class Visualize:
 
         # Determinar el label del eje y en función del plano
         plane = self.data_handler.plane
-        y_label = "Z [au]" if plane == "XZ" else r"$\phi$ [rad]"
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Precalcular la magnitud del campo de velocidad para todos los tiempos
-        precalculated_velocity_magnitude = [
-            np.sqrt(velocity[0]**2 + velocity[1]**2).T*self.data_handler.sim.UV/(1e5) 
-            for velocity in [self.data_handler.interpolate_velocity(time, VAR1, VAR2) for time in time_array]
-        ]
+        precalculated_velocity_magnitude = []
+        for time in time_array:
+            velocity_x, velocity_y = self.data_handler.interpolate_velocity(time, VAR1, VAR2)
+            velocity_magnitude = np.sqrt(velocity_x**2 + velocity_y**2).T * self.data_handler.sim.UV / (1e5)  # Convertir a km/s
+            velocity_magnitude[velocity_magnitude == 0] = None  # Reemplazar las zonas con magnitud 0 por None
+            precalculated_velocity_magnitude.append(velocity_magnitude)
 
         # Crear la figura inicial
         initial_velocity_magnitude = precalculated_velocity_magnitude[0]
@@ -334,7 +431,7 @@ class Visualize:
                     z=velocity_magnitude,
                     x=var1,
                     y=var2,
-                    colorscale="Viridis",  # Este colormap será actualizado dinámicamente
+                    colorscale="Viridis",
                     contours=dict(coloring="heatmap")
                 ),
                 name=f"{time:.2f}"
@@ -389,6 +486,36 @@ class Visualize:
         # Mostrar la animación
         fig.show()
 
+    def vel_streamlines(self, var1_min, var1_max, var2_min, var2_max, res, time):
+        """
+        Grafica las streamlines del campo de velocidad con la densidad de fondo para un tiempo dado.
+        """
+        # Crear una cuadrícula regular para las coordenadas
+        var1 = np.linspace(var1_min, var1_max, res)
+        var2 = np.linspace(var2_min, var2_max, res)
+        VAR1, VAR2 = np.meshgrid(var1, var2, indexing='ij')
+
+        # Interpolar el campo de densidad y velocidad en el tiempo dado
+        density = self.data_handler.interpolate_density(time, VAR1, VAR2)
+        velocity_x, velocity_y = self.data_handler.interpolate_velocity(time, VAR1, VAR2)
+
+        # Calcular la magnitud de la velocidad
+        v_mag = np.sqrt(velocity_x**2 + velocity_y**2).T * self.data_handler.sim.UV / (1e5)  # Convertir a km/s
+
+        # Determinar el label del eje y en función del plano
+        plane = self.data_handler.plane
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
+
+        # Crear el gráfico
+        plt.figure(figsize=(8, 8))
+        plt.pcolormesh(var1, var2, np.log10(density * self.data_handler.sim.URHO * 1e3).T, cmap="Spectral_r", shading='auto')
+        plt.streamplot(var1, var2, velocity_x.T, velocity_y.T, color=v_mag, linewidth=0.7, density=3.0, cmap='viridis')
+        plt.colorbar(label="|v| [km/s]")
+        plt.title(f"Streamlines (t = {time:.2f})")
+        plt.xlabel("r [AU]")
+        plt.ylabel(y_label)
+        plt.show()          
+
     def vel_streamlines_slide(self, var1_min, var1_max, var2_min, var2_max, res, time_array):
 
         # Crear una cuadrícula regular para las coordenadas
@@ -397,7 +524,7 @@ class Visualize:
         VAR1, VAR2 = np.meshgrid(var1, var2, indexing='ij')
             # Determinar el label del eje y en función del plano
         plane = self.data_handler.plane
-        y_label = "Z [au]" if plane == "XZ" else r"$\phi$ [rad]"
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Precalcular densidad y velocidades para todos los tiempos
         precalculated_data = [
@@ -439,7 +566,7 @@ class Visualize:
         VAR1, VAR2 = np.meshgrid(var1, var2, indexing='ij')
             # Determinar el label del eje y en función del plano
         plane = self.data_handler.plane
-        y_label = "Z [au]" if plane == "XZ" else r"$\phi$ [rad]"
+        y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Configurar la figura y la cámara para la animación
         fig, ax = plt.subplots(figsize=(8, 8))
