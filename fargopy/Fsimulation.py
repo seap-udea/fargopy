@@ -147,7 +147,7 @@ class Simulation:
         plane = self.data_handler.plane
         y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(8, 8))
         camera = Camera(fig)
 
         with tqdm(total=len(t_eval), desc="Generando animación", unit="frame") as pbar:
@@ -188,7 +188,7 @@ class Simulation:
         fig.colorbar(c, ax=ax, label=r'$\log_{10}(\rho)$ [kg/m$^3$]')
         plt.close(fig)
         animation = camera.animate()
-        video_filename = 'Streakline6.mp4'
+        video_filename = 'Streaklines.mp4'
         animation.save(video_filename, writer=FFMpegWriter(fps=10, codec='libx264', bitrate=5000))
 
         # Mostrar el video en el entorno interactivo
@@ -235,12 +235,14 @@ class Visualize:
             title=f"Mapa de Contornos de Densidad (t = {time:.2f})",
             xaxis_title="r [AU]",
             yaxis_title=y_label,
-            width=650,
-            height=650
+            width=600,
+            height=600
         )
 
         # Mostrar el gráfico
         fig.show()
+
+        
 
 
     def animate_density(self, var1_min, var1_max, var2_min, var2_max, res, time_array):
@@ -327,8 +329,8 @@ class Visualize:
             title="Evolución del Campo de Densidad",
             xaxis_title='r [AU]',
             yaxis_title=y_label,
-            width=650,
-            height=650,
+            width=600,
+            height=600,
             sliders=sliders,
             updatemenus=updatemenus
         )
@@ -379,8 +381,8 @@ class Visualize:
             title=f"Mapa de Velocidad (t = {time:.2f})",
             xaxis_title="r [AU]",
             yaxis_title=y_label,
-            width=650,
-            height=650,
+            width=600,
+            height=600,
             plot_bgcolor="white"  # Fondo blanco para que las zonas no coloreadas sean visibles
         )
 
@@ -477,8 +479,8 @@ class Visualize:
             title="Evolución del Campo de Velocidad",
             xaxis_title='r [AU]',
             yaxis_title=y_label,
-            width=650,
-            height=650,
+            width=600,
+            height=600,
             sliders=sliders,
             updatemenus=updatemenus
         )
@@ -507,7 +509,7 @@ class Visualize:
         y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Crear el gráfico
-        plt.figure(figsize=(8, 8))
+        plt.figure(figsize=(6, 6))
         plt.pcolormesh(var1, var2, np.log10(density * self.data_handler.sim.URHO * 1e3).T, cmap="Spectral_r", shading='auto')
         plt.streamplot(var1, var2, velocity_x.T, velocity_y.T, color=v_mag, linewidth=0.7, density=3.0, cmap='viridis')
         plt.colorbar(label="|v| [km/s]")
@@ -545,7 +547,7 @@ class Visualize:
             velocity_y = data["velocity"][1]
             v_mag = np.sqrt(velocity_x**2 + velocity_y**2).T*self.data_handler.sim.UV/(1e5)  
             # Crear el gráfico
-            plt.figure(figsize=(8, 8))
+            plt.figure(figsize=(6, 6))
             plt.pcolormesh(var1, var2, np.log10(density * self.data_handler.sim.URHO * 1e3).T, cmap="Spectral_r", shading='auto')
             plt.streamplot(var1, var2, velocity_x.T, velocity_y.T, color=v_mag, linewidth=0.7, density=3.0,cmap='viridis')
             plt.colorbar(label="|v| [km/s]")
@@ -569,7 +571,7 @@ class Visualize:
         y_label = "Z [AU]" if plane == "XZ" else r"$\phi$ [rad]"
 
         # Configurar la figura y la cámara para la animación
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(6, 6))
         camera = Camera(fig)
 
         # Generar los frames de la animación
@@ -582,10 +584,10 @@ class Visualize:
             # Crear el gráfico para el frame actual
             c = ax.pcolormesh(var1, var2, np.log10(density * self.data_handler.sim.URHO * 1e3).T, cmap="Spectral_r", shading='auto')
             strm=ax.streamplot(var1, var2, velocity_x.T, velocity_y.T, color=v_mag, linewidth=0.7, density=3.0,cmap='viridis')
-            ax.set_title(f"Streamlines(t = {time:.2f})")
             ax.set_xlabel("r [AU]")
             ax.set_ylabel(y_label)
             camera.snap()
+            
 
         # Crear la animación
         fig.colorbar(strm.lines, ax=ax, label="|v| [km/s]")
