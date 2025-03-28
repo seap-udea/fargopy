@@ -447,5 +447,5 @@ Version 0.0.*:
 
 ------------
 
-This package has been designed and written mostly by Jorge I. Zuluaga and Alejandro González with advising and contributions by Matías Montesinos (C) 2023, 2024, 2025
+This package has been designed and written mostly by Jorge I. Zuluaga and Alejandro Murillo-González with advising and contributions by Matías Montesinos (C) 2023, 2024, 2025
 
