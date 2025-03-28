@@ -51,7 +51,7 @@ setuptools.setup(
     # DEPENDENCIES
     # ######################################################################
     install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
-                      'celluloid','psutil','gdown','pandas','plotly','ipywidgets'],
+                      'celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat'],
 
     # ######################################################################
     # OPTIONS

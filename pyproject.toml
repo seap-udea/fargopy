@@ -2,5 +2,5 @@
 requires = ['setuptools',
 			'scipy','matplotlib','tqdm','numpy','ipython',
 			'celluloid','psutil','gdown','pandas','plotly',
-			'ipywidgets']
+			'ipywidgets','nbformat']
 build-backend = "setuptools.build_meta"
