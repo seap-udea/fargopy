@@ -8,7 +8,7 @@ setuptools.setup(
     # BASIC DESCRIPTION
     # ######################################################################
     name='fargopy',
-    author='Jorge Zuluaga, Alejandro González, Matias Montesinos',
+    author='Jorge Zuluaga, Alejandro Murillo-González, Matias Montesinos',
     author_email='jorge.zuluaga@gmail.com',
     description='FARGO3D Wrapping',
     long_description=long_description,
