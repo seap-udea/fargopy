@@ -188,7 +188,7 @@ class Simulation:
         fig.colorbar(c, ax=ax, label=r'$\log_{10}(\rho)$ [kg/m$^3$]')
         plt.close(fig)
         animation = camera.animate()
-        video_filename = 'Streaklines.mp4'
+        video_filename = 'figures/streaklines.mp4'
         animation.save(video_filename, writer=FFMpegWriter(fps=10, codec='libx264', bitrate=5000))
 
         # Mostrar el video en el entorno interactivo
