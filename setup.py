@@ -8,7 +8,7 @@ setuptools.setup(
     # BASIC DESCRIPTION
     # ######################################################################
     name='fargopy',
-    author='Jorge Zuluaga, Matias Montesinos',
+    author='Jorge Zuluaga, Alejandro González, Matias Montesinos',
     author_email='jorge.zuluaga@gmail.com',
     description='FARGO3D Wrapping',
     long_description=long_description,
@@ -25,7 +25,7 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         ],
-    version='0.3.12',
+    version='0.3.13',
 
     # ######################################################################
     # FILES
