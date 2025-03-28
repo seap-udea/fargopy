@@ -1,4 +1,7 @@
 #!/bin/bash
+# VERBOSE="--verbose"
+VERBOSE=""
+
 ##################################################################
 # Options
 ##################################################################
@@ -77,8 +80,8 @@ echo
 if [ $qtype -eq 0 ]
 then
     echo "Uploading to Test PyPI (use __token__ as username and pypi-<token> as password)..."
-    $PYTHON -m twine upload --repository testpypi dist/* --verbose
+    $PYTHON -m twine upload --repository testpypi dist/* $VERBOSE
 else
     echo "Uploading to PyPI (use your username and password)..."
-    $PYTHON -m twine upload dist/* --verbose
+    $PYTHON -m twine upload dist/* $VERBOSE
 fi
