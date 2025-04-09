@@ -212,6 +212,8 @@ class FluxAnalyzer:
             # Interpolate density
             self.densities[i] = self.data_handler.interpolate_density(t, xc, yc, zc)
 
+        return self.velocities, self.densities
+
     def calculate_normals(self):
         """Calculates the normal vectors of the sphere's triangles."""
         vertices = self.sphere.triangles
@@ -240,7 +242,9 @@ class FluxAnalyzer:
                 self.densities[i] * np.einsum('ij,ij->i', self.velocities[i], self.normals) * self.sphere.areas
             )
             self.flows[i] = (total_flux * self.sim.URHO * self.sim.UL**2 * self.sim.UV)*1e-3  # en Kg/s
-
+        
+        return(self.flows)
+    
     def plot_fluxes(self):
         """Plots the total flux as a function of time."""
         if self.flows is None:
@@ -352,6 +356,6 @@ class FluxAnalyzer:
         axes[1].set_ylim(y_xy.min(), y_xy.max())
         axes[1].legend()
 
-        # Adjust layout and show the plot
+        
         plt.tight_layout()
         plt.show()
