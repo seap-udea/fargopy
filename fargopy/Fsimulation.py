@@ -22,8 +22,10 @@ class DataHandler:
         self.sim = sim
         self.df = None
         self.plane = None
+        self.angle = None
 
-    def load_data(self, plane=None, angle=None, num_snapshots=None, snapi=None, snapf=None):
+
+    def load_data(self, plane=None, angle=None,snapi=1, snapf=50):
         """
         Loads data in 2D or 3D depending on the provided parameters.
 
@@ -37,10 +39,12 @@ class DataHandler:
         Returns:
             pd.DataFrame: DataFrame containing the loaded data.
         """
-        if plane and angle and num_snapshots:  # Load 2D data
-            self.plane = plane
-            snapshots = np.arange(1, num_snapshots + 1)
-            time_values = snapshots / num_snapshots
+        if plane and angle:  # Load 2D data
+            print(f"Loading 2D data for plane {plane} at angle {angle} rad.")
+            
+            snapshots = np.arange(snapi, snapf + 1)
+            num_snapshots = len(snapshots)
+            time_values = np.linspace(0, 1, num_snapshots)
 
             df_snapshots = pd.DataFrame(columns=["snapshot", "time", "vel1", "vel2", "gasdens", "coord1", "coord2"])
 
@@ -68,7 +72,8 @@ class DataHandler:
             self.df = df_snapshots
             return df_snapshots
 
-        elif snapi and snapf:  # Load 3D data
+        elif plane==None and angle==None:  # Load 3D data
+            print("Loading 3D data.")
             snapshots = np.arange(snapi, snapf + 1)
             num_snapshots = len(snapshots)
             time_values = np.linspace(0, 1, num_snapshots)
