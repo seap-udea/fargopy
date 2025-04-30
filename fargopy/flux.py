@@ -1,10 +1,17 @@
+###############################################################
+# FARGOpy interdependencies
+###############################################################
+import fargopy
+
+###############################################################
+# Required packages
+###############################################################
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from tqdm import tqdm
 import fargopy as fp
-from fargopy.Fsimulation import DataHandler
 
 
 class SphereTessellation:
@@ -184,7 +191,7 @@ class FluxAnalyzer3D:
         """
         self.sim = fp.Simulation(output_dir=output_dir)
         self.radius = radius
-        self.data_handler = DataHandler(self.sim)
+        self.data_handler = fargopy.DataHandler(self.sim)
         self.data_handler.load_data(snapi=snapi, snapf=snapf)  # Load 3D data using the unified method
         self.sphere = SphereTessellation(radius=radius, subdivisions=subdivisions, center=sphere_center)
         self.sphere.tessellate()
@@ -442,7 +449,7 @@ class FluxAnalyzer2D:
         :param snapf: Final snapshot index.
         """
         self.sim = fp.Simulation(output_dir=output_dir)
-        self.data_handler = DataHandler(self.sim)
+        self.data_handler = fargopy.DataHandler(self.sim)
         self.data_handler.load_data(plane=plane,angle=angle, snapi=snapi, snapf=snapf)  # Load 2D data
         self.plane = plane
         self.subdivisions = subdivisions

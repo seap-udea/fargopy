@@ -192,7 +192,7 @@ class DataHandler:
         return self.interpolate_field(time, var1, var2, var3, "gasdens")
         
 
-class Simulation:
+class VisualizationSimulation:
     def __init__(self, plane, angle, num_snapshots, dir_path):
         """
         Initializes the Simulation class.
