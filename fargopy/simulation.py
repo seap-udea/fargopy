@@ -843,35 +843,96 @@ class Simulation(fargopy.Fargobj):
 
         return domains        
 
-    def load_field(self,field,snapshot=None,type='scalar'):
 
-        if not self.has('vars'):
-            # If the simulation has not loaded the variables
-            dims, vars, domains = self.load_properties()
-        
-        # In case no snapshot has been provided use 0
-        snapshot = 0 if snapshot is None else snapshot
+    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False):
+        """
+        Load a field from the simulation.
 
-        field_data = []
-        if type == 'scalar':
-            file_name = f"{field}{str(snapshot)}.dat"
-            file_field = f"{self.output_dir}/{file_name}".replace('//','/')
-            field_data = self._load_field_scalar(file_field)
-        elif type == 'vector':
-            field_data = []
-            variables = ['x','y'] 
-            if self.vars.DIM == 3:
-                variables += ['z'] 
-            for i,variable in enumerate(variables):
-                file_name = f"{field}{variable}{str(snapshot)}.dat"
-                file_field = f"{self.output_dir}/{file_name}".replace('//','/')
-                field_data += [self._load_field_scalar(file_field)]
-        else:
-            raise ValueError(f"fargopy.Field type '{type}' not recognized.")
+        Parameters:
+            fields (str or list of str): Field name(s) to load.
+            slice (str, optional): Slice for 2D data (e.g., 'theta=1.5').
+            snapshot (int, optional): Snapshot index to load.
+            type (str, optional): Type of the field ('scalar' or 'vector'). Default is 'scalar'.
+            interpolate (bool, optional): Whether to interpolate the field. Default is False.
 
-        field = fargopy.Field(data=np.array(field_data), coordinates=self.vars.COORDINATES, domains=self.domains, type=type)
-        return field
-    
+        Returns:
+            fargopy.Field or fargopy.DataHandler: The loaded field(s) or DataHandler object(s).
+        """
+        # Ensure fields is a list
+        if isinstance(fields, str):
+            fields = [fields]
+
+        # Interpolation case
+        if interpolate==True:
+            fields_data = []
+            for field in fields:
+                field_data = fargopy.FieldInterpolate(self)
+                # Pass the current field instead of the entire list
+                field_data.load_data(field, slice, snapshot)
+                fields_data.append(field_data)
+            return fields_data if len(fields_data) > 1 else fields_data[0]
+
+        # Non-interpolation case
+        else :
+            if not self.has('vars'):
+                # If the simulation has not loaded the variables
+                dims, vars, domains = self.load_properties()
+
+            # Use snapshot 0 by default if not provided
+            snapshot = 0 if snapshot is None else snapshot
+
+            loaded_fields = []
+            
+            for field in fields:
+                field_data = []
+
+                # Determine the field type if not specified
+                field_type = type
+                if field_type is None:
+                    if field in ['gasdens', 'gasenergy']:
+                        field_type = 'scalar'
+                    elif field == 'gasv':
+                        field_type = 'vector'
+                    else:
+                        raise ValueError(f"Field type for '{field}' could not be inferred. Please specify it explicitly.")
+
+                if field_type == 'scalar':
+                    file_name = f"{field}{str(snapshot)}.dat"
+                    file_field = f"{self.output_dir}/{file_name}".replace('//', '/')
+                    field_data = self._load_field_scalar(file_field)
+                elif field_type == 'vector':
+                    field_data = []
+                    variables = ['x', 'y']
+                    if self.vars.DIM == 3:
+                        variables += ['z']
+                    for variable in variables:
+                        file_name = f"{field}{variable}{str(snapshot)}.dat"
+                        file_field = f"{self.output_dir}/{file_name}".replace('//', '/')
+                        field_data.append(self._load_field_scalar(file_field))
+                else:
+                    raise ValueError(f"fargopy.Field type '{field_type}' not recognized.")
+
+                # Create the field object
+                loaded_field = fargopy.Field(
+                    data=np.array(field_data),
+                    coordinates=self.vars.COORDINATES,
+                    domains=self.domains,
+                    type=field_type
+                )
+
+                # Apply meshslice if a slice is provided
+                if slice:
+                    sliced_data, mesh = loaded_field.meshslice(slice=slice)
+                    # Pass a single dictionary to Dictobj
+                    loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
+
+
+
+                loaded_fields.append(loaded_field)
+            #print(f'Slice: {slice}.')
+            # Return a single field if only one was provided, or a list if multiple were provided
+            return loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
+
     def _load_field_scalar(self,file):
         """Load scalar field from file a file.
         """

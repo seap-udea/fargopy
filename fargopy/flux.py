@@ -14,8 +14,8 @@ from tqdm import tqdm
 import fargopy as fp
 
 
-class SphereTessellation:
-    def __init__(self, radius=1.0, subdivisions=0, center=(0.0, 0.0, 0.0)):
+class Sphere:
+    def __init__(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
         """
         Initializes the sphere tessellation.
 
@@ -31,7 +31,7 @@ class SphereTessellation:
         self.centers = np.zeros((self.num_triangles, 3))  # Array for centers
         self.areas = np.zeros(self.num_triangles)  # Array for areas
         self.triangle_index = 0  # Index to fill the triangle array
-
+        self.tessellate()
     @staticmethod
     def normalize(v):
         """Normalizes a vector to have magnitude 1."""
@@ -106,63 +106,40 @@ class SphereTessellation:
         for i, (v1, v2, v3) in enumerate(self.triangles):
             self.areas[i] = self.calculate_triangle_area(v1, v2, v3)
 
+    def calculate_normals(self):
+        """
+        Calculates the normal vectors of the triangles in the sphere.
+        Ensures that the normals point outward from the sphere's center.
+        """
+        self.normals = np.zeros((self.num_triangles, 3))
+        for i, tri in enumerate(self.triangles):
+            # Calculate two edges of the triangle
+            AB = tri[1] - tri[0]
+            AC = tri[2] - tri[0]
+
+            # Compute the normal vector using the cross product
+            normal = np.cross(AB, AC)
+
+            # Normalize the normal vector
+            normal /= np.linalg.norm(normal)
+
+            # Ensure the normal points outward from the sphere's center
+            centroid = np.mean(tri, axis=0)
+            to_centroid = centroid - self.center
+            if np.dot(normal, to_centroid) < 0:
+                normal = -normal
+
+            # Store the normal vector
+            self.normals[i] = normal
+
     def tessellate(self):
         """Performs the complete tessellation of the sphere."""
         self.generate_icosphere()
         self.calculate_polygon_centers()
         self.calculate_all_triangle_areas()
+        self.calculate_normals()
 
-    def plot_icosphere(self):
-        """
-        Visualizes the tessellated sphere and the centers of the triangles using Plotly.
-        """
-        x, y, z = [], [], []
-        i, j, k = [], [], []
-
-        # Add vertices and faces
-        vertex_index = 0
-        for v1, v2, v3 in self.triangles:
-            x.extend([v1[0], v2[0], v3[0]])
-            y.extend([v1[1], v2[1], v3[1]])
-            z.extend([v1[2], v2[2], v3[2]])
-            i.append(vertex_index)
-            j.append(vertex_index + 1)
-            k.append(vertex_index + 2)
-            vertex_index += 3
-
-        # Create the triangular mesh
-        mesh = go.Mesh3d(
-            x=x,
-            y=y,
-            z=z,
-            i=i,
-            j=j,
-            k=k,
-            color='lightblue',
-            opacity=0.3
-        )
-
-        # Add centers as points
-        scatter = go.Scatter3d(
-            x=self.centers[:, 0],
-            y=self.centers[:, 1],
-            z=self.centers[:, 2],
-            mode='markers',
-            marker=dict(size=1.0, color='red'),
-            name='Centers'
-        )
-
-        # Create the figure
-        fig = go.Figure(data=[mesh, scatter])
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(visible=True),
-                yaxis=dict(visible=True),
-                zaxis=dict(visible=True),
-            ),
-            template="plotly_white"
-        )
-        fig.show()
+ 
 
     def generate_dataframe(self):
         """
@@ -182,7 +159,107 @@ class SphereTessellation:
         df = pd.DataFrame(data)
         return df
 
+class GeneralAnalyzer:
+    def __init__(self, simulation, surface=None, plane=None, angle=None, fields=None, snapshots=(1, 10)):
+        """
+        General class for performing calculations on 3D surfaces or 2D planes.
 
+        :param simulation: The simulation object (e.g., fp.Simulation).
+        :param surface: The 3D surface object (e.g., Sphere) for 3D calculations.
+        :param plane: The 2D plane ('XY', 'XZ', etc.) for 2D calculations.
+        :param angle: The angle for slicing the 2D plane (e.g., 'phi=0').
+        :param fields: List of fields to load (e.g., ['gasdens', 'gasv']).
+        :param snapshots: Tuple indicating the range of snapshots to load (e.g., (1, 10)).
+        """
+        self.sim = simulation
+        self.surface = surface
+        self.plane = plane
+        self.angle = angle
+        self.fields = fields
+        self.snapshots = snapshots
+        self.time = None
+        self.interpolated_fields = None
+
+        # Load fields with interpolation
+        self.load_fields()
+
+    def load_fields(self):
+        """
+        Loads and interpolates the fields based on the provided configuration.
+        """
+        if self.surface is not None:  # 3D case
+            self.interpolated_fields = self.sim.load_field(
+                fields=self.fields,
+                snapshot=self.snapshots,
+                interpolate=True
+            )
+        elif self.plane is not None:  # 2D case
+            self.interpolated_fields = self.sim.load_field(
+                fields=self.fields,
+                plane=self.plane,
+                angle=self.angle,
+                snapshot=self.snapshots,
+                interpolate=True
+            )
+        else:
+            raise ValueError("Either a surface (3D) or a plane (2D) must be specified.")
+
+    def evaluate_fields(self, time, coordinates):
+        """
+        Evaluates the interpolated fields at a given time and coordinates.
+
+        :param time: The time at which to evaluate the fields.
+        :param coordinates: The coordinates (x, y, z) or (x, z) depending on 3D or 2D.
+        :return: A dictionary with field values.
+        """
+        results = {}
+        for field, interp in zip(self.fields, self.interpolated_fields):
+            # Evaluate the field
+            field_values = interp.evaluate(
+                time=time,
+                var1=coordinates[0],
+                var2=coordinates[1],
+                var3=coordinates[2] if len(coordinates) > 2 else None
+            )
+
+            # Ensure the shape is correct for vector fields
+            if field == 'gasv': 
+                results[field] = np.array(field_values).T  # Transpose to ensure shape
+            else:
+                results[field] = field_values  # Scalar fields remain unchanged
+
+            
+        return results
+
+    def calculate_integral(self, integrand, time_steps):
+        """
+        Calculates an integral based on the provided integrand.
+
+        :param integrand: A callable function defining the integrand.
+        :param time_steps: Number of time steps for the calculation.
+        :return: Array of results for each time step.
+        """
+        self.time = np.linspace(0, 1, time_steps)
+        results = np.zeros(len(self.time))
+
+        if self.surface is not None:  # 3D case
+            xc, yc, zc = self.surface.centers[:, 0], self.surface.centers[:, 1], self.surface.centers[:, 2]
+            for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
+                field_values = self.evaluate_fields(t, (xc, yc, zc))
+                integrand_values = integrand(**field_values)
+                results[i] = np.sum(integrand_values * self.surface.areas)
+
+        elif self.plane is not None:  # 2D case
+            angles = np.linspace(0, 2 * np.pi, len(self.surface.centers), endpoint=False)
+            x = self.surface.center[0] + self.surface.radius * np.cos(angles)
+            z = self.surface.center[1] + self.surface.radius * np.sin(angles)
+            for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
+                field_values = self.evaluate_fields(t, (x, z))
+                integrand_values = integrand(**field_values)
+                dl = 2 * np.pi * self.surface.radius / len(angles)
+                results[i] = np.sum(integrand_values * dl)
+
+        return results
 class FluxAnalyzer3D:
 
     def __init__(self, output_dir, sphere_center=(0.0, 0.0, 0.0), radius=1.0, subdivisions=1, snapi=110, snapf=210):
@@ -193,7 +270,7 @@ class FluxAnalyzer3D:
         self.radius = radius
         self.data_handler = fargopy.DataHandler(self.sim)
         self.data_handler.load_data(snapi=snapi, snapf=snapf)  # Load 3D data using the unified method
-        self.sphere = SphereTessellation(radius=radius, subdivisions=subdivisions, center=sphere_center)
+        self.sphere = Sphere(radius=radius, subdivisions=subdivisions, center=sphere_center)
         self.sphere.tessellate()
         self.sphere_center = np.array(sphere_center)
         self.time = None

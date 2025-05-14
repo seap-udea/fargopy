@@ -351,7 +351,7 @@ from fargopy.sys import *
 from fargopy.fields import *
 from fargopy.simulation import *
 from fargopy.plot import *
-from fargopy.fsimulation import *
+#from fargopy.fsimulation import *
 from fargopy.flux import *
 
 # Showing version 
