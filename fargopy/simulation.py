@@ -866,7 +866,7 @@ class Simulation(fargopy.Fargobj):
         if interpolate==True:
             fields_data = []
             for field in fields:
-                field_data = fargopy.FieldInterpolate(self)
+                field_data = fargopy.FieldInterpolator(self)
                 # Pass the current field instead of the entire list
                 field_data.load_data(field, slice, snapshot)
                 fields_data.append(field_data)
