@@ -14,153 +14,132 @@ from tqdm import tqdm
 import fargopy as fp
 
 
-class Sphere:
-    def __init__(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
-        """
-        Initializes the sphere tessellation.
+class Surface:
+    """
+    Factory class to generate and manage surfaces (e.g., spheres).
+    """
 
-        :radius: Radius of the sphere.
-        :subdivisions: Number of subdivisions for the tessellation.
-        :center: Coordinates of the sphere's center (x, y, z).
-        """
-        self.radius = radius
-        self.subdivisions = subdivisions
-        self.center = np.array(center)  # Sphere center
-        self.num_triangles = 20 * (4 ** subdivisions)  # Total number of triangles
-        self.triangles = np.zeros((self.num_triangles, 3, 3))  # Array for triangles
-        self.centers = np.zeros((self.num_triangles, 3))  # Array for centers
-        self.areas = np.zeros(self.num_triangles)  # Array for areas
-        self.triangle_index = 0  # Index to fill the triangle array
-        self.tessellate()
-    @staticmethod
-    def normalize(v):
-        """Normalizes a vector to have magnitude 1."""
-        return v / np.linalg.norm(v)
+    def __init__(self):
+        self.surface = None
 
-    def subdivide_triangle(self, v1, v2, v3, depth):
-        """Subdivides a triangle into 4 smaller triangles."""
-        if depth == 0:
-            # Shift the vertices according to the sphere's center
-            self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
-            self.triangle_index += 1
-            return
+    def Sphere(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
+        self.surface = self.Sphere(radius, subdivisions, center)
+        return self.surface
 
-        # Calculate the midpoints of the triangle's edges
-        v12 = self.normalize((v1 + v2) / 2) * self.radius
-        v23 = self.normalize((v2 + v3) / 2) * self.radius
-        v31 = self.normalize((v3 + v1) / 2) * self.radius
+    class Sphere:
+        def __init__(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
+            self.radius = radius
+            self.subdivisions = subdivisions
+            self.center = np.array(center)
+            self.num_triangles = 20 * (4 ** subdivisions)
+            self.triangles = np.zeros((self.num_triangles, 3, 3))
+            self.centers = np.zeros((self.num_triangles, 3))
+            self.areas = np.zeros(self.num_triangles)
+            self.triangle_index = 0
+            self.volume = None
+            self.tessellate()
 
-        # Recursively subdivide
-        self.subdivide_triangle(v1, v12, v31, depth - 1)
-        self.subdivide_triangle(v12, v2, v23, depth - 1)
-        self.subdivide_triangle(v31, v23, v3, depth - 1)
-        self.subdivide_triangle(v12, v23, v31, depth - 1)
+        def filter(self, condition):
+            """
+            Filter the sphere's centers, areas, normals, etc. by a string condition.
+            Example: sphere.filter("z > 0")
+            """
+            x = self.centers[:, 0]
+            y = self.centers[:, 1]
+            z = self.centers[:, 2]
+            mask = eval(condition)
+            self.centers = self.centers[mask]
+            self.areas = self.areas[mask]
+            if hasattr(self, "normals"):
+                self.normals = self.normals[mask]
+            if hasattr(self, "volume"):
+                self.volume = self.volume[mask]
 
-    def generate_icosphere(self):
-        """Generates a tessellated sphere based on an icosahedron."""
-        phi = (1.0 + np.sqrt(5.0)) / 2.0
+        @staticmethod
+        def normalize(v):
+            return v / np.linalg.norm(v)
 
-        # Base patterns for vertex coordinates
-        patterns = [
-            (-1, phi, 0), (1, phi, 0), (-1, -phi, 0), (1, -phi, 0),
-            (0, -1, phi), (0, 1, phi), (0, -1, -phi), (0, 1, -phi),
-            (phi, 0, -1), (phi, 0, 1), (-phi, 0, -1), (-phi, 0, 1),
-        ]
+        def subdivide_triangle(self, v1, v2, v3, depth):
+            if depth == 0:
+                self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
+                self.triangle_index += 1
+                return
+            v12 = self.normalize((v1 + v2) / 2) * self.radius
+            v23 = self.normalize((v2 + v3) / 2) * self.radius
+            v31 = self.normalize((v3 + v1) / 2) * self.radius
+            self.subdivide_triangle(v1, v12, v31, depth - 1)
+            self.subdivide_triangle(v12, v2, v23, depth - 1)
+            self.subdivide_triangle(v31, v23, v3, depth - 1)
+            self.subdivide_triangle(v12, v23, v31, depth - 1)
 
-        # Generate and normalize vertices
-        vertices = np.array([self.normalize(np.array(p)) * self.radius for p in patterns])
+        def generate_icosphere(self):
+            phi = (1.0 + np.sqrt(5.0)) / 2.0
+            patterns = [
+                (-1, phi, 0), (1, phi, 0), (-1, -phi, 0), (1, -phi, 0),
+                (0, -1, phi), (0, 1, phi), (0, -1, -phi), (0, 1, -phi),
+                (phi, 0, -1), (phi, 0, 1), (-phi, 0, -1), (-phi, 0, 1),
+            ]
+            vertices = np.array([self.normalize(np.array(p)) * self.radius for p in patterns])
+            faces = [
+                (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
+                (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
+                (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
+                (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
+            ]
+            for face in faces:
+                v1, v2, v3 = vertices[face[0]], vertices[face[1]], vertices[face[2]]
+                self.subdivide_triangle(v1, v2, v3, self.subdivisions)
 
-        # Define the faces of the icosahedron
-        faces = [
-            (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
-            (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
-            (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
-            (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
-        ]
+        def calculate_polygon_centers(self):
+            self.centers = np.mean(self.triangles, axis=1)
 
-        # Subdivide each triangle
-        for face in faces:
-            v1, v2, v3 = vertices[face[0]], vertices[face[1]], vertices[face[2]]
-            self.subdivide_triangle(v1, v2, v3, self.subdivisions)
+        @staticmethod
+        def calculate_triangle_area(v1, v2, v3):
+            side1 = v2 - v1
+            side2 = v3 - v1
+            cross_product = np.cross(side1, side2)
+            area = np.linalg.norm(cross_product) / 2
+            return area
 
-    def calculate_polygon_centers(self):
-        """Calculates the center of each triangle."""
-        self.centers = np.mean(self.triangles, axis=1)
+        def calculate_all_triangle_areas(self):
+            for i, (v1, v2, v3) in enumerate(self.triangles):
+                self.areas[i] = self.calculate_triangle_area(v1, v2, v3)
 
-    @staticmethod
-    def calculate_triangle_area(v1, v2, v3):
-        """Calculates the area of a triangle given three vertices in 3D."""
-        # Calculate the vectors of the triangle's edges
-        side1 = v2 - v1
-        side2 = v3 - v1
+        def calculate_normals(self):
+            self.normals = np.zeros((self.num_triangles, 3))
+            for i, tri in enumerate(self.triangles):
+                AB = tri[1] - tri[0]
+                AC = tri[2] - tri[0]
+                normal = np.cross(AB, AC)
+                normal /= np.linalg.norm(normal)
+                centroid = np.mean(tri, axis=0)
+                to_centroid = centroid - self.center
+                if np.dot(normal, to_centroid) < 0:
+                    normal = -normal
+                self.normals[i] = normal
 
-        # Calculate the cross product of the edges
-        cross_product = np.cross(side1, side2)
+        def tessellate(self):
+            self.generate_icosphere()
+            self.calculate_polygon_centers()
+            self.calculate_all_triangle_areas()
+            self.calculate_normals()
+            self.volume = self.areas * (self.radius / 3)
 
-        # The area is half the magnitude of the cross product
-        area = np.linalg.norm(cross_product) / 2
-        return area
+        def generate_dataframe(self):
+            data = []
+            for i, (triangle, center, area) in enumerate(zip(self.triangles, self.centers, self.areas)):
+                data.append({
+                    "Triangle": triangle.tolist(),
+                    "Center": center.tolist(),
+                    "Area": area
+                })
+            df = pd.DataFrame(data)
+            return df
 
-    def calculate_all_triangle_areas(self):
-        """Calculates the area of all triangles in the tessellation."""
-        for i, (v1, v2, v3) in enumerate(self.triangles):
-            self.areas[i] = self.calculate_triangle_area(v1, v2, v3)
 
-    def calculate_normals(self):
-        """
-        Calculates the normal vectors of the triangles in the sphere.
-        Ensures that the normals point outward from the sphere's center.
-        """
-        self.normals = np.zeros((self.num_triangles, 3))
-        for i, tri in enumerate(self.triangles):
-            # Calculate two edges of the triangle
-            AB = tri[1] - tri[0]
-            AC = tri[2] - tri[0]
 
-            # Compute the normal vector using the cross product
-            normal = np.cross(AB, AC)
-
-            # Normalize the normal vector
-            normal /= np.linalg.norm(normal)
-
-            # Ensure the normal points outward from the sphere's center
-            centroid = np.mean(tri, axis=0)
-            to_centroid = centroid - self.center
-            if np.dot(normal, to_centroid) < 0:
-                normal = -normal
-
-            # Store the normal vector
-            self.normals[i] = normal
-
-    def tessellate(self):
-        """Performs the complete tessellation of the sphere."""
-        self.generate_icosphere()
-        self.calculate_polygon_centers()
-        self.calculate_all_triangle_areas()
-        self.calculate_normals()
-
- 
-
-    def generate_dataframe(self):
-        """
-        Generates a DataFrame with the coordinates of the triangles, their centers, and their areas.
-
-        :return: DataFrame with columns for triangles, centers, and areas.
-        """
-        data = []
-        for i, (triangle, center, area) in enumerate(zip(self.triangles, self.centers, self.areas)):
-            data.append({
-                "Triangle": triangle.tolist(),  # Convert to list for DataFrame compatibility
-                "Center": center.tolist(),
-                "Area": area
-            })
-
-        # Create the DataFrame
-        df = pd.DataFrame(data)
-        return df
-
-class GeneralAnalyzer:
-    def __init__(self, simulation, surface=None, plane=None, angle=None, fields=None, snapshots=(1, 10)):
+class Analyzer:
+    def __init__(self, simulation, surface=None, slice=None, fields=None, snapshots=(1, 10), interpolator='griddata', method='linear', interp_kwargs=None):
         """
         General class for performing calculations on 3D surfaces or 2D planes.
 
@@ -170,13 +149,18 @@ class GeneralAnalyzer:
         :param angle: The angle for slicing the 2D plane (e.g., 'phi=0').
         :param fields: List of fields to load (e.g., ['gasdens', 'gasv']).
         :param snapshots: Tuple indicating the range of snapshots to load (e.g., (1, 10)).
+        :param interpolator: Interpolation algorithm ('griddata', 'rbf', etc.).
+        :param method: Interpolation method ('linear', 'cubic', etc.).
+        :param interp_kwargs: Dict of extra kwargs for the interpolator.
         """
         self.sim = simulation
         self.surface = surface
-        self.plane = plane
-        self.angle = angle
+        self.slice = slice
         self.fields = fields
         self.snapshots = snapshots
+        self.interpolator = interpolator
+        self.method = method
+        self.interp_kwargs = interp_kwargs or {}
         self.time = None
         self.interpolated_fields = None
 
@@ -186,6 +170,7 @@ class GeneralAnalyzer:
     def load_fields(self):
         """
         Loads and interpolates the fields based on the provided configuration.
+        Ensures self.interpolated_fields is always a list, even for a single field.
         """
         if self.surface is not None:  # 3D case
             self.interpolated_fields = self.sim.load_field(
@@ -193,50 +178,111 @@ class GeneralAnalyzer:
                 snapshot=self.snapshots,
                 interpolate=True
             )
-        elif self.plane is not None:  # 2D case
+            # Ensure it's always a list
+            if not isinstance(self.interpolated_fields, (list, tuple)):
+                self.interpolated_fields = [self.interpolated_fields]
+        elif self.slice is not None:  # 2D case
             self.interpolated_fields = self.sim.load_field(
                 fields=self.fields,
-                plane=self.plane,
-                angle=self.angle,
+                slice=self.slice,
                 snapshot=self.snapshots,
                 interpolate=True
             )
+            if not isinstance(self.interpolated_fields, (list, tuple)):
+                self.interpolated_fields = [self.interpolated_fields]
         else:
-            raise ValueError("Either a surface (3D) or a plane (2D) must be specified.")
+            raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
 
-    def evaluate_fields(self, time, coordinates):
+
+    def evaluate_fields(
+        self, time, coordinates,
+        griddata_kwargs=None, rbf_kwargs=None, idw_kwargs=None, linearnd_kwargs=None
+    ):
         """
-        Evaluates the interpolated fields at a given time and coordinates.
+        Evaluate interpolated fields at a given time and coordinates, allowing specific kwargs for each interpolator.
 
-        :param time: The time at which to evaluate the fields.
-        :param coordinates: The coordinates (x, y, z) or (x, z) depending on 3D or 2D.
-        :return: A dictionary with field values.
+        :param time: The time at which to evaluate.
+        :param coordinates: The coordinates (x, y, z) or (x, z).
+        :param griddata_kwargs: Optional kwargs for griddata.
+        :param rbf_kwargs: Optional kwargs for RBF.
+        :param idw_kwargs: Optional kwargs for IDW.
+        :param linearnd_kwargs: Optional kwargs for LinearND.
+        :return: Dictionary with the field values.
         """
         results = {}
         for field, interp in zip(self.fields, self.interpolated_fields):
-            # Evaluate the field
+            # Prepare kwargs in the same format as FieldInterpolator.evaluate
+            eval_kwargs = {}
+            if griddata_kwargs is not None:
+                eval_kwargs["griddata_kwargs"] = griddata_kwargs
+            if rbf_kwargs is not None:
+                eval_kwargs["rbf_kwargs"] = rbf_kwargs
+            if idw_kwargs is not None:
+                eval_kwargs["idw_kwargs"] = idw_kwargs
+            if linearnd_kwargs is not None:
+                eval_kwargs["linearnd_kwargs"] = linearnd_kwargs
+
             field_values = interp.evaluate(
                 time=time,
                 var1=coordinates[0],
                 var2=coordinates[1],
-                var3=coordinates[2] if len(coordinates) > 2 else None
+                var3=coordinates[2] if len(coordinates) > 2 else None,
+                interpolator=self.interpolator,
+                method=self.method,
+                **eval_kwargs
             )
 
-            # Ensure the shape is correct for vector fields
-            if field == 'gasv': 
-                results[field] = np.array(field_values).T  # Transpose to ensure shape
+            if field == 'gasv':
+                results[field] = np.array(field_values).T
             else:
-                results[field] = field_values  # Scalar fields remain unchanged
+                results[field] = field_values
 
-            
         return results
+    
 
-    def calculate_integral(self, integrand, time_steps):
+    def hill_radius(self, planet_index=0):
         """
-        Calculates an integral based on the provided integrand.
+        Calculates the Hill radius of the selected planet using simulation parameters.
+        Returns the Hill radius in cm and AU.
+        """
+        # Conversion constants
+        AU_to_cm = 1.495978707e13
+        Mjup_to_g = 1.898e30
+        Msun_to_g = 1.989e33
+
+        # Check planet data
+        if not hasattr(self.sim, "planets") or not self.sim.planets:
+            raise ValueError("No planet data found. Run sim.load_planet_summary() first.")
+
+        # Check stellar mass in macros
+        if not hasattr(self.sim, "simulation_macros") or 'MSTAR' not in self.sim.simulation_macros:
+            raise ValueError("Stellar mass (MSTAR) not found. Run sim.load_macros() first.")
+
+        planet = self.sim.planets[planet_index]
+        a_au = planet['distance']  # AU
+        m_jup = planet['mass']     # Mjup
+
+        # Get stellar mass in Msun and convert to grams
+        mstar_msun = self.sim.simulation_macros['MSTAR']
+        mstar_g = float(mstar_msun) * Msun_to_g
+
+        # Convert planet mass to grams and distance to cm
+        a_cm = a_au * AU_to_cm
+        m_p = m_jup * Mjup_to_g
+
+        # Hill radius formula
+        r_hill_cm = a_cm * (m_p / (3 * mstar_g))**(1/3)
+        r_hill_au = r_hill_cm / AU_to_cm
+
+        return r_hill_cm, r_hill_au
+
+    def calculate_integral(self, integrand, time_steps, dtype):
+        """
+        Calculates an integral based on the provided integrand and integration type.
 
         :param integrand: A callable function defining the integrand.
         :param time_steps: Number of time steps for the calculation.
+        :param type: 'line', 'area', or 'volume' (default: 'area').
         :return: Array of results for each time step.
         """
         self.time = np.linspace(0, 1, time_steps)
@@ -244,22 +290,44 @@ class GeneralAnalyzer:
 
         if self.surface is not None:  # 3D case
             xc, yc, zc = self.surface.centers[:, 0], self.surface.centers[:, 1], self.surface.centers[:, 2]
+            # Select weights according to the integration type
+            if dtype == 'volume':
+                weights = self.surface.volume
+            elif dtype == 'area':
+                weights = self.surface.areas
+            else:
+                raise ValueError("For 3D, dtype must be 'area' or 'volume'.")
             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
                 field_values = self.evaluate_fields(t, (xc, yc, zc))
                 integrand_values = integrand(**field_values)
-                results[i] = np.sum(integrand_values * self.surface.areas)
+                results[i] = np.sum(integrand_values * weights)
 
-        elif self.plane is not None:  # 2D case
-            angles = np.linspace(0, 2 * np.pi, len(self.surface.centers), endpoint=False)
+        elif self.slice is not None:  # 2D case
+            n_points = len(self.surface.centers)
+            angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
             x = self.surface.center[0] + self.surface.radius * np.cos(angles)
-            z = self.surface.center[1] + self.surface.radius * np.sin(angles)
+            y = self.surface.center[1] + self.surface.radius * np.sin(angles)
+            # Select weights according to the integration type
+            if dtype == 'line':
+                dl = 2 * np.pi * self.surface.radius / n_points
+                weights = dl
+            elif dtype == 'area':
+                weights = np.ones(n_points)  # You can define area elements if needed
+            else:
+                raise ValueError("For 2D, dtype must be 'line' or 'area'.")
             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
-                field_values = self.evaluate_fields(t, (x, z))
+                field_values = self.evaluate_fields(t, (x, y))
                 integrand_values = integrand(**field_values)
-                dl = 2 * np.pi * self.surface.radius / len(angles)
-                results[i] = np.sum(integrand_values * dl)
+                results[i] = np.sum(integrand_values * weights)
+
+        else:
+            raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
 
         return results
+    
+
+
+
 class FluxAnalyzer3D:
 
     def __init__(self, output_dir, sphere_center=(0.0, 0.0, 0.0), radius=1.0, subdivisions=1, snapi=110, snapf=210):
@@ -374,6 +442,7 @@ class FluxAnalyzer3D:
 
         # Convert areas to m² and calculate volume elements
         area_m2 = (self.sim.UL * 1e-2) ** 2  # cm² to m²
+        
         vol_elem = self.sphere.areas * area_m2 * (r_m / 3)  # m³
 
         # Calculate the total mass inside the sphere at each time step

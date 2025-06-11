@@ -699,12 +699,130 @@ class Simulation(fargopy.Fargobj):
                         file_list += "\n"
                 print(file_list)
             return files
+            
 
-    def load_properties(self,quiet=False,
-                        varfile='variables.par',
-                        domain_prefix='domain_',
-                        dimsfile='dims.dat'
-                        ):
+    def load_macros(self, summaryfile='summary0.dat'):
+        """
+        Extracts global simulation parameters from the PREPROCESSOR MACROS SECTION in summary0.dat.
+        Returns a dictionary with the parameters found in the macros section.
+        Only the value after the last '=' is stored for each parameter.
+        """
+        summary_path = f"{self.output_dir}/{summaryfile}".replace('//', '/')
+        if not os.path.isfile(summary_path):
+            print(f"No summary file '{summary_path}' found.")
+            return {}
+
+        macros = {}
+        in_macros_section = False
+        with open(summary_path, 'r') as f:
+            for line in f:
+                # Detect the start of the macros section
+                if 'PREPROCESSOR MACROS SECTION' in line:
+                    in_macros_section = True
+                    continue
+                # Stop if another section starts
+                if in_macros_section and 'SECTION' in line and 'PREPROCESSOR MACROS SECTION' not in line:
+                    break
+                if in_macros_section:
+                    # Skip empty lines and lines that don't contain '='
+                    if line.strip() == '' or '=' not in line or line.strip().startswith('=') or line.strip().startswith('#'):
+                        continue
+                    # Extract parameter name and value after the last '='
+                    parts = line.split('=')
+                    if len(parts) >= 2:
+                        key = parts[0].strip()
+                        value_str = parts[-1].strip()
+                        # Try to convert to float if possible
+                        try:
+                            value = float(value_str)
+                        except ValueError:
+                            value = value_str
+                        macros[key] = value
+        self.simulation_macros = macros
+        return macros
+
+                
+    def load_planet_summary(self, summaryfile='summary0.dat'):
+        """
+        Loads planet information from summary.dat.
+        If not found, tries to extract from variables.par (PLANETMASS, ORBITALRADIUS, PLANETCONFIG).
+        Returns a list of dictionaries with name, distance, and mass.
+        """
+        summary_path = f"{self.output_dir}/{summaryfile}".replace('//', '/')
+        if os.path.isfile(summary_path):
+            planets = []
+            with open(summary_path, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    # Skip comments, empty lines, and separators
+                    if line.strip().startswith('#') or not line.strip() or set(line.strip()) == set('-'):
+                        continue
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        # Only accept if the first field is NOT a number
+                        try:
+                            float(parts[0])
+                            continue  # If it's a number, skip the line
+                        except ValueError:
+                            pass  # If not a number, it's a planet name
+                        try:
+                            planet = {
+                                'name': parts[0],
+                                'distance': float(parts[1]),
+                                'mass': float(parts[2])
+                            }
+                            planets.append(planet)
+                        except ValueError:
+                            continue
+            return planets
+
+        # If summary.dat does not exist, try to read from variables.par
+        varfile = f"{self.output_dir}/variables.par".replace('//', '/')
+        if not os.path.isfile(varfile):
+            print(f"No summary file '{summary_path}' or variables file '{varfile}' found.")
+            return []
+
+        planet_mass = None
+        orbital_radius = None
+        planet_config = None
+        with open(varfile, 'r') as f:
+            for line in f:
+                # Look for PLANETMASS, ORBITALRADIUS, PLANETCONFIG lines
+                if line.strip().startswith('PLANETMASS'):
+                    try:
+                        planet_mass = float(line.split()[1])
+                    except Exception:
+                        pass
+                elif line.strip().startswith('ORBITALRADIUS'):
+                    try:
+                        orbital_radius = float(line.split()[1])
+                    except Exception:
+                        pass
+                elif line.strip().startswith('PLANETCONFIG'):
+                    try:
+                        planet_config = line.split()[1]
+                    except Exception:
+                        pass
+
+        if planet_mass is not None and orbital_radius is not None:
+            # Use the config file name as planet name if available
+            planet_name = planet_config.split('/')[-1].split('.')[0] if planet_config else 'planet'
+            return [{
+                'name': planet_name,
+                'distance': orbital_radius,
+                'mass': planet_mass
+            }]
+        else:
+            print("No planet data found in summary.dat or variables.par.")
+            return []
+
+
+    def load_properties(self, quiet=False,
+                            varfile='variables.par',
+                            domain_prefix='domain_',
+                            dimsfile='dims.dat',
+                            summaryfile='summary0.dat'  # Nuevo parámetro opcional
+                            ):
         if self.output_dir is None:
             print(f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')")
             return
@@ -716,7 +834,7 @@ class Simulation(fargopy.Fargobj):
         print(f"Simulation in {vars.DIM} dimensions")
         
         # Read domains 
-        domains = self._load_domains(vars,domain_prefix)
+        domains = self._load_domains(vars, domain_prefix)
 
         # Store the variables in the object
         self.vars = vars
@@ -730,13 +848,22 @@ class Simulation(fargopy.Fargobj):
         # Read the summary files
         self.nsnaps = self._get_nsnaps()
         print(f"Number of snapshots in output directory: {self.nsnaps}")
-    
+
+        # Leer planetas del summary.dat
+        self.planets = self.load_planet_summary(summaryfile)
+        if self.planets:
+            print("Planets found in summary.dat:")
+            for planet in self.planets:
+                print(f"  Name: {planet['name']}, Distance: {planet['distance']}, Mass: {planet['mass']}")
+        else:
+            print("No planet data found in summary.dat.")
+
         print("Configuration variables and domains load into the object. See e.g. <sim>.vars")
 
     def _get_nsnaps(self):
         """Get the number of snapshots in an output directory
         """
-        error,output = fargopy.Sys.run(f"ls {self.output_dir}/summary[0-9]*.dat")
+        error, output = fargopy.Sys.run(f"ls {self.output_dir}/summary[0-9]*.dat")
         if error == 0:
             files = output[:-1]
             nsnaps = len(files)
@@ -745,7 +872,7 @@ class Simulation(fargopy.Fargobj):
             print(f"No summary file in {self.output_dir}")
             return 0
 
-    def _load_dims(self,dimsfile):
+    def _load_dims(self, dimsfile):
         """Parse the dim directory
         """
         dimsfile = f"{self.output_dir}/{dimsfile}".replace('//','/')

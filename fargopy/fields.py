@@ -17,6 +17,9 @@ import plotly.graph_objects as go
 from matplotlib.animation import FFMpegWriter
 from scipy.interpolate import RBFInterpolator
 from scipy.interpolate import interp1d
+from scipy.interpolate import LinearNDInterpolator
+from scipy.spatial import cKDTree
+
 
 from joblib import Parallel, delayed
 
@@ -550,48 +553,70 @@ class FieldInterpolator:
         else:
             raise ValueError("Slice definition must include either 'z', 'phi', or 'theta'.")
 
-
     def evaluate(
-        self, time, var1, var2=None, var3=None,
-        interpolator="griddata", method="linear",
-        rbf_kwargs=None, griddata_kwargs=None
-    ):
-
+            self, time, var1, var2=None, var3=None,
+            interpolator="griddata", method="linear",
+            rbf_kwargs=None, griddata_kwargs=None, idw_kwargs=None
+        ):
         """
-        Interpolates a field in 1D, 2D, or 3D using RBFInterpolator or griddata with parallelization.
+        Interpolates a field in 1D, 2D, or 3D using RBFInterpolator, griddata, LinearNDInterpolator, or IDW.
         Supports both grids and discrete points.
 
         Parameters:
-            time (float): Time at which to interpolate.
-            var1 (numpy.ndarray or float): Spatial coordinate for 1D interpolation or the first coordinate for 2D/3D.
-            var2 (numpy.ndarray or float, optional): Second spatial coordinate for 2D/3D interpolation.
-            var3 (numpy.ndarray or float, optional): Third spatial coordinate for 3D interpolation. If None, 2D is assumed.
-            interpolator (str): Interpolation family, either "rbf" or "griddata". Default is "griddata".
-            method (str): Interpolation method for the chosen interpolator.
-            rbf_kwargs (dict, optional): Extra keyword arguments for RBFInterpolator (e.g., degree, epsilon, smoothing).
-            griddata_kwargs (dict, optional): Extra keyword arguments for griddata (e.g., fill_value).
-
-        Returns:
-            numpy.ndarray or float: Interpolated field values at the given coordinates.
+            ...
+            interpolator (str): Interpolation family, either "rbf", "griddata", "linearnd", or "idw". Default is "griddata".
+            idw_kwargs (dict): Optional kwargs for IDW, e.g. {'power': 2, 'k': 8}
+            ...
         """
-        
 
 
-        # Disambiguate between snapshot number (int) and normalized time (float)
-        if isinstance(time, int):
-            # Interpret as snapshot number
-            if hasattr(self, "snapshot_time_table") and self.snapshot_time_table is not None:
-                row = self.snapshot_time_table[self.snapshot_time_table["Snapshot"] == time]
-                if not row.empty:
-                    time = float(row["Normalized_time"].values[0])
+        # --- Handle time input: explicit and robust: normalized time [0,1] or snapshot index ---
+        if hasattr(self, "snapshot_time_table") and self.snapshot_time_table is not None:
+            snaps = self.snapshot_time_table["Snapshot"].values
+            min_snap, max_snap = snaps.min(), snaps.max()
+            # If time is float in [0,1], treat as normalized time (directly)
+            if isinstance(time, float) and 0 <= time <= 1:
+                pass  # Use as normalized time directly
+            # If time is int or float > 1, treat as snapshot or fractional snapshot
+            elif (isinstance(time, int) or (isinstance(time, float) and time > 1)):
+                if time < min_snap or time > max_snap:
+                    raise ValueError(
+                        f"Selected snapshot (time={time}) is outside the loaded range [{min_snap}, {max_snap}]."
+                    )
+                if isinstance(time, int) or np.isclose(time, np.round(time)):
+                    # Exact snapshot
+                    row = self.snapshot_time_table[self.snapshot_time_table["Snapshot"] == int(round(time))]
+                    if not row.empty:
+                        time = float(row["Normalized_time"].values[0])
+                    else:
+                        raise ValueError(f"Snapshot {int(round(time))} not found in snapshot_time_table.")
                 else:
-                    raise ValueError(f"Snapshot {time} not found in snapshot_time_table.")
+                    # Fractional snapshot: interpolate between neighbors
+                    snap0 = int(np.floor(time))
+                    snap1 = int(np.ceil(time))
+                    if snap0 < min_snap or snap1 > max_snap:
+                        raise ValueError(
+                            f"Selected snapshot (time={time}) requires neighbors [{snap0}, {snap1}] outside the loaded range [{min_snap}, {max_snap}]."
+                        )
+                    row0 = self.snapshot_time_table[self.snapshot_time_table["Snapshot"] == snap0]
+                    row1 = self.snapshot_time_table[self.snapshot_time_table["Snapshot"] == snap1]
+                    if not row0.empty and not row1.empty:
+                        t0 = float(row0["Normalized_time"].values[0])
+                        t1 = float(row1["Normalized_time"].values[0])
+                        factor = (time - snap0) / (snap1 - snap0)
+                        time = (1 - factor) * t0 + factor * t1
+                    else:
+                        raise ValueError(f"Snapshots {snap0} or {snap1} not found in snapshot_time_table.")
             else:
+                raise ValueError(
+                    f"Invalid time value: {time}. Must be a normalized time in [0,1] or a snapshot index in [{min_snap},{max_snap}]."
+                )
+        else:
+            if isinstance(time, int):
                 raise ValueError("snapshot_time_table not found. Did you call load_data()?")
 
-
-        if interpolator not in ["rbf", "griddata"]:
-            raise ValueError("Invalid method. Choose either 'rbf' or 'griddata'.")
+        if interpolator not in ["rbf", "griddata", "linearnd","idw"]:
+            raise ValueError("Invalid method. Choose either 'rbf', 'griddata', 'idw', or 'linearnd'.")
 
         # Automatically determine the field to interpolate
         if "gasdens_mesh" in self.df.columns:
@@ -618,6 +643,29 @@ class FieldInterpolator:
             griddata_kwargs = {}
 
 
+
+        if idw_kwargs is None:
+            idw_kwargs = {}
+
+
+        def idw_interp(coords, values, xi):
+            # Forzar a 2D: (N, D) y (M, D)
+            coords = np.asarray(coords)
+            xi = np.asarray(xi)
+            if coords.ndim > 2:
+                coords = coords.reshape(-1, coords.shape[-1])
+            if xi.ndim > 2:
+                xi = xi.reshape(-1, xi.shape[-1])
+            values = np.asarray(values).ravel()
+            power = idw_kwargs.get('power', 2)
+            k = idw_kwargs.get('k', 8)
+            tree = cKDTree(coords)
+            dists, idxs = tree.query(xi, k=k)
+            dists = np.where(dists == 0, 1e-10, dists)
+            weights = 1 / dists**power
+            weights /= weights.sum(axis=1, keepdims=True)
+            return np.sum(values[idxs] * weights, axis=1)
+
         def rbf_interp(coords, values, xi):
             # Check if epsilon is required for the selected kernel
             kernels_requiring_epsilon = ["gaussian", "multiquadric", "inverse_multiquadric", "inverse_quadratic"]
@@ -631,9 +679,11 @@ class FieldInterpolator:
             return interpolator_obj(xi)
 
         def griddata_interp(coords, values, xi):
-            return griddata(coords, values.ravel(), xi, method=method, **griddata_kwargs)
+                return griddata(coords, values.ravel(), xi, method=method, **griddata_kwargs)
 
-
+        def linearnd_interp(coords, values, xi):
+            interp_obj = LinearNDInterpolator(coords, values.ravel())
+            return interp_obj(xi)
 
         def interp(idx, field, component=None):
             if var2 is None and var3 is None:  # 1D interpolation
@@ -645,10 +695,14 @@ class FieldInterpolator:
                 coords = coord_x.reshape(-1, 1)
                 xi = var1.reshape(-1, 1) if not is_scalar else np.array([[var1]])
                 if interpolator == "rbf":
-                    return rbf_interp(coords, data, xi)   
+                    return rbf_interp(coords, data, xi)
+                elif interpolator == "linearnd":
+                    return linearnd_interp(coords, data, xi)
+                elif interpolator == "idw":
+                    return idw_interp(coords, data, xi)
                 else:
                     return griddata_interp(coords, data, xi)
-                
+
             elif var3 is not None:  # 3D interpolation
                 coord_x = np.array(df_sorted.iloc[idx]["var1_mesh"])
                 coord_y = np.array(df_sorted.iloc[idx]["var2_mesh"])
@@ -658,9 +712,14 @@ class FieldInterpolator:
                 else:
                     data = np.array(df_sorted.iloc[idx][field])
                 coords = np.column_stack((coord_x.ravel(), coord_y.ravel(), coord_z.ravel()))
+        
                 xi = np.column_stack((var1.ravel(), var2.ravel(), var3.ravel()))
                 if interpolator == "rbf":
                     return rbf_interp(coords, data, xi)
+                elif interpolator == "linearnd":
+                    return linearnd_interp(coords, data, xi)
+                elif interpolator == "idw":
+                    return idw_interp(coords, data, xi)
                 else:
                     return griddata_interp(coords, data, xi)
             else:  # 2D interpolation
@@ -674,12 +733,15 @@ class FieldInterpolator:
                 xi = np.column_stack((var1.ravel(), var2.ravel()))
                 if interpolator == "rbf":
                     return rbf_interp(coords, data, xi)
-
+                elif interpolator == "linearnd":
+                    return linearnd_interp(coords, data, xi)
+                elif interpolator == "idw":
+                    return idw_interp(coords, data, xi)
                 else:
                     return griddata_interp(coords, data, xi)
-                    
-
-        # --- Caso 1: Solo un snapshot ---
+                
+        
+        # --- Case 1: only a snapshot ---
         if n_snaps == 1:
             def eval_single(component=None):
                 return interp(0, field_name, component)
@@ -690,12 +752,12 @@ class FieldInterpolator:
                 )
                 return np.array([res.item() if is_scalar else res.reshape(result_shape) for res in results])
             else:
-                # Escalar: paralelización trivial (solo un resultado)
-                result = Parallel(n_jobs=1)([delayed(eval_single)()])
+                # Trivial escalar case: parallelization over the single snapshot
+                result = Parallel(n_jobs=-1)([delayed(eval_single)()])
                 result = result[0]
                 return result.item() if is_scalar else result.reshape(result_shape)
 
-        # --- Caso 2: Dos snapshots, interpolación temporal lineal ---
+        # --- Case 2: Two snapshots, linear temporal interpolation ---
         elif n_snaps == 2:
             idx, idx_after = 0, 1
             t0, t1 = times[idx], times[idx_after]
@@ -719,7 +781,7 @@ class FieldInterpolator:
                 result = results[0]
                 return result.item() if is_scalar else result.reshape(result_shape)
 
-        # --- Caso 3: Más de dos snapshots, interpolación temporal spline ---
+        # --- Case 3: More than two snapshots, spline temporal interpolation ---
         else:
             def eval_all_snaps(component=None):
                 return Parallel(n_jobs=-1)(
