@@ -421,6 +421,8 @@ You may find in the [examples directory](https://github.com/seap-udea/fargopy/tr
 
 ## What's new
 
+Version 0.4.*:
+- Interpolation and flux computations.
 
 Version 0.3.*:
 
