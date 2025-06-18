@@ -25,7 +25,7 @@ setuptools.setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         ],
-    version='0.3.15',
+    version='0.4.0',
 
     # ######################################################################
     # FILES
@@ -50,7 +50,8 @@ setuptools.setup(
     # ######################################################################
     # DEPENDENCIES
     # ######################################################################
-    install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
+
+    install_requires=['scipy','matplotlib','tqdm','numpy','ipython','joblib',
                       'celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy'],
 
     # ######################################################################
