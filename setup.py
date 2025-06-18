@@ -51,12 +51,12 @@ setuptools.setup(
     # DEPENDENCIES
     # ######################################################################
     install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
-                      'celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat'],
+                      'celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy'],
 
     # ######################################################################
     # OPTIONS
     # ######################################################################
     include_package_data=True,
-    package_data={'': ['data/*.*', 'tests/*.*']},
+    package_data={'': ['data/*.*', 'tests/*']},
     scripts=['fargopy/bin/ifargopy'],
 )
