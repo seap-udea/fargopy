@@ -15,3 +15,7 @@ Long-term:
 
 Done:
 - List all files in the output directory.
+
+New: 
+- Check the uncompressing procedure
+- Check pytest not finilizing

@@ -64,3 +64,6 @@ env:
 	python3 -m venv .fargopyenv
 	. .fargopyenv/bin/activate
 	pip3 install -e .
+
+test:
+	pytest
