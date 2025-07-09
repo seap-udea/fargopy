@@ -355,4 +355,4 @@ from fargopy.plot import *
 from fargopy.flux import *
 
 # Showing version 
-print(f"Running FARGOpy version {version}")
+#print(f"Running FARGOpy version {version}")

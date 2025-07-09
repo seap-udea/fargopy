@@ -858,7 +858,7 @@ class FieldInterpolator:
             # Only interpolate where mask is True
 
             if np.any(mask):
-                interp_values[mask] = griddata(coords, values.ravel(), xi[mask], method=method, fill_value=np.nan, **griddata_kwargs)
+                interp_values[mask] = griddata(coords, values.ravel(), xi[mask], method=method, **griddata_kwargs)
             return interp_values
         
         def linearnd_interp(coords, values, xi):
@@ -982,6 +982,7 @@ class FieldInterpolator:
 
         # --- Case 2: Two snapshots, linear temporal interpolation ---
         elif n_snaps == 2:
+            
             idx, idx_after = 0, 1
             t0, t1 = times[idx], times[idx_after]
             factor = (time - t0) / (t1 - t0) if abs(t1 - t0) > 1e-10 else 0
@@ -1026,3 +1027,4 @@ class FieldInterpolator:
                 f = interp1d(times, values, axis=0, kind='linear', bounds_error=False, fill_value=np.nan)
                 result = f(time)
                 return result.item() if is_scalar else result.reshape(result_shape)
+            
