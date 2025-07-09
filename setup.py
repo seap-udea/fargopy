@@ -52,7 +52,7 @@ setuptools.setup(
     # ######################################################################
 
     install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
-                      'joblib','contextlib','celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy'],
+                      'joblib','celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy','virtualenv'],
 
     # ######################################################################
     # OPTIONS

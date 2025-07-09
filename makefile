@@ -35,7 +35,7 @@ cleancrap:
 	@-find . -name "Icon*" -delete
 	@-find . -name "*.egg-info*" -type d | xargs rm -fr
 	@-find . -name "__pycache__" -type d | xargs rm -fr
-	
+
 cleandist:
 	@echo "Cleaning dist..."
 	@rm -rf dist/*.*
@@ -59,3 +59,8 @@ readme:
 
 %.md:%.ipynb
 	python3 -m nbconvert $^ --to markdown
+
+env:
+	python3 -m venv .fargopyenv
+	. .fargopyenv/bin/activate
+	pip3 install -e .
