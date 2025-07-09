@@ -240,41 +240,7 @@ class Analyzer:
         return results
     
 
-    def hill_radius(self, planet_index=0):
-        """
-        Calculates the Hill radius of the selected planet using simulation parameters.
-        Returns the Hill radius in cm and AU.
-        """
-        # Conversion constants
-        AU_to_cm = 1.495978707e13
-        Mjup_to_g = 1.898e30
-        Msun_to_g = 1.989e33
-
-        # Check planet data
-        if not hasattr(self.sim, "planets") or not self.sim.planets:
-            raise ValueError("No planet data found. Run sim.load_planet_summary() first.")
-
-        # Check stellar mass in macros
-        if not hasattr(self.sim, "simulation_macros") or 'MSTAR' not in self.sim.simulation_macros:
-            raise ValueError("Stellar mass (MSTAR) not found. Run sim.load_macros() first.")
-
-        planet = self.sim.planets[planet_index]
-        a_au = planet['distance']  # AU
-        m_jup = planet['mass']     # Mjup
-
-        # Get stellar mass in Msun and convert to grams
-        mstar_msun = self.sim.simulation_macros['MSTAR']
-        mstar_g = float(mstar_msun) * Msun_to_g
-
-        # Convert planet mass to grams and distance to cm
-        a_cm = a_au * AU_to_cm
-        m_p = m_jup * Mjup_to_g
-
-        # Hill radius formula
-        r_hill_cm = a_cm * (m_p / (3 * mstar_g))**(1/3)
-        r_hill_au = r_hill_cm / AU_to_cm
-
-        return r_hill_cm, r_hill_au
+    
 
     def calculate_integral(self, integrand, time_steps, dtype):
         """
