@@ -269,18 +269,24 @@ class Field(fargopy.Fargobj):
 
 class FieldInterpolator:
 
-    def __init__(self, sim):
+    def __init__(self, sim, df=None):
         self.sim = sim
         self.snapshot_time_table = None
         self.snapshot = None
         self.slice = None
         self.dim=None
+        self.df = df
+
+    def __getattr__(self, name):
+        # Use object.__getattribute__ to avoid recursion
+        df = object.__getattribute__(self, 'df')
+        if df is not None and hasattr(df, name):
+            return getattr(df, name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")   
 
     def load_data(self, field=None, slice=None, snapshots=1):
         self.field = field
         self.slice = slice
-
-
 
         # Convert a single snapshot to a list
         if isinstance(snapshots, int):
@@ -307,7 +313,7 @@ class FieldInterpolator:
             snaps = np.arange(snapshots[0], snapshots[1] + 1)
             time_values = np.linspace(0, 1, len(snaps))
 
-        # Guarda la tabla como DataFrame
+        # Save table like dataframe
         self.snapshot_time_table = pd.DataFrame({
             "Snapshot": snaps,
             "Normalized_time": time_values
@@ -337,8 +343,13 @@ class FieldInterpolator:
         if not hasattr(self.sim, "domains") or self.sim.domains is None:
             raise ValueError("Simulation domains are not loaded. Ensure the simulation data is properly initialized.")
 
+        def rotation(X, Y, Z, phi0):
+            X_rot =  X * np.cos(phi0) + Y * np.sin(phi0)
+            Y_rot = -X * np.sin(phi0) + Y * np.cos(phi0)
+            Z_rot = Z.copy()  # z no cambia
 
-    
+            return X_rot, Y_rot, Z_rot
+
 
         if self.dim<3:
         
@@ -358,15 +369,27 @@ class FieldInterpolator:
 
                 # Assign coordinates for all fields
                 if field == 'gasdens':
+                    
+                    
                     gasd = self.sim.load_field('gasdens', snapshot=snap, type='scalar')
                     gasd_slice, mesh = gasd.meshslice(slice=slice)
+                    
+                    if np.all(mesh.phi.ravel()== mesh.phi.ravel()[0]):
+                        x_rot, y_rot, z_rot = rotation(getattr(mesh, 'x'), getattr(mesh, 'y'), getattr(mesh, 'z'), mesh.phi.ravel()[0])
+                        row['var1_mesh'] = x_rot
+                        row['var2_mesh'] = y_rot
+                        row['var3_mesh'] = z_rot
+                        row['gasdens_mesh'] = gasd_slice
 
-                    row['var1_mesh'] = getattr(mesh, 'x')
-                    row['var2_mesh'] = getattr(mesh, 'y')
-                    row['var3_mesh'] = getattr(mesh, 'z')
-                    row['gasdens_mesh'] = gasd_slice
+
+                    else:
+                        row['var1_mesh'] = getattr(mesh, 'x')
+                        row['var2_mesh'] = getattr(mesh, 'y')
+                        row['var3_mesh'] = getattr(mesh, 'z')
+                        row['gasdens_mesh'] = gasd_slice
 
                 if field == "gasv":
+
                     gasv = self.sim.load_field('gasv', snapshot=snap, type='vector')
                     gasvx, gasvy, gasvz = gasv.to_cartesian()
 
@@ -401,6 +424,7 @@ class FieldInterpolator:
             return df_snapshots
 
         if self.dim==3:  # Load 3D data
+            
             # Generate 3D mesh
             theta, r, phi = np.meshgrid(self.sim.domains.theta, self.sim.domains.r, self.sim.domains.phi, indexing='ij')
             x, y, z = r * np.sin(theta) * np.cos(phi), r * np.sin(theta) * np.sin(phi), r * np.cos(theta)
@@ -408,14 +432,14 @@ class FieldInterpolator:
             # Dynamically create DataFrame columns based on the fields
             columns = ['snapshot', 'time', 'var1_mesh', 'var2_mesh', 'var3_mesh']
             if field == "gasdens":
-                print(f'Loading 3D density data ')
+                print(f'Loading density field')
                 columns.append('gasdens_mesh')
             if field == "gasv":
                 columns.append('gasv_mesh')
-                print(f'Loading 3D gas velocity data')
+                print(f'Loading velocity field')
             if field == 'gasenergy':
                 columns.append('gasenergy_mesh')
-                print(f'Loading 3D gas energy data')
+                print(f'Loading energy field')
 
             df_snapshots = pd.DataFrame(columns=columns)
 
@@ -579,25 +603,47 @@ class FieldInterpolator:
         r_min, r_max = self.sim.domains.r.min(), self.sim.domains.r.max()
         theta_min, theta_max = self.sim.domains.theta.min(), self.sim.domains.theta.max()
         phi_min, phi_max = self.sim.domains.phi.min(), self.sim.domains.phi.max()
+        # Ajustar ángulos a valores exactos si están cerca de múltiplos de pi/2 o pi
+        eps_round = 1e-8
+        def round_angle(val):
+            for ref in [0, np.pi/2, np.pi, 3*np.pi/2, 2*np.pi, -np.pi/2, -np.pi, -3*np.pi/2, -2*np.pi]:
+                if abs(val - ref) < eps_round:
+                    return ref
+            return val
+        theta_min = round_angle(theta_min)
+        theta_max = round_angle(theta_max)
+        phi_min = round_angle(phi_min)
+        phi_max = round_angle(phi_max)
 
         if ndim == 2:
+            # Usa una tolerancia mayor para asegurar inclusión de bordes
+            eps = 1e-7
             if slice is not None and 'phi' in slice:
-                print("using phi slice")
                 # XZ plane: y = 0, phi fixed, filter by r and theta
                 x, z = xi[:, 0], xi[:, 1]
                 y = np.zeros_like(x)
                 r = np.sqrt(x**2 + y**2 + z**2)
-                theta = np.arccos(z / np.clip(r, 1e-12, None))
-                mask = (r >= r_min) & (r <= r_max) & (theta >= theta_min) & (theta <= theta_max)
+                theta = np.arccos(z / np.clip(r, 1e-14, None))
+                # Usa np.isclose para los bordes
+                mask = (
+                    ((r > r_min) | np.isclose(r, r_min, atol=eps)) &
+                    ((r < r_max) | np.isclose(r, r_max, atol=eps)) &
+                    ((theta > theta_min) | np.isclose(theta, theta_min, atol=eps)) &
+                    ((theta < theta_max) | np.isclose(theta, theta_max, atol=eps))
+                )
                 return mask
             elif slice is not None and 'theta' in slice:
-                print("using theta slice")
                 # XY plane: z = 0, theta fixed, filter by r and phi
                 x, y = xi[:, 0], xi[:, 1]
                 z = np.zeros_like(x)
                 r = np.sqrt(x**2 + y**2 + z**2)
                 phi = np.arctan2(y, x)
-                mask = (r >= r_min) & (r <= r_max) & (phi >= phi_min) & (phi <= phi_max)
+                mask = (
+                    ((r > r_min) | np.isclose(r, r_min, atol=eps)) &
+                    ((r < r_max) | np.isclose(r, r_max, atol=eps)) &
+                    ((phi > phi_min) | np.isclose(phi, phi_min, atol=eps)) &
+                    ((phi < phi_max) | np.isclose(phi, phi_max, atol=eps))
+                )
                 return mask
             else:
                 # Default: treat as XY
@@ -605,7 +651,12 @@ class FieldInterpolator:
                 z = np.zeros_like(x)
                 r = np.sqrt(x**2 + y**2 + z**2)
                 phi = np.arctan2(y, x)
-                mask = (r >= r_min) & (r <= r_max) & (phi >= phi_min) & (phi <= phi_max)
+                mask = (
+                    ((r > r_min) | np.isclose(r, r_min, atol=eps)) &
+                    ((r < r_max) | np.isclose(r, r_max, atol=eps)) &
+                    ((phi > phi_min) | np.isclose(phi, phi_min, atol=eps)) &
+                    ((phi < phi_max) | np.isclose(phi, phi_max, atol=eps))
+                )
                 return mask
         elif ndim == 3:
             x, y, z = xi[:, 0], xi[:, 1], xi[:, 2]
@@ -637,10 +688,19 @@ class FieldInterpolator:
 
 
     def evaluate(
-            self, time, var1, var2=None, var3=None,
+            self,time, var1, var2=None, var3=None,dataframe=None,
             interpolator="griddata", method="linear",
             rbf_kwargs=None, griddata_kwargs=None, idw_kwargs=None
         ):
+
+        # Use the provided DataFrame or the internal one
+        if dataframe is not None:
+            dataframe = dataframe
+        elif self.df is not None:
+            dataframe = self.df
+        else:
+            raise ValueError("No DataFrame provided and self.df is not set.")
+        
 
         
 
@@ -654,7 +714,6 @@ class FieldInterpolator:
             idw_kwargs (dict): Optional kwargs for IDW, e.g. {'power': 2, 'k': 8}
             ...
         """
-
 
 
         # --- Handle time input: explicit and robust: normalized time [0,1] or snapshot index ---
@@ -706,17 +765,17 @@ class FieldInterpolator:
             raise ValueError("Invalid method. Choose either 'rbf', 'griddata', 'idw', or 'linearnd'.")
 
         # Automatically determine the field to interpolate
-        if "gasdens_mesh" in self.df.columns:
+        if "gasdens_mesh" in dataframe.columns:
             field_name = "gasdens_mesh"
-        elif "gasenergy_mesh" in self.df.columns:
+        elif "gasenergy_mesh" in dataframe.columns:
             field_name = "gasenergy_mesh"
-        elif "gasv_mesh" in self.df.columns:  # Velocity field
+        elif "gasv_mesh" in dataframe.columns:  # Velocity field
             field_name = "gasv_mesh"
         else:
             raise ValueError("No valid field found in the DataFrame for interpolation.")
 
         # Sort the DataFrame by time
-        df_sorted = self.df.sort_values("time")
+        df_sorted = dataframe.sort_values("time")
         times = df_sorted["time"].values
         n_snaps = len(times)
 
@@ -799,7 +858,7 @@ class FieldInterpolator:
             # Only interpolate where mask is True
 
             if np.any(mask):
-                interp_values[mask] = griddata(coords, values.ravel(), xi[mask], method=method, **griddata_kwargs)
+                interp_values[mask] = griddata(coords, values.ravel(), xi[mask], method=method, fill_value=np.nan, **griddata_kwargs)
             return interp_values
         
         def linearnd_interp(coords, values, xi):
