@@ -421,8 +421,15 @@ You may find in the [examples directory](https://github.com/seap-udea/fargopy/tr
 
 ## What's new
 
+Version 0.5.*:
+- Windows compatibility (Does not apply to control methods, only interpolation, visualization, and flus computations)
+- Interactive plotting tools for simulation data.
+
 Version 0.4.*:
-- Interpolation and flux computations.
+- Field interpolation in 1D, 2D, and 3D with evaluation at arbitrary points and times.
+- Analytical surface definition and tessellation for integration.
+- Calculation of mass flux and total mass through/inside surfaces.
+- Flexible field slicing and mesh generation for visualization and analysis.
 
 Version 0.3.*:
 
