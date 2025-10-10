@@ -201,13 +201,23 @@ class Simulation(fargopy.Fargobj):
         >>> sim = fargopy.Simulation(setup='fargo', load=True)
     """
     def __init__(self,**kwargs):
-        """
-        Initialize a Simulation object. See class docstring for usage examples.
+        """Initialize a simulation.
 
-        Parameters
-        ----------
-        **kwargs : dict
-            Simulation configuration options.
+        Examples:
+            Create an empty simulation (no setup chosen):
+            >>> sim = fargopy.Simulation()
+
+            Create a simulation using a specific base FARGO3D directory (no setup chosen):
+            >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
+
+            Create a simulation starting with setup directory: 
+            >>> sim = fargopy.Simulation(setup='fargo')
+            
+            Connect to an existing simulation:
+            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+
+            Load an already existing simulation:
+            >>> sim = fargopy.Simulation(setup='fargo',load=True)
         """
         super().__init__(**kwargs)
 
@@ -260,13 +270,13 @@ class Simulation(fargopy.Fargobj):
         # Set properties
         self.set_property('fargo3d_dir',
                           fargopy.Conf.FP_FARGO3D_DIR,
-                          self._set_fargo3d_dir)
+                          self.set_fargo3d_dir)
         self.set_property('setup',
                           None,
-                          self._set_setup)
+                          self.set_setup)
         self.set_property('output_dir',
                           None,
-                          self._set_output_dir)
+                          self.set_output_dir)
         self.set_property('fargo3d_compilation_options',
                           dict(parallel=0,gpu=0,options=''))
 
@@ -287,7 +297,7 @@ class Simulation(fargopy.Fargobj):
     # ##########################################################################
     # Set special properties
     # ##########################################################################  
-    def _set_fargo3d_dir(self,dir=None):
+    def set_fargo3d_dir(self,dir=None):
         """
         Set the FARGO3D directory for the simulation.
 
@@ -318,7 +328,7 @@ class Simulation(fargopy.Fargobj):
         self.outputs_dir = os.path.join(self.fargo3d_dir, 'outputs')
         self.setups_dir = os.path.join(self.fargo3d_dir, 'setups')
     
-    def _set_setup(self,setup):
+    def set_setup(self,setup):
         """
         Connect the simulation to a given setup.
 
@@ -336,12 +346,12 @@ class Simulation(fargopy.Fargobj):
             self.setup_dir = None
             return None
         setup_dir = os.path.join(self.setups_dir, setup)
-        if self._set_setup_dir(setup_dir):
+        if self.set_setup_dir(setup_dir):
             self.setup = setup
             self.logfile = os.path.join(self.setup_dir, f"{self.setup}.log")
         return setup
     
-    def _set_setup_dir(self,dir):
+    def set_setup_dir(self,dir):
         """
         Set the setup directory.
 
@@ -366,7 +376,7 @@ class Simulation(fargopy.Fargobj):
         self.setup_dir = dir
         return True
 
-    def _set_output_dir(self,dir):
+    def set_output_dir(self,dir):
         """
         Connect a simulation with a directory where the outputs are stored.
 
