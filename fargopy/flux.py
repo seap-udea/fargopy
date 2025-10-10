@@ -16,759 +16,688 @@ import fargopy as fp
 
 class Surface:
     """
-    Factory class to generate and manage surfaces (e.g., spheres).
+    Class to generate and manage 3D surfaces (e.g., spheres, cylinders) for integration and analysis
+    of simulation data. Provides tessellation, geometric properties, and methods for mass and flux
+    calculations over the defined surface.
     """
 
-    def __init__(self):
-        self.surface = None
+    def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1, center=(0.0, 0.0, 0.0), z_cut=None):
+        """
+        Initialize a Surface object.
 
-    def Sphere(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
-        self.surface = self.Sphere(radius, subdivisions, center)
-        return self.surface
+        Parameters
+        ----------
+        type : str
+            Type of surface ('sphere' or 'cylinder').
+        radius : float
+            Radius of the surface.
+        height : float, optional
+            Height of the cylinder (required if type='cylinder').
+        subdivisions : int
+            Number of subdivisions for tessellation (higher means finer mesh).
+        center : tuple of float
+            Center coordinates (x, y, z) of the surface.
+        z_cut : float, optional
+            If specified, only include triangles with center z >= z_cut (for hemispheres).
+        """
+        self.type = type
+        self.radius = radius
+        self.height = height
+        self.subdivisions = subdivisions
+        self.center = np.array(center)
+        self.z_cut = z_cut  # New parameter for z-cut
 
-    class Sphere:
-        def __init__(self, radius=1.0, subdivisions=1, center=(0.0, 0.0, 0.0)):
-            self.radius = radius
-            self.subdivisions = subdivisions
-            self.center = np.array(center)
-            self.num_triangles = 20 * (4 ** subdivisions)
+        # Attributes for tessellation
+        self.centers = None
+        self.normals = None
+        self.areas = None
+        self.triangles = None
+        self.num_triangles = 0
+        self.triangle_index = 0
+
+        if self.type == "sphere":
+            self.num_triangles = 20 * (4 ** self.subdivisions)
             self.triangles = np.zeros((self.num_triangles, 3, 3))
             self.centers = np.zeros((self.num_triangles, 3))
             self.areas = np.zeros(self.num_triangles)
-            self.triangle_index = 0
-            self.volume = None
-            self.tessellate()
-
-        def filter(self, condition):
-            """
-            Filter the sphere's centers, areas, normals, etc. by a string condition.
-            Example: sphere.filter("z > 0")
-            """
-            x = self.centers[:, 0]
-            y = self.centers[:, 1]
-            z = self.centers[:, 2]
-            mask = eval(condition)
-            self.centers = self.centers[mask]
-            self.areas = self.areas[mask]
-            if hasattr(self, "normals"):
-                self.normals = self.normals[mask]
-            if hasattr(self, "volume"):
-                self.volume = self.volume[mask]
-
-        @staticmethod
-        def normalize(v):
-            return v / np.linalg.norm(v)
-
-        def subdivide_triangle(self, v1, v2, v3, depth):
-            if depth == 0:
-                self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
-                self.triangle_index += 1
-                return
-            v12 = self.normalize((v1 + v2) / 2) * self.radius
-            v23 = self.normalize((v2 + v3) / 2) * self.radius
-            v31 = self.normalize((v3 + v1) / 2) * self.radius
-            self.subdivide_triangle(v1, v12, v31, depth - 1)
-            self.subdivide_triangle(v12, v2, v23, depth - 1)
-            self.subdivide_triangle(v31, v23, v3, depth - 1)
-            self.subdivide_triangle(v12, v23, v31, depth - 1)
-
-        def generate_icosphere(self):
-            phi = (1.0 + np.sqrt(5.0)) / 2.0
-            patterns = [
-                (-1, phi, 0), (1, phi, 0), (-1, -phi, 0), (1, -phi, 0),
-                (0, -1, phi), (0, 1, phi), (0, -1, -phi), (0, 1, -phi),
-                (phi, 0, -1), (phi, 0, 1), (-phi, 0, -1), (-phi, 0, 1),
-            ]
-            vertices = np.array([self.normalize(np.array(p)) * self.radius for p in patterns])
-            faces = [
-                (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
-                (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
-                (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
-                (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
-            ]
-            for face in faces:
-                v1, v2, v3 = vertices[face[0]], vertices[face[1]], vertices[face[2]]
-                self.subdivide_triangle(v1, v2, v3, self.subdivisions)
-
-        def calculate_polygon_centers(self):
-            self.centers = np.mean(self.triangles, axis=1)
-
-        @staticmethod
-        def calculate_triangle_area(v1, v2, v3):
-            side1 = v2 - v1
-            side2 = v3 - v1
-            cross_product = np.cross(side1, side2)
-            area = np.linalg.norm(cross_product) / 2
-            return area
-
-        def calculate_all_triangle_areas(self):
-            for i, (v1, v2, v3) in enumerate(self.triangles):
-                self.areas[i] = self.calculate_triangle_area(v1, v2, v3)
-
-        def calculate_normals(self):
-            self.normals = np.zeros((self.num_triangles, 3))
-            for i, tri in enumerate(self.triangles):
-                AB = tri[1] - tri[0]
-                AC = tri[2] - tri[0]
-                normal = np.cross(AB, AC)
-                normal /= np.linalg.norm(normal)
-                centroid = np.mean(tri, axis=0)
-                to_centroid = centroid - self.center
-                if np.dot(normal, to_centroid) < 0:
-                    normal = -normal
-                self.normals[i] = normal
-
-        def tessellate(self):
-            self.generate_icosphere()
-            self.calculate_polygon_centers()
-            self.calculate_all_triangle_areas()
-            self.calculate_normals()
-            self.volume = self.areas * (self.radius / 3)
-
-        def generate_dataframe(self):
-            data = []
-            for i, (triangle, center, area) in enumerate(zip(self.triangles, self.centers, self.areas)):
-                data.append({
-                    "Triangle": triangle.tolist(),
-                    "Center": center.tolist(),
-                    "Area": area
-                })
-            df = pd.DataFrame(data)
-            return df
-
-
-
-class Analyzer:
-    def __init__(self, simulation, surface=None, slice=None, fields=None, snapshots=(1, 10), interpolator='griddata', method='linear', interp_kwargs=None):
-        """
-        General class for performing calculations on 3D surfaces or 2D planes.
-
-        :param simulation: The simulation object (e.g., fp.Simulation).
-        :param surface: The 3D surface object (e.g., Sphere) for 3D calculations.
-        :param plane: The 2D plane ('XY', 'XZ', etc.) for 2D calculations.
-        :param angle: The angle for slicing the 2D plane (e.g., 'phi=0').
-        :param fields: List of fields to load (e.g., ['gasdens', 'gasv']).
-        :param snapshots: Tuple indicating the range of snapshots to load (e.g., (1, 10)).
-        :param interpolator: Interpolation algorithm ('griddata', 'rbf', etc.).
-        :param method: Interpolation method ('linear', 'cubic', etc.).
-        :param interp_kwargs: Dict of extra kwargs for the interpolator.
-        """
-        self.sim = simulation
-        self.surface = surface
-        self.slice = slice
-        self.fields = fields
-        self.snapshots = snapshots
-        self.interpolator = interpolator
-        self.method = method
-        self.interp_kwargs = interp_kwargs or {}
-        self.time = None
-        self.interpolated_fields = None
-
-        # Load fields with interpolation
-        self.load_fields()
-
-    def load_fields(self):
-        """
-        Loads and interpolates the fields based on the provided configuration.
-        Ensures self.interpolated_fields is always a list, even for a single field.
-        """
-        if self.surface is not None:  # 3D case
-            self.interpolated_fields = self.sim.load_field(
-                fields=self.fields,
-                snapshot=self.snapshots,
-                interpolate=True
-            )
-            # Ensure it's always a list
-            if not isinstance(self.interpolated_fields, (list, tuple)):
-                self.interpolated_fields = [self.interpolated_fields]
-        elif self.slice is not None:  # 2D case
-            self.interpolated_fields = self.sim.load_field(
-                fields=self.fields,
-                slice=self.slice,
-                snapshot=self.snapshots,
-                interpolate=True
-            )
-            if not isinstance(self.interpolated_fields, (list, tuple)):
-                self.interpolated_fields = [self.interpolated_fields]
+            self._tessellate_sphere()
+        elif self.type == "cylinder":
+            self._tessellate_cylinder()
         else:
-            raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
+            raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
 
-
-    def evaluate_fields(
-        self, time, coordinates,
-        griddata_kwargs=None, rbf_kwargs=None, idw_kwargs=None, linearnd_kwargs=None
-    ):
+    def _tessellate_sphere(self):
         """
-        Evaluate interpolated fields at a given time and coordinates, allowing specific kwargs for each interpolator.
-
-        :param time: The time at which to evaluate.
-        :param coordinates: The coordinates (x, y, z) or (x, z).
-        :param griddata_kwargs: Optional kwargs for griddata.
-        :param rbf_kwargs: Optional kwargs for RBF.
-        :param idw_kwargs: Optional kwargs for IDW.
-        :param linearnd_kwargs: Optional kwargs for LinearND.
-        :return: Dictionary with the field values.
+        Tessellate the sphere using recursive subdivision of an icosahedron.
+        Sets up the triangles, centers, and areas arrays.
+        Applies z_cut if specified.
         """
-        results = {}
-        for field, interp in zip(self.fields, self.interpolated_fields):
-            # Prepare kwargs in the same format as FieldInterpolator.evaluate
-            eval_kwargs = {}
-            if griddata_kwargs is not None:
-                eval_kwargs["griddata_kwargs"] = griddata_kwargs
-            if rbf_kwargs is not None:
-                eval_kwargs["rbf_kwargs"] = rbf_kwargs
-            if idw_kwargs is not None:
-                eval_kwargs["idw_kwargs"] = idw_kwargs
-            if linearnd_kwargs is not None:
-                eval_kwargs["linearnd_kwargs"] = linearnd_kwargs
+        phi = (1.0 + np.sqrt(5.0)) / 2.0
+        patterns = [
+            (-1, phi, 0), (1, phi, 0), (-1, -phi, 0), (1, -phi, 0),
+            (0, -1, phi), (0, 1, phi), (0, -1, -phi), (0, 1, -phi),
+            (phi, 0, -1), (phi, 0, 1), (-phi, 0, -1), (-phi, 0, 1),
+        ]
+        vertices = np.array([Surface._normalize(np.array(p)) * self.radius for p in patterns])
+        faces = [
+            (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
+            (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
+            (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
+            (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
+        ]
+        # Reset triangle index and arrays
+        self.num_triangles = 20 * (4 ** self.subdivisions)
+        self.triangle_index = 0
+        self.triangles = np.zeros((self.num_triangles, 3, 3))
+        self.centers = np.zeros((self.num_triangles, 3))
+        self.areas = np.zeros(self.num_triangles)
 
-            field_values = interp.evaluate(
-                time=time,
-                var1=coordinates[0],
-                var2=coordinates[1],
-                var3=coordinates[2] if len(coordinates) > 2 else None,
-                interpolator=self.interpolator,
-                method=self.method,
-                **eval_kwargs
-            )
+        for face in faces:
+            v1, v2, v3 = vertices[face[0]], vertices[face[1]], vertices[face[2]]
+            self._subdivide_triangle(v1, v2, v3, self.subdivisions)
 
-            if field == 'gasv':
-                results[field] = np.array(field_values).T
-            else:
-                results[field] = field_values
+        self._calculate_polygon_centers()
 
-        return results
-    
+        # Apply z_cut filter if specified
+        if self.z_cut is not None:
+            valid_indices = self.centers[:, 2] >= self.z_cut
+            self.centers = self.centers[valid_indices]
+            self.triangles = self.triangles[valid_indices]
+            self.areas = self.areas[valid_indices]
+            # Ensure normals are also filtered
 
-    
+        self._calculate_all_triangle_areas()
+        self._calculate_normals()
+        self.volume = self.areas * (self.radius / 3)
+        self.normals = self.normals[valid_indices] 
 
-    def calculate_integral(self, integrand, time_steps, dtype):
+    def _tessellate_cylinder(self):
         """
-        Calculates an integral based on the provided integrand and integration type.
-
-        :param integrand: A callable function defining the integrand.
-        :param time_steps: Number of time steps for the calculation.
-        :param type: 'line', 'area', or 'volume' (default: 'area').
-        :return: Array of results for each time step.
+        Tessellate a cylinder into top, bottom, and lateral surfaces.
+        Sets up arrays for centers, normals, and areas for each part.
         """
-        self.time = np.linspace(0, 1, time_steps)
-        results = np.zeros(len(self.time))
+        theta = np.linspace(0, 2 * np.pi, self.subdivisions, endpoint=False)
+        r = np.linspace(0, self.radius, self.subdivisions)
+        R, Theta = np.meshgrid(r, theta, indexing='ij')
+        X = R * np.cos(Theta) + self.center[0]
+        Y = R * np.sin(Theta) + self.center[1]
+        Z_top = np.full_like(X, self.center[2] + self.height / 2)
+        Z_bottom = np.full_like(X, self.center[2] - self.height / 2)
 
-        if self.surface is not None:  # 3D case
-            xc, yc, zc = self.surface.centers[:, 0], self.surface.centers[:, 1], self.surface.centers[:, 2]
-            # Select weights according to the integration type
-            if dtype == 'volume':
-                weights = self.surface.volume
-            elif dtype == 'area':
-                weights = self.surface.areas
-            else:
-                raise ValueError("For 3D, dtype must be 'area' or 'volume'.")
-            for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
-                field_values = self.evaluate_fields(t, (xc, yc, zc))
-                integrand_values = integrand(**field_values)
-                results[i] = np.sum(integrand_values * weights)
+        self.top_centers = np.stack([X.ravel(), Y.ravel(), Z_top.ravel()], axis=1)
+        self.bottom_centers = np.stack([X.ravel(), Y.ravel(), Z_bottom.ravel()], axis=1)
+        self.top_normals = np.tile([0, 0, 1], (self.top_centers.shape[0], 1))
+        self.bottom_normals = np.tile([0, 0, -1], (self.bottom_centers.shape[0], 1))
+        self.top_areas = (self.radius / self.subdivisions) ** 2 * np.pi
+        self.bottom_areas = self.top_areas
 
-        elif self.slice is not None:  # 2D case
-            n_points = len(self.surface.centers)
-            angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
-            x = self.surface.center[0] + self.surface.radius * np.cos(angles)
-            y = self.surface.center[1] + self.surface.radius * np.sin(angles)
-            # Select weights according to the integration type
-            if dtype == 'line':
-                dl = 2 * np.pi * self.surface.radius / n_points
-                weights = dl
-            elif dtype == 'area':
-                weights = np.ones(n_points)  # You can define area elements if needed
-            else:
-                raise ValueError("For 2D, dtype must be 'line' or 'area'.")
-            for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
-                field_values = self.evaluate_fields(t, (x, y))
-                integrand_values = integrand(**field_values)
-                results[i] = np.sum(integrand_values * weights)
+        theta = np.linspace(0, 2 * np.pi, self.subdivisions, endpoint=False)
+        z = np.linspace(-self.height / 2, self.height / 2, self.subdivisions) + self.center[2]  # Adjust z by center
+        Theta, Z = np.meshgrid(theta, z, indexing='ij')
+        X = self.radius * np.cos(Theta) + self.center[0]
+        Y = self.radius * np.sin(Theta) + self.center[1]
 
-        else:
-            raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
+        self.lateral_centers = np.stack([X.ravel(), Y.ravel(), Z.ravel()], axis=1)
+        self.lateral_normals = np.stack([np.cos(Theta).ravel(), np.sin(Theta).ravel(), np.zeros_like(Z).ravel()], axis=1)
+        self.lateral_areas = (2 * np.pi * self.radius / self.subdivisions) * (self.height / self.subdivisions)
 
-        return results
-    
-
-
-
-class FluxAnalyzer3D:
-
-    def __init__(self, output_dir, sphere_center=(0.0, 0.0, 0.0), radius=1.0, subdivisions=1, snapi=110, snapf=210):
+    @staticmethod
+    def _normalize(v):
         """
-        Initializes the class with the simulation and sphere parameters.
+        Normalize a vector.
+
+        Parameters
+        ----------
+        v : np.ndarray
+            Input vector.
+
+        Returns
+        -------
+        np.ndarray
+            Normalized vector.
         """
-        self.sim = fp.Simulation(output_dir=output_dir)
-        self.radius = radius
-        self.data_handler = fargopy.DataHandler(self.sim)
-        self.data_handler.load_data(snapi=snapi, snapf=snapf)  # Load 3D data using the unified method
-        self.sphere = Sphere(radius=radius, subdivisions=subdivisions, center=sphere_center)
-        self.sphere.tessellate()
-        self.sphere_center = np.array(sphere_center)
-        self.time = None
-        self.snapi = snapi
-        self.snapf = snapf
-        self.velocities = None
-        self.densities = None
-        self.normals = None
-        self.flows = None
+        return v / np.linalg.norm(v)
 
-    def interpolate(self, time_steps):
-        """Interpolates velocity and density fields at the sphere's points."""
-        self.time = np.linspace(0, 1, time_steps)
-        xc, yc, zc = self.sphere.centers[:, 0], self.sphere.centers[:, 1], self.sphere.centers[:, 2]
+    def _subdivide_triangle(self, v1, v2, v3, depth):
+        """
+        Recursively subdivide a triangle for tessellation.
 
-        self.velocities = np.zeros((time_steps, len(xc), 3))
-        self.densities = np.zeros((time_steps, len(xc)))
+        Parameters
+        ----------
+        v1, v2, v3 : np.ndarray
+            Vertices of the triangle.
+        depth : int
+            Subdivision depth.
+        """
+        if depth == 0:
+            self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
+            self.triangle_index += 1
+            return
+        v12 = Surface._normalize((v1 + v2) / 2) * self.radius
+        v23 = Surface._normalize((v2 + v3) / 2) * self.radius
+        v31 = Surface._normalize((v3 + v1) / 2) * self.radius
+        self._subdivide_triangle(v1, v12, v31, depth - 1)
+        self._subdivide_triangle(v12, v2, v23, depth - 1)
+        self._subdivide_triangle(v31, v23, v3, depth - 1)
+        self._subdivide_triangle(v12, v23, v31, depth - 1)
 
-        valid_triangles = None  # To store valid triangles across all time steps
+    def _calculate_polygon_centers(self):
+        """
+        Calculate the centroid of each triangle in the tessellation.
+        """
+        self.centers = np.mean(self.triangles, axis=1)
 
-        for i, t in enumerate(tqdm(self.time, desc="Interpolating fields")):
-            # Interpolate velocity
-            velx, vely, velz = self.data_handler.interpolate_velocity(t, xc, yc, zc)
-            self.velocities[i, :, 0] = velx
-            self.velocities[i, :, 1] = vely
-            self.velocities[i, :, 2] = velz
+    @staticmethod
+    def _calculate_triangle_area(v1, v2, v3):
+        """
+        Calculate the area of a triangle given its vertices.
 
-            # Interpolate density
-            rho = self.data_handler.interpolate_density(t, xc, yc, zc)
-            self.densities[i] = rho
+        Parameters
+        ----------
+        v1, v2, v3 : np.ndarray
+            Vertices of the triangle.
 
-            # Filter triangles where density is greater than 0
-            valid_mask = rho > 0
-            if valid_triangles is None:
-                valid_triangles = valid_mask  # Initialize valid triangles
-            else:
-                valid_triangles &= valid_mask  # Keep only triangles valid across all time steps
+        Returns
+        -------
+        float
+            Area of the triangle.
+        """
+        side1 = v2 - v1
+        side2 = v3 - v1
+        cross_product = np.cross(side1, side2)
+        area = np.linalg.norm(cross_product) / 2
+        return area
 
-        # Update sphere centers and areas to include only valid triangles
-        self.valid_centers = self.sphere.centers[valid_triangles]
-        self.valid_areas = self.sphere.areas[valid_triangles]
-        self.valid_normals = None  # Normals will be recalculated for valid triangles
+    def _calculate_all_triangle_areas(self):
+        """
+        Calculate the area for all triangles in the tessellation.
+        """
+        for i, (v1, v2, v3) in enumerate(self.triangles):
+            self.areas[i] = self._calculate_triangle_area(v1, v2, v3)
 
-        return self.velocities, self.densities
-
-    def calculate_normals(self):
-        """Calculates the normal vectors of the valid triangles."""
-        if self.valid_normals is not None:
-            return self.valid_normals  # Use cached normals if already calculated
-
-        valid_triangles = self.sphere.triangles[self.sphere.areas > 0]  # Use valid triangles
-        self.valid_normals = np.zeros((len(valid_triangles), 3))
-
-        for i, tri in enumerate(valid_triangles):
+    def _calculate_normals(self):
+        """
+        Calculate the normal vector for each triangle in the tessellation.
+        Ensures normals point outward from the surface.
+        """
+        self.normals = np.zeros((self.num_triangles, 3))
+        for i, tri in enumerate(self.triangles):
             AB = tri[1] - tri[0]
             AC = tri[2] - tri[0]
             normal = np.cross(AB, AC)
             normal /= np.linalg.norm(normal)
             centroid = np.mean(tri, axis=0)
-            to_centroid = centroid - self.sphere_center
+            to_centroid = centroid - self.center
             if np.dot(normal, to_centroid) < 0:
                 normal = -normal
-            self.valid_normals[i] = normal
+            self.normals[i] = normal
 
-        return self.valid_normals
-
-    def calculate_fluxes(self):
-        """Calculates the total flux at each time step."""
-        if self.valid_normals is None:
-            self.calculate_normals()
-
-        self.flows = np.zeros(len(self.time))
-
-        for i in range(len(self.time)):
-            total_flux = np.sum(
-                self.densities[i][self.sphere.areas > 0] *  # Use valid densities
-                np.einsum('ij,ij->i', self.velocities[i][self.sphere.areas > 0], self.valid_normals) *
-                self.valid_areas
-            )
-            self.flows[i] = (total_flux * self.sim.URHO * self.sim.UL**2 * self.sim.UV) * 1e-3 * 1.587e-23  # en Msun_yr
-
-        return self.flows
-    
-    def calculate_accretion(self):
+    def tessellate(self):
         """
-        Calculates the accretion rate (dM/dt) and the total accreted mass inside the sphere.
-
-        :return: A tuple containing:
-            - accretion_rate: Array of accretion rates at each time step in Msun/yr.
-            - total_accreted_mass: Total accreted mass over the simulation time in Msun.
+        Re-tessellate the surface (sphere or cylinder) based on current parameters.
         """
-        # Ensure densities have been interpolated
-        if self.densities is None:
-            raise ValueError("Densities have not been interpolated. Call interpolate() first.")
-
-        # Convert density to kg/m³
-        rho_conv = self.sim.URHO * 1e3  # g/cm³ to kg/m³
-
-        # Convert radius to meters
-        r_m = self.radius * self.sim.UL * 1e-2  # cm to m
-
-        # Convert areas to m² and calculate volume elements
-        area_m2 = (self.sim.UL * 1e-2) ** 2  # cm² to m²
-        
-        vol_elem = self.sphere.areas * area_m2 * (r_m / 3)  # m³
-
-        # Calculate the total mass inside the sphere at each time step
-        total_mass = np.array([
-            np.sum(self.densities[i] * rho_conv * vol_elem)  # Mass in kg
-            for i in range(len(self.time))
-        ])
-
-        # Calculate the time step in physical units (seconds)
-        dt = (self.time[1] - self.time[0]) * self.sim.UT  # Time step in seconds
-
-        # Calculate the accretion rate as the time derivative of the total mass
-        acc_rate = np.gradient(total_mass, dt)  # dM/dt in kg/s
-
-        # Convert accretion rate to Msun/yr
-        acc_rate_msun_yr = acc_rate * (1 / 1.989e30) * fp.YEAR  # Convert kg/s to Msun/yr
-
-        # Calculate the total accreted mass (in Msun)
-        total_mass_msun = np.sum(acc_rate_msun_yr * dt / fp.YEAR)  # Convert Msun/yr to Msun
-
-        return acc_rate_msun_yr, float(total_mass_msun)
-
-
-    def plot_fluxes(self):
-        """Plots the total flux as a function of time."""
-        if self.flows is None:
-            raise ValueError("Flows have not been calculated. Call calculate_flows() first.")
-
-        #times
-        duration=(self.snapf - self.snapi + 1) * self.sim.UT / fp.YEAR
-        times= self.time * duration
-        
-        start_time = self.snapi * self.sim.UT / fp.YEAR
-        times += start_time
-        
-        average_flux = np.mean(self.flows)
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=self.time,
-            y=self.flows,
-            mode='lines',
-            name='Flux',
-            line=dict(color='dodgerblue', width=2)
-        ))
-        fig.add_trace(go.Scatter(
-            x=self.time,
-            y=[average_flux]* len(self.time),
-            mode='lines',
-            name=f'Avg: {average_flux:.2e} Msun/yr',
-            line=dict(color='orangered', width=2, dash='dash')
-        ))
-        fig.update_layout(
-            title=f"Matter Flux over Planet-Centered Sphere (R={self.radius*self.sim.UL/fp.AU:.3f} [AU])",
-            xaxis_title="Normalized Time",
-            yaxis_title="Flux [Msun/yr]",
-            template="plotly_white",
-            font=dict(size=14),
-            xaxis=dict(showgrid=True),
-            yaxis=dict(showgrid=True,exponentformat="e"),
-        )
-        fig.show()
-
-    def planet_sphere(self, snapshot=1):
-        """
-        Plots the density map in both the XZ  and XY planes for a given snapshot,
-        along with the circle representing the tessellation sphere.
-
-        Parameters:
-            snapshot (int): The snapshot to visualize (default is 1).
-        """
-        # Load the density field for the snapshot
-        gasdens = self.sim.load_field("gasdens", snapshot=snapshot, type="scalar")
-
-        # Get the density slice and coordinates for the XZ plane
-        density_slice_xz, mesh_xz = gasdens.meshslice(slice="phi=0")
-        x_xz, z_xz = mesh_xz.x, mesh_xz.z
-
-        # Get the density slice and coordinates for the XY plane
-        density_slice_xy, mesh_xy = gasdens.meshslice(slice="theta=1.56")
-        x_xy, y_xy = mesh_xy.x, mesh_xy.y
-
-        # Extract sphere center and radius
-        sphere_center_x, sphere_center_y, sphere_center_z = self.sphere.center
-        sphere_radius = self.sphere.radius * self.sim.UL / fp.AU  # Convert radius to AU
-
-        # Create the figure with two subplots
-        fig, axes = plt.subplots(1, 2, figsize=(16, 8))
-
-        # Plot the density map for the XZ plane
-        c1 = axes[0].pcolormesh(
-            x_xz,
-            z_xz,
-            np.log10(density_slice_xz * self.sim.URHO ),
-            cmap="Spectral_r",
-            shading="auto"
-        )
-        fig.colorbar(c1, ax=axes[0], label=r"$\log_{10}(\rho)$ [g/cm³]")
-        circle_xz = plt.Circle(
-            (sphere_center_x, sphere_center_z),  # Sphere center in XZ plane
-            sphere_radius,  # Sphere radius
-            color="red",
-            fill=False,
-            linestyle="--",
-            linewidth=3,
-            label="Tessellation Sphere"
-        )
-        axes[0].add_artist(circle_xz)
-        axes[0].set_xlabel("X [AU]")
-        axes[0].set_ylabel("Z [AU]")
-        axes[0].set_xlim(x_xz.min(), x_xz.max())
-        axes[0].set_ylim(z_xz.min(), z_xz.max())
-        axes[0].legend()
-
-        # Plot the density map for the XY plane
-        c2 = axes[1].pcolormesh(
-            x_xy,
-            y_xy,
-            np.log10(density_slice_xy * self.sim.URHO),
-            cmap="Spectral_r",
-            shading="auto"
-        )
-        fig.colorbar(c2, ax=axes[1], label=r"$\log_{10}(\rho)$ [g/cm³]")
-        circle_xy = plt.Circle(
-            (sphere_center_x, sphere_center_y),  # Sphere center in XY plane
-            sphere_radius,  # Sphere radius
-            color="red",
-            fill=False,
-            linestyle="--",
-            linewidth=3,
-            label="Tessellation Sphere"
-        )
-        axes[1].add_artist(circle_xy)
-        axes[1].set_xlabel("X [AU]")
-        axes[1].set_ylabel("Y [AU]")
-        axes[1].set_xlim(x_xy.min(), x_xy.max())
-        axes[1].set_ylim(y_xy.min(), y_xy.max())
-        axes[1].legend()
-
-
-
-class FluxAnalyzer2D:
-    def __init__(self, output_dir, plane="XY",angle="theta=1.56",snapi=110, snapf=210, center=(0,0),radius=1,subdivisions=10):
-        """
-        Initializes the class for 2D flux analysis.
-
-        :param output_dir: Directory containing simulation data.
-        :param plane: Plane to analyze ("XY" or "XZ").
-        :param snapi: Initial snapshot index.
-        :param snapf: Final snapshot index.
-        """
-        self.sim = fp.Simulation(output_dir=output_dir)
-        self.data_handler = fargopy.DataHandler(self.sim)
-        self.data_handler.load_data(plane=plane,angle=angle, snapi=snapi, snapf=snapf)  # Load 2D data
-        self.plane = plane
-        self.subdivisions = subdivisions
-        self.center = center
-        self.radius = radius
-        self.angle = angle
-        self.snapi = snapi
-        self.snapf = snapf
-        self.time = None
-        self.velocities = None
-        self.densities = None
-        self.flows = None
-
-            
-    def interpolate(self, time_steps):
-        """
-        Interpolates velocity and density fields at the circle's perimeter points.
-
-        :param time_steps: Number of time steps for interpolation.
-        """
-        self.time = np.linspace(0, 1, time_steps)
-        angles = np.linspace(0, 2 * np.pi, self.subdivisions, endpoint=False)
-
-        if self.plane == "XY":
-            x = self.center[0] + self.radius * np.cos(angles)
-            y = self.center[1] + self.radius * np.sin(angles)
-            z = np.zeros_like(x)  # z = 0 for the XY plane
-        elif self.plane == "XZ":
-            x = self.center[0] + self.radius * np.cos(angles)
-            z = self.center[1] + self.radius * np.sin(angles)
-            y = np.zeros_like(x)  # y = 0 for the XZ plane
-
-        self.velocities = np.zeros((time_steps, self.subdivisions, 2))
-        self.densities = np.zeros((time_steps, self.subdivisions))
-
-        valid_points = None  # To store valid points for all time steps
-
-        for i, t in enumerate(tqdm(self.time, desc="Interpolating fields")):
-            if self.plane == "XY":
-                vx, vy = self.data_handler.interpolate_velocity(t, x, y)
-                rho = self.data_handler.interpolate_density(t, x, y)
-            elif self.plane == "XZ":
-                vx, vz = self.data_handler.interpolate_velocity(t, x, z)
-                rho = self.data_handler.interpolate_density(t, x, z)
-
-            # Filter points where density is not zero
-            valid_mask = rho > 0
-            if valid_points is None:
-                valid_points = valid_mask  # Initialize valid points
-            else:
-                valid_points &= valid_mask  # Keep only points valid across all time steps
-
-            # Store interpolated values for valid points
-            self.velocities[i, valid_mask, 0] = vx[valid_mask]
-            self.velocities[i, valid_mask, 1] = vy[valid_mask] if self.plane == "XY" else vz[valid_mask]
-            self.densities[i, valid_mask] = rho[valid_mask]
-
-        # Update angles and coordinates to only include valid points
-        self.valid_angles = angles[valid_points]
-        self.valid_x = x[valid_points]
-        self.valid_y = y[valid_points]
-        self.valid_z = z[valid_points] if self.plane == "XZ" else np.zeros_like(self.valid_x)
-
-        return self.velocities, self.densities
-
-    def calculate_fluxes(self):
-        """
-        Calculates the total flux at each time step.
-        """
-        if self.velocities is None or self.densities is None:
-            raise ValueError("Fields have not been interpolated. Call interpolate() first.")
-
-        normals = np.stack((np.cos(self.valid_angles), np.sin(self.valid_angles)), axis=1)
-        dl = 2 * np.pi * self.radius / self.subdivisions  # Differential length
-
-        self.flows = np.zeros(len(self.time))
-
-        for i in range(len(self.time)):
-            velocity_dot_normal = np.einsum('ij,ij->i', self.velocities[i, :len(self.valid_angles)], normals)
-            total_flux = np.sum(self.densities[i, :len(self.valid_angles)] * velocity_dot_normal * dl)
-            self.flows[i] = (total_flux * self.sim.URHO * self.sim.UL**2 * self.sim.UV)* 1e-3 * 1.587e-23   # Convert to physical units
-
-        return self.flows
-    
-    def calculate_accretion(self):
-        """
-        Calculates the accretion rate (dM/dt) and the total accreted mass in the 2D plane.
-
-        :return: A tuple containing:
-            - accretion_rate: Array of accretion rates at each time step in Msun/yr.
-            - total_accreted_mass: Total accreted mass over the simulation time in Msun.
-        """
-        # Ensure densities have been interpolated
-        if self.densities is None:
-            raise ValueError("Densities have not been interpolated. Call interpolate() first.")
-
-        # Differential area for each subdivision
-        dA = (np.pi * self.radius**2) / self.subdivisions  # Area of each segment in AU²
-
-        # Convert density to kg/m² (2D case)
-        rho_conv = self.sim.UM/self.sim.UL**2 *10  # g/cm2 to kg/m2
-
-        # Convert dA to m²
-        dA_m2 = dA * (self.sim.UL * 1e-2)**2  # Convert from cm² to m²
-
-        # Calculate the total mass in the 2D plane at each time step
-        total_mass = np.array([
-            np.sum(self.densities[i] * rho_conv * dA_m2)  # Mass in kg
-            for i in range(len(self.time))
-        ])
-
-        # Calculate the time step in physical units (seconds)
-        dt = (self.time[1] - self.time[0]) * self.sim.UT  # Time step in seconds
-
-        # Calculate the accretion rate as the time derivative of the total mass
-        acc_rate = np.gradient(total_mass, dt)  # dM/dt in kg/s
-
-        # Convert accretion rate to Msun/yr
-        acc_rate_msun_yr = acc_rate * (1 / 1.989e30) * fp.YEAR  # Convert kg/s to Msun/yr
-
-        # Calculate the total accreted mass (in Msun)
-        total_mass_msun = np.sum(acc_rate_msun_yr * dt / fp.YEAR)  # Convert Msun/yr to Msun
-
-        return acc_rate_msun_yr, float(total_mass_msun)
-
-    def plot_fluxes(self):
-        """
-        Plots the total flux as a function of time.
-        """
-        if self.flows is None:
-            raise ValueError("Flows have not been calculated. Call calculate_fluxes() first.")
-
-        # Convert time to physical units
-        duration = (self.snapf - self.snapi + 1) * self.sim.UT / fp.YEAR
-        times = self.time * duration
-        start_time = self.snapi * self.sim.UT / fp.YEAR
-        times += start_time
-
-        average_flux = np.mean(self.flows)
-
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=self.time,
-            y=self.flows,
-            mode='lines',
-            name='Flux',
-            line=dict(color='dodgerblue', width=2)
-        ))
-        fig.add_trace(go.Scatter(
-            x=self.time,
-            y=[average_flux] * len(times),
-            mode='lines',
-            name=f'Avg: {average_flux:.2e} [Msun/yr]',
-            line=dict(color='orangered', width=2, dash='dash')
-        ))
-        fig.update_layout(
-            title=f"Total Flux over Region (R={self.radius:.3f} [AU])",
-            xaxis_title="Normalized Time",
-            yaxis_title="Flux [Msun/yr]",
-            template="plotly_white",
-            font=dict(size=14),
-            xaxis=dict(showgrid=True),
-            yaxis=dict(showgrid=True, exponentformat="e"),
-        )
-        fig.show()
-
-    def plot_region(self, snapshot=1):
-        """
-        Plots the density map in 2D with the valid circular perimeter overlaid.
-
-        :param snapshot: Snapshot to visualize.
-        """
-        # Load the density field for the snapshot
-        gasdens = self.sim.load_field("gasdens", snapshot=snapshot, type="scalar")
-
-        # Get the density slice and coordinates for the selected plane
-        if self.plane == "XY":
-            density_slice, mesh = gasdens.meshslice(slice=self.angle)
-            x, y = mesh.x, mesh.y
-        elif self.plane == "XZ":
-            density_slice, mesh = gasdens.meshslice(slice=self.angle)
-            x, y = mesh.x, mesh.z
+        if self.type == "sphere":
+            self._tessellate_sphere()
+        elif self.type == "cylinder":
+            self._tessellate_cylinder()
         else:
-            raise ValueError("Invalid plane. Choose 'XY' or 'XZ'.")
+            raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
 
-        # Plot the density map
-        fig, ax = plt.subplots(figsize=(6, 6))
-        c = ax.pcolormesh(
-            x, y, np.log10(density_slice * self.sim.URHO),
-            cmap="Spectral_r", shading="auto"
-        )
-        fig.colorbar(c, ax=ax, label=r"$\log_{10}(\rho)$ $[g/cm^3]$")
+    def generate_dataframe(self):
+        """
+        Generate a pandas DataFrame with tessellation data (centers, normals, areas).
 
-        # Add the circular perimeter
-        circle = plt.Circle(
-            self.center,  # Sphere center in the selected plane
-            self.radius,  # Sphere radius
-            color="red",
-            fill=False,
-            linestyle="--",
-            linewidth=2
-        )
-        ax.add_artist(circle)  # Add the circle to the plot
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: 'Center', 'Normal', 'Area'.
+        """
+        data = []
+        for i, (center, normal, area) in enumerate(zip(self.centers, self.normals, self.areas)):
+            data.append({
+                "Center": center.tolist(),
+                "Normal": normal.tolist(),
+                "Area": area
+            })
+        return pd.DataFrame(data)
 
-        # Set plot labels and limits
-        ax.set_xlabel(f"{self.plane[0]} [AU]")
-        ax.set_ylabel(f"{self.plane[1]} [AU]")
-        ax.set_xlim(x.min(), x.max())
-        ax.set_ylim(y.min(), y.max())
-        ax.legend()
+    def total_mass(self, sim, field='gasdens', n_samples=10000, snapshot=[0,1], interpolator='griddata', method='linear', cut_r=None, follow_planet=True, planet_index=0):
+        """
+        Estimate the total mass inside the surface using Monte Carlo sampling.
+
+        Parameters
+        ----------
+        sim : Simulation
+            Simulation object (must have load_field method).
+        field : str
+            Density field name (default 'gasdens').
+        n_samples : int
+            Number of random points for Monte Carlo integration.
+        snapshot : int or list
+            Snapshot(s) to evaluate the field.
+        interpolator : str
+            Interpolation algorithm.
+        method : str
+            Interpolation method.
+        cut_r : float, optional
+            Cut radius for loading field data.
+        follow_planet : bool
+            If True, update surface to follow planet at each snapshot.
+        planet_index : int
+            Index of the planet to follow.
+
+        Returns
+        -------
+        float or np.ndarray
+            Estimated total mass (array if multiple snapshots).
+        """
+        if isinstance(snapshot, int):
+            times = [snapshot]
+        else:
+            times = np.linspace(snapshot[0], snapshot[1], snapshot[1]-snapshot[0]+1)
+        mass = np.zeros(len(times))
+
+        for i, t in enumerate(tqdm(times, desc="Calculating total mass")):
+            # Update surface if following planet
+            if follow_planet:
+                planet = sim.load_planets(snapshot=int(t))[planet_index]
+                self.center = np.array([planet.pos.x, planet.pos.y, planet.pos.z])
+                if hasattr(planet, 'hill_radius'):
+                    self.radius = planet.hill_radius
+                self.tessellate()
+
+            # Generate random points inside the sphere
+            u = np.random.uniform(0, 1, int(n_samples))
+            v = np.random.uniform(0, 1, int(n_samples))
+            w = np.random.uniform(0, 1, int(n_samples))
+
+            r = self.radius * np.cbrt(u)
+            theta = np.arccos(1 - 2 * v)
+            phi = 2 * np.pi * w
+
+            x = r * np.sin(theta) * np.cos(phi) + self.center[0]
+            y = r * np.sin(theta) * np.sin(phi) + self.center[1]
+            z = r * np.cos(theta) + self.center[2]
+
+            # Apply z_cut if specified
+            if self.z_cut is not None:
+                mask = z > self.z_cut
+                x, y, z = x[mask], y[mask], z[mask]
+                n_effective = len(x)
+                h = self.radius + self.center[2] - self.z_cut
+                h = np.clip(h, 0, 2*self.radius)
+                volume = (1/3) * np.pi * h**2 * (3*self.radius - h)
+            else:
+                n_effective = int(n_samples)
+                volume = (4/3) * np.pi * self.radius**3
+
+            # Interpolate density at the random points
+            if cut_r is not None:
+                field_interp = sim.load_field(
+                    fields=[field],
+                    snapshot=[int(t)],
+                    cut=(self.center[0], self.center[1], self.center[2], cut_r),
+                    interpolate=True
+                )
+            else:
+                field_interp = sim.load_field(
+                    fields=[field],
+                    snapshot=[int(t)],
+                    cut=(self.center[0], self.center[1], self.center[2], self.radius*2),
+                    interpolate=True
+                )
+
+            rho = field_interp.evaluate(
+                time=t,
+                var1=x,
+                var2=y,
+                var3=z,
+                interpolator=interpolator,
+                method=method
+            )
+            avg_rho = np.mean(rho[~np.isnan(rho)])
+            mass[i] = avg_rho * volume
+
+        if len(mass) == 1:
+            return mass[0]
+        return mass
+
+    def mass_flux(self, sim, field_density='gasdens', field_velocity='gasv', snapshot=[0, 1], interpolator='griddata', method='linear', follow_planet=True, planet_index=0):
+        """
+        Compute the total mass flux through the surface for a range of snapshots.
+
+        Parameters
+        ----------
+        sim : Simulation
+            Simulation object (must have load_field and load_planets methods).
+        field_density : str
+            Name of the density field (default 'gasdens').
+        field_velocity : str
+            Name of the velocity field (default 'gasv').
+        snapshot : list
+            Range of snapshots (e.g., [0, 1]).
+        interpolator : str
+            Interpolation algorithm.
+        method : str
+            Interpolation method.
+        follow_planet : bool
+            If True, update surface to follow planet at each snapshot.
+        planet_index : int
+            Index of the planet to follow.
+
+        Returns
+        -------
+        np.ndarray
+            Array with the total mass flux for each snapshot.
+        """
+        steps = snapshot[1] - snapshot[0] + 1
+        times = np.linspace(snapshot[0], snapshot[1], steps)
+        flux = np.zeros(len(times))
+
+        for i, t in enumerate(tqdm(times, desc="Calculating mass flux")):
+            # Update surface parameters if following a planet
+            if follow_planet:
+                planet = sim.load_planets(snapshot=int(t))[planet_index]
+                self.center = np.array([planet.pos.x, planet.pos.y, planet.pos.z])
+                if hasattr(planet, 'hill_radius'):
+                    self.radius = planet.hill_radius
+                self.tessellate()  # Recompute tessellation for new center/radius
+
+            # Select centers, normals, and areas according to surface type
+            if self.type == "sphere":
+                centers = self.centers
+                normals = self.normals
+                areas = self.areas
+                surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius)
+            elif self.type == "cylinder":
+                centers = np.concatenate([self.top_centers, self.bottom_centers, self.lateral_centers], axis=0)
+                normals = np.concatenate([self.top_normals, self.bottom_normals, self.lateral_normals], axis=0)
+                areas = np.concatenate([
+                    np.full(self.top_centers.shape[0], self.top_areas),
+                    np.full(self.bottom_centers.shape[0], self.bottom_areas),
+                    np.full(self.lateral_centers.shape[0], self.lateral_areas)
+                ])
+                surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius, 2*self.height)
+            else:
+                raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
+
+            # Load fields for this snapshot and cut
+            fields = sim.load_field(
+                fields=[field_density, field_velocity],
+                snapshot=[int(t)],
+                interpolate=True,
+                cut=surface_cut
+            )
+
+            # Evaluate density at the surface centers
+            rho = fields[0].evaluate(
+                time=t,
+                var1=centers[:, 0],
+                var2=centers[:, 1],
+                var3=centers[:, 2],
+                interpolator=interpolator,
+                method=method
+            )
+            # Evaluate velocity at the surface centers
+            vel = fields[1].evaluate(
+                time=t,
+                var1=centers[:, 0],
+                var2=centers[:, 1],
+                var3=centers[:, 2],
+                interpolator=interpolator,
+                method=method
+            )
+            if vel.shape[0] == 3 and vel.shape[1] == len(rho):
+                vel = vel.T  # (N, 3)
+            v_dot_n = np.einsum('ij,ij->i', vel, normals)
+            dF = rho * v_dot_n * areas
+            flux[i] = np.nansum(dF)
+
+        return flux
+
+
+# class Analyzer:
+#     """
+#     General class for performing calculations and integrals on 3D surfaces or 2D slices
+#     using simulation data. Handles field loading, interpolation, and integration.
+#     """
+
+#     def __init__(self, simulation, surface=None, slice=None, fields=None, snapshots=(1, 10), interpolator='griddata', method='linear', interp_kwargs=None):
+#         """
+#         Initialize an Analyzer object.
+
+#         Parameters
+#         ----------
+#         simulation : Simulation
+#             The simulation object (e.g., fp.Simulation).
+#         surface : Surface, optional
+#             The 3D surface object for 3D calculations.
+#         slice : str, optional
+#             The 2D slice specification for 2D calculations.
+#         fields : list of str
+#             List of fields to load (e.g., ['gasdens', 'gasv']).
+#         snapshots : tuple
+#             Range of snapshots to load (e.g., (1, 10)).
+#         interpolator : str
+#             Interpolation algorithm.
+#         method : str
+#             Interpolation method.
+#         interp_kwargs : dict, optional
+#             Extra kwargs for the interpolator.
+#         """
+#         self.sim = simulation
+#         self.surface = surface
+#         self.slice = slice
+#         self.fields = fields
+#         self.snapshots = snapshots
+#         self.interpolator = interpolator
+#         self.method = method
+#         self.interp_kwargs = interp_kwargs or {}
+#         self.time = None
+#         self.interpolated_fields = None
+
+#         # Load fields with interpolation
+#         self.load_fields()
+
+#     def load_fields(self):
+#         """
+#         Load and interpolate the fields based on the provided configuration.
+#         Ensures self.interpolated_fields is always a list, even for a single field.
+#         """
+#         if self.surface is not None:  # 3D case
+#             self.interpolated_fields = self.sim.load_field(
+#                 fields=self.fields,
+#                 snapshot=self.snapshots,
+#                 interpolate=True
+#             )
+#             # Ensure it's always a list
+#             if not isinstance(self.interpolated_fields, (list, tuple)):
+#                 self.interpolated_fields = [self.interpolated_fields]
+#         elif self.slice is not None:  # 2D case
+#             self.interpolated_fields = self.sim.load_field(
+#                 fields=self.fields,
+#                 slice=self.slice,
+#                 snapshot=self.snapshots,
+#                 interpolate=True
+#             )
+#             if not isinstance(self.interpolated_fields, (list, tuple)):
+#                 self.interpolated_fields = [self.interpolated_fields]
+#         else:
+#             raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
+
+#     def evaluate_fields(
+#         self, time, coordinates,
+#         griddata_kwargs=None, rbf_kwargs=None, idw_kwargs=None, linearnd_kwargs=None
+#     ):
+#         """
+#         Evaluate interpolated fields at a given time and coordinates, allowing specific kwargs for each interpolator.
+
+#         Parameters
+#         ----------
+#         time : float
+#             The time at which to evaluate.
+#         coordinates : tuple of np.ndarray
+#             The coordinates (x, y, z) or (x, z).
+#         griddata_kwargs : dict, optional
+#             Optional kwargs for griddata.
+#         rbf_kwargs : dict, optional
+#             Optional kwargs for RBF.
+#         idw_kwargs : dict, optional
+#             Optional kwargs for IDW.
+#         linearnd_kwargs : dict, optional
+#             Optional kwargs for LinearND.
+
+#         Returns
+#         -------
+#         dict
+#             Dictionary with the field values.
+#         """
+#         results = {}
+#         for field, interp in zip(self.fields, self.interpolated_fields):
+#             # Prepare kwargs in the same format as FieldInterpolator.evaluate
+#             eval_kwargs = {}
+#             if griddata_kwargs is not None:
+#                 eval_kwargs["griddata_kwargs"] = griddata_kwargs
+#             if rbf_kwargs is not None:
+#                 eval_kwargs["rbf_kwargs"] = rbf_kwargs
+#             if idw_kwargs is not None:
+#                 eval_kwargs["idw_kwargs"] = idw_kwargs
+#             if linearnd_kwargs is not None:
+#                 eval_kwargs["linearnd_kwargs"] = linearnd_kwargs
+
+#             field_values = interp.evaluate(
+#                 time=time,
+#                 var1=coordinates[0],
+#                 var2=coordinates[1],
+#                 var3=coordinates[2] if len(coordinates) > 2 else None,
+#                 interpolator=self.interpolator,
+#                 method=self.method,
+#                 **eval_kwargs
+#             )
+
+#             if field == 'gasv':
+#                 results[field] = np.array(field_values).T
+#             else:
+#                 results[field] = field_values
+
+#         return results
+    
+
+#     def calculate_integral(self, integrand, time_steps, dtype):
+#         """
+#         Calculates an integral based on the provided integrand and integration type.
+
+#         Parameters
+#         ----------
+#         integrand : callable
+#             Function defining the integrand, accepting field values as keyword arguments.
+#         time_steps : int
+#             Number of time steps for the calculation.
+#         dtype : str
+#             Type of integration: 'area', 'volume', or 'line'.
+
+#         Returns
+#         -------
+#         np.ndarray
+#             Array of results for each time step.
+#         """
+#         self.time = np.linspace(0, 1, time_steps)
+#         results = np.zeros(len(self.time))
+
+#         if self.surface is not None:  # 3D case
+#             xc, yc, zc = self.surface.centers[:, 0], self.surface.centers[:, 1], self.surface.centers[:, 2]
+#             # Select weights according to the integration type
+#             if dtype == 'volume':
+#                 weights = self.surface.volume
+#             elif dtype == 'area':
+#                 weights = self.surface.areas
+#             else:
+#                 raise ValueError("For 3D, dtype must be 'area' or 'volume'.")
+#             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
+#                 field_values = self.evaluate_fields(t, (xc, yc, zc))
+#                 integrand_values = integrand(**field_values)
+#                 results[i] = np.sum(integrand_values * weights)
+
+#         elif self.slice is not None:  # 2D case
+#             n_points = len(self.surface.centers)
+#             angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
+#             x = self.surface.center[0] + self.surface.radius * np.cos(angles)
+#             y = self.surface.center[1] + self.surface.radius * np.sin(angles)
+#             # Select weights according to the integration type
+#             if dtype == 'line':
+#                 dl = 2 * np.pi * self.surface.radius / n_points
+#                 weights = dl
+#             elif dtype == 'area':
+#                 weights = np.ones(n_points)  # You can define area elements if needed
+#             else:
+#                 raise ValueError("For 2D, dtype must be 'line' or 'area'.")
+#             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
+#                 field_values = self.evaluate_fields(t, (x, y))
+#                 integrand_values = integrand(**field_values)
+#                 results[i] = np.sum(integrand_values * weights)
+
+#         else:
+#             raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
+
+#         return results
+    
+#     def total_masss(sim, time_steps, surface):
+#         """
+#         Calculate the total mass within the defined surface over time.
+
+#         Parameters
+#         ----------
+#         sim : Simulation
+#             Simulation object.
+#         time_steps : tuple
+#             Limits of time steps for the calculation.
+#         surface : Surface
+#             Surface object (must have .type, .center, .radius, .height if cylinder).
+
+#         Returns
+#         -------
+#         np.ndarray
+#             Array of total mass at each time step.
+#         """
+
+#         # Detect surface type and build the cut tuple
+#         if surface.type == "sphere":
+#             # cut = (xc, yc, zc, r)
+#             surface_cut = (surface.center[0], surface.center[1], surface.center[2], surface.radius)
+#             volume = surface.volume
+#             centers = surface.centers
+#         elif surface.type == "cylinder":
+#             # cut = (xc, yc, zc, rc, hc)
+#             surface_cut = (surface.center[0], surface.center[1], surface.center[2], surface.radius, surface.height)
+#             # For cylinder, you may want to use lateral_centers and lateral_areas, or combine all
+#             # Here, we use all points (top, bottom, lateral) and sum their contributions
+#             centers = np.concatenate([surface.top_centers, surface.bottom_centers, surface.lateral_centers], axis=0)
+#             volume = np.concatenate([
+#                 np.full(surface.top_centers.shape[0], surface.top_areas),
+#                 np.full(surface.bottom_centers.shape[0], surface.bottom_areas),
+#                 np.full(surface.lateral_centers.shape[0], surface.lateral_areas)
+#             ])
+#         else:
+#             raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
+
+#         steps = time_steps[1] - time_steps[0]
+#         time = np.linspace(time_steps[0], time_steps[1], steps)
+#         mass = np.zeros(len(time))
+
+#         gasdens = sim.load_field(
+#             fields=['gasdens'],
+#             snapshot=time_steps,
+#             cut=surface_cut,
+#             interpolate=True
+#         )
+
+#         for i, t in enumerate(tqdm(time, desc="Calculating total mass")):
+#             rho = gasdens.evaluate(
+#                 time=t,
+#                 var1=centers[:, 0],
+#                 var2=centers[:, 1],
+#                 var3=centers[:, 2]
+#             )
+#             mass[i] = np.sum(rho * volume)
+
+#         return mass

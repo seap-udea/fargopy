@@ -15,6 +15,10 @@ import time
 import gdown
 import os
 import signal
+import ipywidgets as widgets
+import matplotlib.pyplot as plt
+from IPython.display import display, clear_output
+from pathlib import Path
 
 ###############################################################
 # Constants
@@ -62,35 +66,155 @@ PRECOMPUTED_SIMULATIONS = dict(
 )
 
 if not fargopy.IN_COLAB:
-    signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+    # SIGCHLD is only available on Unix-like systems (Linux, macOS)
+    if hasattr(signal, 'SIGCHLD'):
+        signal.signal(signal.SIGCHLD, signal.SIG_IGN)
 
 ###############################################################
 # Classes
 ###############################################################
-class Simulation(fargopy.Fargobj):
 
-    def __init__(self,**kwargs):
-        """Initialize a simulation.
+class Planet:
+    """
+    Represents a planet in the simulation, holding its physical state and properties.
 
-        Examples:
-            Create an empty simulation (no setup chosen):
-            >>> sim = fargopy.Simulation()
+    Attributes
+    ----------
+    name : str
+        Name or label of the planet.
+    mass : float
+        Planet mass (in Msun or simulation units).
+    pos : Planet.Vector
+        Current cartesian position (x, y, z) in AU.
+    vel : Planet.Vector
+        Current cartesian velocity (vx, vy, vz) in AU/UT.
+    posi : Planet.Vector
+        Initial cartesian position (x, y, z) in AU.
+    mstar : float
+        Stellar mass (in Msun or simulation units).
 
-            Create a simulation using a specific base FARGO3D directory (no setup chosen):
-            >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
+    Properties
+    ----------
+    hill_radius : float
+        The Hill radius of the planet (in AU), computed from its current position and mass.
 
-            Create a simulation starting with setup directory: 
-            >>> sim = fargopy.Simulation(setup='fargo')
-            
-            Connect to an existing simulation:
-            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+    Example
+    -------
+    >>> jupiter = planets[0]
+    >>> print(jupiter.pos.x, jupiter.vel.y, jupiter.hill_radius)
+    """
+    def __init__(self, name, pos, vel, mass, posi, mstar):
+        self.name = name
+        self.mass = mass
+        self.pos = Planet._Vector(*pos)
+        self.vel = Planet._Vector(*vel)
+        self.posi = Planet._Vector(*posi)
+        self.mstar = mstar
 
-            Load an already existing simulation:
-            >>> sim = fargopy.Simulation(setup='fargo',load=True)
+    class _Vector:
         """
+        Simple vector class for 3D coordinates, allowing attribute and index access.
 
+        Attributes
+        ----------
+        x : float
+            X coordinate.
+        y : float
+            Y coordinate.
+        z : float
+            Z coordinate.
+        """
+        def __init__(self, x, y, z):
+            self.x = x
+            self.y = y
+            self.z = z
+        def __getitem__(self, idx):
+            return [self.x, self.y, self.z][idx]
+        def __array__(self):
+            import numpy as np
+            return np.array([self.x, self.y, self.z])
+        def __repr__(self):
+            return f"[{self.x}, {self.y}, {self.z}]"
+
+    @property
+    def hill_radius(self):
+        """
+        .. :no-index:
+
+        Returns the Hill radius in AU, using the current position and mass.
+
+        Returns
+        -------
+        float
+            Hill radius in AU.
+        """
+        AU_to_cm = 1.495978707e13
+        Mjup_to_g = 1.898e30
+        Msun_to_g = 1.989e33
+
+        # Distance to star (AU)
+        r_au = (self.pos.x**2 + self.pos.y**2 + self.pos.z**2)**0.5
+        m_jup = self.mass * 1e3  # Msun to Mjup
+        mstar_g = float(self.mstar) * Msun_to_g
+        r_cm = r_au * AU_to_cm
+        m_p = m_jup * Mjup_to_g
+
+        r_hill_cm = r_cm * (m_p / (3 * mstar_g))**(1/3)
+        r_hill_au = r_hill_cm / AU_to_cm
+        return r_hill_au
+
+    def __repr__(self):
+        """
+        String representation of the Planet object.
+
+        Returns
+        -------
+        str
+        """
+        return f"Planet(name={self.name}, mass={self.mass}, pos={self.pos}, vel={self.vel}, posi={self.posi})"
+
+class Simulation(fargopy.Fargobj):
+    """
+    Main class for managing a FARGOpy simulation. Handles setup, compilation, running, and data access
+    for FARGO3D simulations, including units, directories, and output management.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Keyword arguments for simulation configuration. See examples below.
+
+    Examples
+    --------
+    Create an empty simulation (no setup chosen):
+        >>> sim = fargopy.Simulation()
+
+    Create a simulation using a specific base FARGO3D directory (no setup chosen):
+        >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
+
+    Create a simulation starting with setup directory:
+        >>> sim = fargopy.Simulation(setup='fargo')
+
+    Connect to an existing simulation:
+        >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+
+    Load an already existing simulation:
+        >>> sim = fargopy.Simulation(setup='fargo', load=True)
+    """
+    def __init__(self,**kwargs):
+        """
+        Initialize a Simulation object. See class docstring for usage examples.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Simulation configuration options.
+        """
         super().__init__(**kwargs)
-        
+
+        # Default to CGS units
+        self.units_system = 'CGS'
+        self._set_constants_cgs()
+
         # Load simulation configuration from a file
         if ('load' in kwargs.keys()) and kwargs['load']:
             
@@ -104,10 +228,10 @@ class Simulation(fargopy.Fargobj):
                 fargo3d_dir = fargopy.Conf.FP_FARGO3D_DIR
             
             # Load simulation
-            load_from = f"{fargo3d_dir}/setups/{setup}".replace('//','/')
+            load_from = os.path.join(fargo3d_dir, 'setups', setup)
             if not os.path.isdir(load_from):
                 print(f"Directory for loading simulation '{load_from}' not found.")
-            json_file = f"{load_from}/fargopy_simulation.json"
+            json_file = os.path.join(load_from, 'fargopy_simulation.json')
 
             print(f"Loading simulation from '{json_file}'")
             if not os.path.isfile(json_file):
@@ -136,13 +260,13 @@ class Simulation(fargopy.Fargobj):
         # Set properties
         self.set_property('fargo3d_dir',
                           fargopy.Conf.FP_FARGO3D_DIR,
-                          self.set_fargo3d_dir)
+                          self._set_fargo3d_dir)
         self.set_property('setup',
                           None,
-                          self.set_setup)
+                          self._set_setup)
         self.set_property('output_dir',
                           None,
-                          self.set_output_dir)
+                          self._set_output_dir)
         self.set_property('fargo3d_compilation_options',
                           dict(parallel=0,gpu=0,options=''))
 
@@ -163,16 +287,19 @@ class Simulation(fargopy.Fargobj):
     # ##########################################################################
     # Set special properties
     # ##########################################################################  
-    def set_fargo3d_dir(self,dir=None):
-        """Set fargo3d directory
+    def _set_fargo3d_dir(self,dir=None):
+        """
+        Set the FARGO3D directory for the simulation.
 
-        Args:
-            dir: string, default = None:
-                Directory where FARGO3D is installed.
+        Parameters
+        ----------
+        dir : str, optional
+            Directory where FARGO3D is installed.
 
-        Returns:
-            True if the FARGO3D directory exists and the file
-            'src/<fargo_header>' is found. False otherwise.
+        Returns
+        -------
+        bool or None
+            True if the directory exists and the header file is found, False otherwise.
         """
         if dir is None:
             return
@@ -180,7 +307,7 @@ class Simulation(fargopy.Fargobj):
             print(f"FARGO3D directory '{dir}' does not exist.")
             return
         else:
-            fargo_header = f"{dir}/{fargopy.Conf.FP_FARGO3D_HEADER}".replace('//','/')
+            fargo_header = os.path.join(dir, fargopy.Conf.FP_FARGO3D_HEADER)
             if not os.path.isfile(fargo_header):
                 print(f"No header file for FARGO3D found in '{fargo_header}'")
             else:
@@ -188,39 +315,45 @@ class Simulation(fargopy.Fargobj):
         
         # Set derivative dirs
         self.fargo3d_dir = dir
-        self.outputs_dir = (self.fargo3d_dir + '/outputs').replace('//','/')
-        self.setups_dir = (self.fargo3d_dir + '/setups').replace('//','/')
+        self.outputs_dir = os.path.join(self.fargo3d_dir, 'outputs')
+        self.setups_dir = os.path.join(self.fargo3d_dir, 'setups')
     
-    def set_setup(self,setup):
-        """Connect the simulation to a given setup.
+    def _set_setup(self,setup):
+        """
+        Connect the simulation to a given setup.
 
-        Args:
-            setup: string:
-                Name of the setup.
-        
-        Returns:
-            True if the setup_dir <faro3d_dir>/setups/<setup> is found. 
-            False otherwise.
+        Parameters
+        ----------
+        setup : str
+            Name of the setup.
+
+        Returns
+        -------
+        str or None
+            The setup name if successful, None otherwise.
         """
         if setup is None:
             self.setup_dir = None
             return None
-        setup_dir = f"{self.setups_dir}/{setup}".replace('//','/')
-        if self.set_setup_dir(setup_dir):
+        setup_dir = os.path.join(self.setups_dir, setup)
+        if self._set_setup_dir(setup_dir):
             self.setup = setup
-            self.logfile = f"{self.setup_dir}/{self.setup}.log"
+            self.logfile = os.path.join(self.setup_dir, f"{self.setup}.log")
         return setup
     
-    def set_setup_dir(self,dir):
-        """Set setup directory
+    def _set_setup_dir(self,dir):
+        """
+        Set the setup directory.
 
-        Args:
-            dir: string:
-                Directory where setup is available.
+        Parameters
+        ----------
+        dir : str
+            Directory where setup is available.
 
-        Returns:
-            True if the FARGO3D directory exists and the file
-            <fargo3d_dir>/src/<fargo_header> is found. False otherwise.
+        Returns
+        -------
+        bool
+            True if the setup directory exists, False otherwise.
         """
         if dir is None:
             return False
@@ -233,8 +366,14 @@ class Simulation(fargopy.Fargobj):
         self.setup_dir = dir
         return True
 
-    def set_output_dir(self,dir):
-        """Connect a simulation with a directory where the outputs are stored.
+    def _set_output_dir(self,dir):
+        """
+        Connect a simulation with a directory where the outputs are stored.
+
+        Parameters
+        ----------
+        dir : str
+            Output directory path.
         """
         if dir is None:
             return
@@ -245,15 +384,75 @@ class Simulation(fargopy.Fargobj):
             print(f"Now you are connected with output directory '{dir}'")
             self.output_dir = dir
             # Check if there are results 
-            par_file = f"{dir}/variables.par".replace('//','/')
+            par_file = os.path.join(dir, 'variables.par')
             if os.path.isfile(par_file):
                 print(f"Found a variables.par file in '{dir}', loading properties")
                 self.load_properties()
         
         return
+    
+    ################################
+    ##  UNITS
+    ################################
+
+    def units(self, system):
+        """
+        Set the units system for the simulation.
+
+        Parameters
+        ----------
+        system : str
+            The units system to use ('CGS' or 'MKS').
+        """
+        if system.upper() == 'CGS':
+            self._set_constants_cgs()
+            self.units_system = 'CGS'
+            print("Units set to CGS.")
+        elif system.upper() == 'MKS':
+            self._set_constants_mks()
+            self.units_system = 'MKS'
+            print("Units set to MKS.")
+        else:
+            raise ValueError("Invalid units system. Use 'CGS' or 'MKS'.")
+
+    def _set_constants_cgs(self):
+        """
+        Set physical constants in CGS units.
+        """
+        self.KB = 1.380650424e-16  # Boltzmann constant: erg/K
+        self.MP = 1.672623099e-24  # Mass of the proton, g
+        self.GCONST = 6.67259e-8  # Gravitational constant, cm^3/g/s^2
+        self.RGAS = 8.314472e7  # Gas constant, erg/K/mol
+        self.MSUN = 1.9891e33  # Solar mass, g
+        self.AU = 1.49598e13  # Astronomical unit, cm
+        self.YEAR = 31557600.0  # Year, s
+
+    def _set_constants_mks(self):
+        """
+        Set physical constants in MKS units.
+        """
+        self.KB = 1.380649e-23  # Boltzmann constant: J/K
+        self.MP = 1.6726219e-27  # Mass of the proton, kg
+        self.GCONST = 6.67430e-11  # Gravitational constant, m^3/kg/s^2
+        self.RGAS = 8.314462618  # Gas constant, J/K/mol
+        self.MSUN = 1.9891e30  # Solar mass, kg
+        self.AU = 1.49598e11  # Astronomical unit, m
+        self.YEAR = 31557600.0  # Year, s
 
     def set_units(self,UM=MSUN,UL=AU,G=1,mu=2.35):
-        """Set units of the simulation
+        """
+        Set the units of the simulation.
+
+        Parameters
+        ----------
+        UM : float
+            Mass unit (default: MSUN).
+        UL : float
+            Length unit (default: AU).
+        G : float
+            Gravitational constant (default: 1).
+        mu : float
+            Mean molecular weight (default: 2.35).
         """
         # Basic
         self.UM = UM
@@ -269,12 +468,27 @@ class Simulation(fargopy.Fargobj):
         self.URHO = self.UM/self.UL**3 # In kg/m^3
         self.UEPS = self.UM/(self.UL*self.UT**2)  # In J/m^3
         self.UV = self.UL/self.UT
-    
+
+
     # ##########################################################################
     # Control methods
     # ##########################################################################  
     def compile(self,setup=None,parallel=0,gpu=0,options='',force=False):
-        """Compile FARGO3D binary
+        """
+        Compile the FARGO3D binary for the current setup.
+
+        Parameters
+        ----------
+        setup : str, optional
+            Name of the setup to compile.
+        parallel : int, optional
+            Use parallel compilation (default: 0).
+        gpu : int, optional
+            Use GPU compilation (default: 0).
+        options : str, optional
+            Additional compilation options.
+        force : bool, optional
+            If True, clean the directory before compiling.
         """
         if setup is not None:
             if not self.set_setup(setup):
@@ -314,7 +528,22 @@ class Simulation(fargopy.Fargobj):
             print(f"Something failed when compiling FARGO3D. For details check '{self.setup_dir}/compilation.log")
             
     def _generate_binary_name(self,parallel=0,gpu=0,options=''):
-        """Generate binary name
+        """
+        Generate the binary name for the compiled FARGO3D executable.
+
+        Parameters
+        ----------
+        parallel : int
+            Parallel option.
+        gpu : int
+            GPU option.
+        options : str
+            Additional options.
+
+        Returns
+        -------
+        tuple
+            (binary_name, compile_options)
         """
         compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
         fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
@@ -328,6 +557,26 @@ class Simulation(fargopy.Fargobj):
             cleanrun=False,
             test=False,
             unlock=True):
+        """
+        Run the FARGO3D simulation.
+
+        Parameters
+        ----------
+        mode : str, optional
+            'async' for asynchronous or 'sync' for synchronous execution.
+        options : str, optional
+            Command-line options for FARGO3D.
+        mpioptions : str, optional
+            MPI options for parallel runs.
+        resume : bool, optional
+            Resume from previous run.
+        cleanrun : bool, optional
+            Clean output directory before running.
+        test : bool, optional
+            If True, do not actually run the simulation.
+        unlock : bool, optional
+            If True, unlock the simulation if locked.
+        """
 
         if self.fargo3d_binary is None:
             print("You must first compile your simulation with: <simulation>.compile(<option>).")
@@ -350,7 +599,7 @@ class Simulation(fargopy.Fargobj):
         # Clean output if available
         if cleanrun:
             # Check if there is an output director
-            output_dir = f"{self.outputs_dir}/{self.setup}"
+            output_dir = os.path.join(self.outputs_dir, self.setup)
             if os.path.isdir(output_dir):
                 self.output_dir = output_dir
                 self.clean_output()
@@ -365,7 +614,7 @@ class Simulation(fargopy.Fargobj):
         # Preparing command
         run_cmd = f"{precmd} ./{self.fargo3d_binary} {options} setups/{self.setup}/{self.setup}.par"
 
-        self.json_file = f"{self.setup_dir}/fargopy_simulation.json"
+        self.json_file = os.path.join(self.setup_dir, 'fargopy_simulation.json')
         if mode == 'sync':
             # Save object 
             self.save_object(self.json_file)
@@ -413,7 +662,7 @@ class Simulation(fargopy.Fargobj):
                     )
 
                     # Setup output directory 
-                    self.set_output_dir(f"{self.outputs_dir}/{self.setup}".replace('//','/'))    
+                    self.set_output_dir(os.path.join(self.outputs_dir, self.setup))    
 
                     # Save object 
                     self.save_object(self.json_file)
@@ -424,6 +673,9 @@ class Simulation(fargopy.Fargobj):
             return
                     
     def stop(self):
+        """
+        Stop the running FARGO3D process and unlock the simulation directory.
+        """
         # Check if the directory is locked
         lock_info = fargopy.Sys.is_locked(self.setup_dir)
         
@@ -447,7 +699,15 @@ class Simulation(fargopy.Fargobj):
             print(f"The process has finished. Check logfile {self.logfile}.")
 
     def unlock_simulation(self,lock_info=None,force=True):
-        """Unlock a simulation
+        """
+        Unlock a simulation directory, killing the process if necessary.
+
+        Parameters
+        ----------
+        lock_info : dict, optional
+            Lock information.
+        force : bool, optional
+            If True, force unlock.
         """
         if lock_info is None and force:
             lock_info = fargopy.Sys.is_locked(self.setup_dir)
@@ -461,18 +721,17 @@ class Simulation(fargopy.Fargobj):
             fargopy.Sys.unlock(self.setup_dir)
         
     def status(self,mode='isrunning',verbose=True,**kwargs):
-        """Check the status of the running process
+        """
+        Check the status of the running process.
 
-        Parameters:
-            mode: string, defaul='isrunning':
-                Available modes:
-                    'isrunning': Just show if the process is running.
-                    'logfile': Show the latest lines of the logfile
-                    'outputs': Show (and return) a list of outputs
-                    'snapshots': Show (and return) a list of snapshots
-                    'progress': Show progress in realtime
-                    'locking': Show if the directory is locked
-
+        Parameters
+        ----------
+        mode : str, optional
+            Status mode ('isrunning', 'logfile', 'outputs', 'progress', 'summary', 'locking', or 'all').
+        verbose : bool, optional
+            If True, print detailed output.
+        **kwargs : dict
+            Additional keyword arguments.
         """
         # Bar separating output 
         bar = f"\n{''.join(['#']*80)}\n"
@@ -541,14 +800,15 @@ class Simulation(fargopy.Fargobj):
         print(f"\nOther status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'")
 
     def _status_progress(self,minfreq=0.1,numstatus=100):
-        """Show a progress of the execution
+        """
+        Show a progress of the execution.
 
-        Parameters:
-            minfreq: float, default = 0.1:
-                Minimum amount of seconds between status check.
-
-            numstatus: int, default = 5:
-                Number of status shown before automatically stopping.
+        Parameters
+        ----------
+        minfreq : float, optional
+            Minimum seconds between status checks.
+        numstatus : int, optional
+            Number of status updates before stopping.
         """
         # Prepare
         if 'status_frequency' not in self.__dict__.keys():
@@ -605,6 +865,16 @@ class Simulation(fargopy.Fargobj):
                     return
                 
     def resume(self,snapshot=-1,mpioptions='-np 1'):
+        """
+        Resume the simulation from a given snapshot.
+
+        Parameters
+        ----------
+        snapshot : int, optional
+            Snapshot number to resume from. If -1, resumes from the latest.
+        mpioptions : str, optional
+            MPI options for parallel runs.
+        """
         latest_snapshot_resumable = self._is_resumable()
         if latest_snapshot_resumable<0:
             return
@@ -622,6 +892,14 @@ class Simulation(fargopy.Fargobj):
                  options=self.fargo3d_run_options+f' -S {snapshot}',test=False)
 
     def _has_finished(self):
+        """
+        Check if the simulation process has finished.
+
+        Returns
+        -------
+        bool
+            True if finished, False otherwise.
+        """
         if self.fargo3d_process:
             poll = self.fargo3d_process.poll()
             if poll is None:
@@ -631,6 +909,14 @@ class Simulation(fargopy.Fargobj):
                 return True
 
     def _is_resumable(self):
+        """
+        Check if the simulation can be resumed.
+
+        Returns
+        -------
+        int
+            Latest resumable snapshot number, or -1 if not resumable.
+        """
         if self.logfile is None:
             print(f"The simulation has not been ran yet. Run <simulation>.run() before resuming")
             return -1
@@ -638,6 +924,9 @@ class Simulation(fargopy.Fargobj):
         return latest_snapshot_resumable
         
     def clean_output(self):
+        """
+        Clean the output directory by removing all files.
+        """
         if self.output_dir is None:
             print(f"Output directory has not been set.")
             return
@@ -651,6 +940,19 @@ class Simulation(fargopy.Fargobj):
         error,output = fargopy.Sys.run(cmd)
 
     def _is_running(self,verbose=False):
+        """
+        Check if the simulation process is currently running.
+
+        Parameters
+        ----------
+        verbose : bool, optional
+            If True, print status messages.
+
+        Returns
+        -------
+        bool
+            True if running, False otherwise.
+        """
         lock_info = fargopy.Sys.is_locked(self.setup_dir)
         if lock_info:
             # Check if process is up
@@ -675,6 +977,14 @@ class Simulation(fargopy.Fargobj):
             return False
 
     def _check_process(self):
+        """
+        Check if the FARGO3D process handler is available.
+
+        Returns
+        -------
+        bool
+            True if process handler exists, False otherwise.
+        """
         if self.fargo3d_process is None:
             print(f"There is no FARGO3D process handler available.")
             return False
@@ -684,6 +994,19 @@ class Simulation(fargopy.Fargobj):
     # Operations on the FARGO3D directories
     # ##########################################################################  
     def list_fields(self,quiet=False):
+        """
+        List all field files in the output directory.
+
+        Parameters
+        ----------
+        quiet : bool, optional
+            If True, suppress detailed output.
+
+        Returns
+        -------
+        list
+            List of field filenames.
+        """
         if self.output_dir is None:
             print(f"You have to set forst the outputs directory with <sim>.set_outputs('<directory>')")
         else:
@@ -703,11 +1026,19 @@ class Simulation(fargopy.Fargobj):
 
     def load_macros(self, summaryfile='summary0.dat'):
         """
-        Extracts global simulation parameters from the PREPROCESSOR MACROS SECTION in summary0.dat.
-        Returns a dictionary with the parameters found in the macros section.
-        Only the value after the last '=' is stored for each parameter.
+        Extract global simulation parameters from the PREPROCESSOR MACROS SECTION in summary0.dat.
+
+        Parameters
+        ----------
+        summaryfile : str, optional
+            Name of the summary file.
+
+        Returns
+        -------
+        dict
+            Dictionary with macro parameters.
         """
-        summary_path = f"{self.output_dir}/{summaryfile}".replace('//', '/')
+        summary_path = os.path.join(self.output_dir, summaryfile)
         if not os.path.isfile(summary_path):
             print(f"No summary file '{summary_path}' found.")
             return {}
@@ -741,96 +1072,132 @@ class Simulation(fargopy.Fargobj):
         self.simulation_macros = macros
         return macros
 
+    def load_planets(self, snapshot=0, summaryfile=None):
+        """
+        Load planet data from a summary file.
+
+        Parameters
+        ----------
+        snapshot : int, optional
+            Snapshot index to load.
+        summaryfile : str, optional
+            Name of the summary file.
+
+        Returns
+        -------
+        list of Planet
+            List of Planet objects for the given snapshot.
+        """
+        import os
+
+        # Determine summary file
+        if summaryfile is None:
+            summaryfile = f"summary{snapshot}.dat"
+        summary_path = os.path.join(self.output_dir, summaryfile)
+        if not os.path.isfile(summary_path):
+            print(f"No summary file '{summary_path}' found.")
+            return []
+
+        # Get stellar mass
+        if not hasattr(self, "simulation_macros") or 'MSTAR' not in self.simulation_macros:
+            self.load_macros()
+        mstar = self.simulation_macros['MSTAR']
+
+        # Parse initial positions from the top of the file (if available)
+        initial_planets = []
+        with open(summary_path, 'r') as f:
+            lines = f.readlines()
+        for line in lines:
+            if line.strip().startswith('#') or not line.strip() or set(line.strip()) == set('-'):
+                continue
+            parts = line.split()
+            if len(parts) >= 3:
+                try:
+                    float(parts[0])
+                    continue  # skip if first field is a number
+                except ValueError:
+                    pass
+                try:
+                    name = parts[0]
+                    x0 = float(parts[1])
+                    y0 = float(parts[2]) if len(parts) > 3 else 0.0
+                    z0 = 0.0
+                    initial_planets.append({'name': name, 'posi': (x0, y0, z0)})
+                except Exception:
+                    continue
+
+        # Find PLANETARY SYSTEM SECTION
+        planet_indices = []
+        in_section = False
+        for i, line in enumerate(lines):
+            if 'PLANETARY SYSTEM SECTION' in line:
+                in_section = True
+                continue
+            if in_section and line.strip().startswith('#### Planet'):
+                planet_indices.append(i+1)  # next line has the data
+            if in_section and line.strip().startswith('***'):
+                break
+
+        planets = []
+        for idx, data_idx in enumerate(planet_indices):
+            data_line = lines[data_idx].strip()
+            parts = data_line.split()
+            if len(parts) < 7:
+                continue
+            x, y, z = map(float, parts[0:3])
+            vx, vy, vz = map(float, parts[3:6])
+            mass = float(parts[-1])  # Always take the last column as mass
+
+            # Get initial position if available
+            if idx < len(initial_planets):
+                name = initial_planets[idx]['name']
+                posi = initial_planets[idx]['posi']
+            else:
+                name = f"Planet {idx}"
+                posi = (x, y, z)
+            planet = Planet(name=name, pos=(x, y, z), vel=(vx, vy, vz), mass=mass, posi=posi, mstar=mstar)
+            planets.append(planet)
+        return planets
                 
-    def load_planet_summary(self, summaryfile='summary0.dat'):
-        """
-        Loads planet information from summary.dat.
-        If not found, tries to extract from variables.par (PLANETMASS, ORBITALRADIUS, PLANETCONFIG).
-        Returns a list of dictionaries with name, distance, and mass.
-        """
-        summary_path = f"{self.output_dir}/{summaryfile}".replace('//', '/')
-        if os.path.isfile(summary_path):
-            planets = []
-            with open(summary_path, 'r') as f:
-                lines = f.readlines()
-                for line in lines:
-                    # Skip comments, empty lines, and separators
-                    if line.strip().startswith('#') or not line.strip() or set(line.strip()) == set('-'):
-                        continue
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        # Only accept if the first field is NOT a number
-                        try:
-                            float(parts[0])
-                            continue  # If it's a number, skip the line
-                        except ValueError:
-                            pass  # If not a number, it's a planet name
-                        try:
-                            planet = {
-                                'name': parts[0],
-                                'distance': float(parts[1]),
-                                'mass': float(parts[2])
-                            }
-                            planets.append(planet)
-                        except ValueError:
-                            continue
-            return planets
-
-        # If summary.dat does not exist, try to read from variables.par
-        varfile = f"{self.output_dir}/variables.par".replace('//', '/')
-        if not os.path.isfile(varfile):
-            print(f"No summary file '{summary_path}' or variables file '{varfile}' found.")
-            return []
-
-        planet_mass = None
-        orbital_radius = None
-        planet_config = None
-        with open(varfile, 'r') as f:
-            for line in f:
-                # Look for PLANETMASS, ORBITALRADIUS, PLANETCONFIG lines
-                if line.strip().startswith('PLANETMASS'):
-                    try:
-                        planet_mass = float(line.split()[1])
-                    except Exception:
-                        pass
-                elif line.strip().startswith('ORBITALRADIUS'):
-                    try:
-                        orbital_radius = float(line.split()[1])
-                    except Exception:
-                        pass
-                elif line.strip().startswith('PLANETCONFIG'):
-                    try:
-                        planet_config = line.split()[1]
-                    except Exception:
-                        pass
-
-        if planet_mass is not None and orbital_radius is not None:
-            # Use the config file name as planet name if available
-            planet_name = planet_config.split('/')[-1].split('.')[0] if planet_config else 'planet'
-            return [{
-                'name': planet_name,
-                'distance': orbital_radius,
-                'mass': planet_mass
-            }]
-        else:
-            print("No planet data found in summary.dat or variables.par.")
-            return []
-
+ 
 
     def load_properties(self, quiet=False,
-                            varfile='variables.par',
-                            domain_prefix='domain_',
-                            dimsfile='dims.dat',
-                            summaryfile='summary0.dat'  # Nuevo parámetro opcional
-                            ):
+                                varfile='variables.par',
+                                domain_prefix='domain_',
+                                dimsfile='dims.dat',
+                                summaryfile='summary0.dat'):
+        """
+        Load and print simulation properties, including variables, domains, dimensions, and planets.
+
+        Parameters
+        ----------
+        quiet : bool, optional
+            If True, suppress output.
+        varfile : str, optional
+            Name of the variables file.
+        domain_prefix : str, optional
+            Prefix for domain files.
+        dimsfile : str, optional
+            Name of the dimensions file.
+        summaryfile : str, optional
+            Name of the summary file.
+
+        Returns
+        -------
+        str
+            Summary information string.
+        """
+        info = []
         if self.output_dir is None:
-            print(f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')")
-            return
+            msg = f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')"
+            print(msg)
+            return msg
 
         # Read variables
         vars = self._load_variables(varfile)
         if not vars:
-            return
+            return "No variables found."
+        info.append(f"Simulation in {vars.DIM} dimensions")
         print(f"Simulation in {vars.DIM} dimensions")
         
         # Read domains 
@@ -847,35 +1214,58 @@ class Simulation(fargopy.Fargobj):
 
         # Read the summary files
         self.nsnaps = self._get_nsnaps()
+        info.append(f"Number of snapshots in output directory: {self.nsnaps}")
         print(f"Number of snapshots in output directory: {self.nsnaps}")
 
-        # Leer planetas del summary.dat
-        self.planets = self.load_planet_summary(summaryfile)
+        # Read planets from summary.dat using load_planet_states
+        self.planets = self.load_planets(snapshot=0, summaryfile=summaryfile)
         if self.planets:
+            info.append("Planets found in summary.dat:")
             print("Planets found in summary.dat:")
             for planet in self.planets:
-                print(f"  Name: {planet['name']}, Distance: {planet['distance']}, Mass: {planet['mass']}")
+                planet_info = f"  Name: {planet.name}, Initial pos: {planet.posi}, Mass: {planet.mass}"
+                info.append(planet_info)
+                print(planet_info)
         else:
+            info.append("No planet data found in summary.dat.")
             print("No planet data found in summary.dat.")
 
-        print("Configuration variables and domains load into the object. See e.g. <sim>.vars")
+        # Devuelve el string para mostrar en el cuadro de diálogo
+        return "\n".join(info)
 
     def _get_nsnaps(self):
-        """Get the number of snapshots in an output directory
         """
-        error, output = fargopy.Sys.run(f"ls {self.output_dir}/summary[0-9]*.dat")
-        if error == 0:
-            files = output[:-1]
+        Get the number of snapshots in the output directory.
+
+        Returns
+        -------
+        int
+            Number of snapshot files.
+        """
+        try:
+            # List all files in the output directory
+            files = [f for f in os.listdir(self.output_dir) if f.startswith("summary") and f.endswith(".dat")]
             nsnaps = len(files)
             return nsnaps
-        else:
+        except FileNotFoundError:
             print(f"No summary file in {self.output_dir}")
             return 0
 
     def _load_dims(self, dimsfile):
-        """Parse the dim directory
         """
-        dimsfile = f"{self.output_dir}/{dimsfile}".replace('//','/')
+        Parse the dimensions file.
+
+        Parameters
+        ----------
+        dimsfile : str
+            Name of the dimensions file.
+
+        Returns
+        -------
+        np.ndarray or list
+            Array of dimensions or empty list if not found.
+        """
+        dimsfile = os.path.join(self.output_dir, dimsfile)
         if not os.path.isfile(dimsfile):
             #print(f"No file with dimensions '{dimsfile}' found.")
             return []
@@ -883,10 +1273,20 @@ class Simulation(fargopy.Fargobj):
         return dims
 
     def _load_variables(self,varfile):
-        """Parse the file with the variables
         """
+        Parse the file with the simulation variables.
 
-        varfile = f"{self.output_dir}/{varfile}".replace('//','/')
+        Parameters
+        ----------
+        varfile : str
+            Name of the variables file.
+
+        Returns
+        -------
+        fargopy.Dictobj
+            Object containing simulation variables.
+        """
+        varfile = os.path.join(self.output_dir, varfile)
         if not os.path.isfile(varfile):
             print(f"No file with variables named '{varfile}' found.")
             return
@@ -932,7 +1332,25 @@ class Simulation(fargopy.Fargobj):
     def _load_domains(self,vars,domain_prefix,
                       borders=[[],[3,-3],[3,-3]],
                       middle=True):
+        """
+        Load domain coordinate arrays from files.
 
+        Parameters
+        ----------
+        vars : fargopy.Dictobj
+            Simulation variables.
+        domain_prefix : str
+            Prefix for domain files.
+        borders : list, optional
+            List of border slices for each variable.
+        middle : bool, optional
+            If True, average between cell coordinates.
+
+        Returns
+        -------
+        fargopy.Dictobj
+            Object containing domain arrays.
+        """
         # Coordinates
         variable_suffixes = ['x', 'y', 'z']
         print(f"Loading domain in {vars.COORDINATES} coordinates:")
@@ -946,7 +1364,7 @@ class Simulation(fargopy.Fargobj):
         domains['extrema'] = dict()
 
         for i,variable_suffix in enumerate(variable_suffixes):
-            domain_file = f"{self.output_dir}/{domain_prefix}{variable_suffix}.dat".replace('//','/')
+            domain_file = os.path.join(self.output_dir, f"{domain_prefix}{variable_suffix}.dat")
             if os.path.isfile(domain_file):
 
                 # Load data from file
@@ -971,19 +1389,29 @@ class Simulation(fargopy.Fargobj):
         return domains        
 
 
-    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False):
+    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False,cut=None):
         """
         Load a field from the simulation.
 
-        Parameters:
-            fields (str or list of str): Field name(s) to load.
-            slice (str, optional): Slice for 2D data (e.g., 'theta=1.5').
-            snapshot (int, optional): Snapshot index to load.
-            type (str, optional): Type of the field ('scalar' or 'vector'). Default is 'scalar'.
-            interpolate (bool, optional): Whether to interpolate the field. Default is False.
+        Parameters
+        ----------
+        fields : str or list of str
+            Field name(s) to load.
+        slice : str, optional
+            Slice for 2D data (e.g., 'theta=1.5').
+        snapshot : int or list, optional
+            Snapshot index or indices to load.
+        type : str, optional
+            Type of the field ('scalar' or 'vector'). Default is 'scalar'.
+        interpolate : bool, optional
+            Whether to interpolate the field. Default is False.
+        cut : tuple, optional
+            Spatial cut for loading a subset of the field.
 
-        Returns:
-            fargopy.Field or fargopy.DataHandler: The loaded field(s) or DataHandler object(s).
+        Returns
+        -------
+        fargopy.Field or list of fargopy.Field
+            The loaded field(s) or DataHandler object(s).
         """
         # Ensure fields is a list
         if isinstance(fields, str):
@@ -995,7 +1423,7 @@ class Simulation(fargopy.Fargobj):
             for field in fields:
                 field_data = fargopy.FieldInterpolator(self)
                 # Pass the current field instead of the entire list
-                field_data.load_data(field, slice, snapshot)
+                field_data.load_data(field, slice, snapshot, cut=cut)
                 fields_data.append(field_data)
             return fields_data if len(fields_data) > 1 else fields_data[0]
 
@@ -1008,6 +1436,7 @@ class Simulation(fargopy.Fargobj):
             # Use snapshot 0 by default if not provided
             snapshot = 0 if snapshot is None else snapshot
 
+            # Load data from simulation (macros)
             loaded_fields = []
             
             for field in fields:
@@ -1025,7 +1454,7 @@ class Simulation(fargopy.Fargobj):
 
                 if field_type == 'scalar':
                     file_name = f"{field}{str(snapshot)}.dat"
-                    file_field = f"{self.output_dir}/{file_name}".replace('//', '/')
+                    file_field = os.path.join(self.output_dir, file_name)
                     field_data = self._load_field_scalar(file_field)
                 elif field_type == 'vector':
                     field_data = []
@@ -1034,7 +1463,7 @@ class Simulation(fargopy.Fargobj):
                         variables += ['z']
                     for variable in variables:
                         file_name = f"{field}{variable}{str(snapshot)}.dat"
-                        file_field = f"{self.output_dir}/{file_name}".replace('//', '/')
+                        file_field = os.path.join(self.output_dir, file_name)
                         field_data.append(self._load_field_scalar(file_field))
                 else:
                     raise ValueError(f"fargopy.Field type '{field_type}' not recognized.")
@@ -1061,7 +1490,18 @@ class Simulation(fargopy.Fargobj):
             return loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
 
     def _load_field_scalar(self,file):
-        """Load scalar field from file a file.
+        """
+        Load a scalar field from a file.
+
+        Parameters
+        ----------
+        file : str
+            Path to the field file.
+
+        Returns
+        -------
+        np.ndarray
+            Field data array.
         """
         if os.path.isfile(file):
             field_data = np.fromfile(file).reshape(int(self.vars.NZ),int(self.vars.NY),int(self.vars.NX))
@@ -1070,7 +1510,22 @@ class Simulation(fargopy.Fargobj):
             raise AssertionError(f"File with field '{file}' not found")
         
     def load_allfields(self,fluid,snapshot=None,type='scalar'):
-        """Load all fields in the output
+        """
+        Load all fields in the output directory for a given fluid.
+
+        Parameters
+        ----------
+        fluid : str
+            Name of the fluid (e.g., 'gas').
+        snapshot : int, optional
+            Snapshot index to load. If None, loads all snapshots.
+        type : str, optional
+            Field type ('scalar' or 'vector').
+
+        Returns
+        -------
+        fargopy.Dictobj
+            Object containing all loaded fields.
         """
         qall = False
         if snapshot is None:
@@ -1080,7 +1535,7 @@ class Simulation(fargopy.Fargobj):
             fields = fargopy.Dictobj()
         
         # Search for field files
-        pattern = f"{self.output_dir}/{fluid}*.dat"
+        pattern = os.path.join(self.output_dir, f"{fluid}*.dat")
         error,output = fargopy.Sys.run(f"ls {pattern}")
 
         if not error:
@@ -1102,7 +1557,7 @@ class Simulation(fargopy.Fargobj):
                                 variables += ['z'] 
                             for i,variable in enumerate(variables):
                                 file_name = f"{fluid}{variable}{str(field_snap)}.dat"
-                                file_field = f"{self.output_dir}/{file_name}".replace('//','/')
+                                file_field = os.path.join(self.output_dir, file_name)
                                 field_data += [self._load_field_scalar(file_field)]
                             field_data = np.array(field_data)
                             field_name = field_name[:-1]
@@ -1126,7 +1581,7 @@ class Simulation(fargopy.Fargobj):
                                     variables += ['z'] 
                                 for i,variable in enumerate(variables):
                                     file_name = f"{fluid}{variable}{str(field_snap)}.dat"
-                                    file_field = f"{self.output_dir}/{file_name}".replace('//','/')
+                                    file_field = os.path.join(self.output_dir, file_name)
                                     field_data += [self._load_field_scalar(file_field)]
                                 field_data = np.array(field_data)
                                 field_name = field_name[:-1]
@@ -1144,6 +1599,19 @@ class Simulation(fargopy.Fargobj):
 
     @staticmethod
     def _parse_file_field(file_field):
+        """
+        Parse a field filename to extract the field name and snapshot number.
+
+        Parameters
+        ----------
+        file_field : str
+            Filename of the field.
+
+        Returns
+        -------
+        list or None
+            List with field name and snapshot number, or None if not matched.
+        """
         basename = os.path.basename(file_field)
         comps = None
         match = re.match('([a-zA-Z]+)(\d+).dat',basename)
@@ -1152,10 +1620,24 @@ class Simulation(fargopy.Fargobj):
         return comps
 
     def __repr__(self):
+        """
+        String representation of the Simulation object.
+
+        Returns
+        -------
+        str
+        """
         repr = f"""FARGOPY simulation (fargo3d_dir = '{self.fargo3d_dir}', setup = '{self.setup}')"""
         return repr
 
     def __str__(self):
+        """
+        Detailed string with simulation information.
+
+        Returns
+        -------
+        str
+        """
         str = f"""Simulation information:
     FARGO3D directory: {self.fargo3d_dir}
         Outputs: {self.outputs_dir}
@@ -1180,50 +1662,61 @@ class Simulation(fargopy.Fargobj):
     # ##########################################################################
     @staticmethod
     def list_setups():
-        """List setups available in the FARGO3D directory
+        """
+        List setups available in the FARGO3D directory.
         """
         error,output = fargopy.Sys.run(f"ls -d {fargopy.Conf.FP_FARGO3D_DIR}/setups/*")
         list = ''
         for setup_dir in output[:-1]:
             setup_dir = setup_dir.replace('//','/')
             setup_name = setup_dir.split('/')[-1]
-            setup_par = f"{setup_dir}/{setup_name}.par"
+            setup_par = os.path.join(setup_dir, f"{setup_name}.par")
             if os.path.isfile(setup_par):
                 list += f"Setup '{setup_name}' in '{setup_dir}'\n"
         print(list)
                  
     @staticmethod
     def list_precomputed():
-        """List the available precomputed simulations
+        """
+        List the available precomputed simulations.
         """
         for key,item in PRECOMPUTED_SIMULATIONS.items():
             print(f"{key}:\n\tDescription: {item['description']}\n\tSize: {item['size']} MB")
     
     @staticmethod
-    def download_precomputed(setup=None,download_dir='/tmp',quiet=False,clean=True):
-        """Download a precomputed output from Google Drive FARGOpy public repository.
+    def download_precomputed(setup=None,download_dir=None,quiet=False,clean=True):
+        """
+        Download a precomputed output from the Google Drive FARGOpy public repository.
 
-        Args:
-            setup: string, default = None:
-                Name of the setup. For a list see fargopu.PRECOMPUTED_SIMULATIONS dictionary.
+        Parameters
+        ----------
+        setup : str, optional
+            Name of the setup. For a list see PRECOMPUTED_SIMULATIONS.
+        download_dir : str, optional
+            Directory where the output will be downloaded and uncompressed.
+        quiet : bool, optional
+            If True, download quietly (no progress bar).
+        clean : bool, optional
+            If True, remove the tgz file after uncompressing it.
 
-            download_dir: string, default = '/tmp':
-                Directory where the output will be downloaded and uncompressed.
-
-        Optional args:
-            quiet: bool, default = True:
-                If True download quietly (no progress bar).
-            
-            clean: bool, default = False:
-                If True remove the tgz file after uncompressing it.
-
-        Return:
-            If successful returns the output directory.
-
+        Returns
+        -------
+        str
+            Output directory if successful, empty string otherwise.
         """
         if setup is None:
             print(f"You must provide a setup name. Available setups: {list(PRECOMPUTED_SIMULATIONS.keys())}")
             return ''
+        
+        # Set default download directory based on OS
+        if download_dir is None:
+            if os.name == 'nt':  # Windows
+                download_dir = os.path.join(os.environ.get('TEMP', 'C:\\temp'), 'fargopy_data')
+            else:  # Unix-like systems
+                download_dir = '/tmp'
+            # Create directory if it doesn't exist
+            os.makedirs(download_dir, exist_ok=True)
+        
         if not os.path.isdir(download_dir):
             print(f"Download directory '{download_dir}' does not exist.")
             return ''
@@ -1231,13 +1724,13 @@ class Simulation(fargopy.Fargobj):
             print(f"Precomputed setup '{setup}' is not among the available setups: {list(PRECOMPUTED_SIMULATIONS.keys())}")
             return ''
         
-        output_dir = (download_dir + '/' + setup).replace('//','/')
+        output_dir = os.path.join(download_dir, setup)
         if os.path.isdir(output_dir):
             print(f"Precomputed output directory '{output_dir}' already exist")
             return output_dir
         else:
             filename = setup + '.tgz'
-            fileloc = download_dir + '/' + filename
+            fileloc = os.path.join(download_dir, filename)
             if os.path.isfile(fileloc):
                 print(f"Precomputed file '{fileloc}' already downloaded")
             else:
@@ -1245,62 +1738,370 @@ class Simulation(fargopy.Fargobj):
                 print(f"Downloading {filename} from cloud (compressed size around {PRECOMPUTED_SIMULATIONS[setup]['size']} MB) into {download_dir}")
                 url = PRECOMPUTED_BASEURL + PRECOMPUTED_SIMULATIONS[setup]['id']
                 gdown.download(url,fileloc,quiet=quiet)
-            # Uncompress the setups
-            print(f"Uncompressing {filename} into {output_dir}") 
-            fargopy.Sys.simple(f"cd {download_dir};tar zxf {filename}")
-            print(f"Done.")
-            fargopy.Sys.simple(f"cd {download_dir};rm -rf {filename}")
+            
+            # Uncompress the setups - Windows compatible
+            print(f"Uncompressing {filename} into {output_dir}")
+            try:
+                import tarfile
+                with tarfile.open(fileloc, 'r:gz') as tar:
+                    tar.extractall(path=download_dir)
+                print(f"Done.")
+                
+                # Clean up the tar file if requested
+                if clean:
+                    os.remove(fileloc)
+                    
+            except Exception as e:
+                print(f"Error uncompressing file: {e}")
+                # Fallback to system command for Unix-like systems
+                if os.name != 'nt':
+                    fargopy.Sys.simple(f"cd {download_dir};tar zxf {filename}")
+                    if clean:
+                        fargopy.Sys.simple(f"cd {download_dir};rm -rf {filename}")
+                else:
+                    print("Failed to decompress on Windows. Please install tar or 7-zip.")
+                    return ''
+                    
+            return output_dir
 
-    def time_scale(self,scale='orbits'):
+    def time_scale(self, scale='orbits'):
+        """
+        Calculates the time scale of the simulation in different units.
+
+        Parameters
+        ----------
+        scale : str, optional
+            'orbits' to calculate the number of orbits completed by the planet,
+            'duration' for the total simulation time in simulation units.
+
+        Returns
+        -------
+        float
+            Number of orbits or total simulation time, depending on scale.
+        """
         import contextlib
         import io
+        import numpy as np
 
-        """
-        Calculates the time scale of the simulation in different scales.
-        """
         with contextlib.redirect_stdout(io.StringIO()):
-            if scale=='orbits':
-                
-                NINTERM = self._load_variables('variables.par').NINTERM
-                DT = self._load_variables('variables.par').DT
-                NTOT = self._load_variables('variables.par').NTOT
-                NSNAPS = NTOT/NINTERM
-                orbits_num = NINTERM * DT / np.pi * NSNAPS
+            # Load necessary parameters
+            self.load_macros()
+            self.load_planet_summary()
 
+            # Extract parameters from macros and planet summary
+            G = self.G  # Gravitational constant in simulation units
+            M_star = self.simulation_macros['MSTAR']  # Stellar mass in simulation units
+            planet = self.planets[0]  # Assume the first planet for calculations
+            a = planet['distance']  # Orbital radius in simulation units
+
+            # Calculate orbital period (T) using Kepler's third law
+            T = 2 * np.pi * np.sqrt(a**3 / (G * M_star))
+
+            # Extract simulation parameters
+            NINTERM = self._load_variables('variables.par').NINTERM
+            DT = self._load_variables('variables.par').DT
+            NTOT = self._load_variables('variables.par').NTOT
+
+            # Calculate total simulation time
+            total_time = NTOT * DT  # Total time in simulation units
+
+            if scale == 'orbits':
+                # Calculate the number of orbits completed by the planet
+                orbits_num = total_time / T
                 return orbits_num
-            
-    def hill_radius(self, planet_index=0):
+
+            elif scale == 'duration':
+                # Return the total simulation time in simulation units
+                return total_time
+
+            else:
+                raise ValueError("Invalid scale. Choose either 'orbits' or 'duration'.")
+
+
+    ######################################
+    # PLOTS
+    #####################################
+
+
+
+    def plot_interactive(self):
         """
-        Calculates the Hill radius of the selected planet using simulation parameters.
-        Returns the Hill radius in cm and AU.
+        Interactive plot for the simulation using ipywidgets.
+
+        Allows selection of density, energy, or velocity (and component) for the colormap.
+        Provides controls for slice, resolution, interpolation, streamlines, and Hill radius overlay.
         """
-        # Conversion constants
-        AU_to_cm = 1.495978707e13
-        Mjup_to_g = 1.898e30
-        Msun_to_g = 1.989e33
+        import ipywidgets as widgets
+        import matplotlib.pyplot as plt
+        from IPython.display import display, clear_output
 
-        # Check planet data
-        if not hasattr(self, "planets") or not self.planets:
-            raise ValueError("No planet data found. Run sim.load_planet_summary() first.")
+        # --- Widgets ---
+        time_slider = widgets.IntSlider(min=0, max=self._get_nsnaps()-1, step=1, value=1, description='Snapshot')
+        slice_text = widgets.Text(value='theta=1.568', description='Slice')
+        res_slider = widgets.IntSlider(min=50, max=1000, step=10, value=500, description='Res')
+        interp_toggle = widgets.ToggleButton(value=False, description='Interpolate', icon='check')
+        progress = widgets.Label(value='')
+        streamlines_toggle = widgets.ToggleButton(value=False, description='Streamlines', icon='random')
+        density_slider = widgets.FloatSlider(min=1, max=10, step=0.5, value=3, description='Stream density')
+        hill_frac_slider = widgets.FloatSlider(min=0.1, max=2.0, step=0.05, value=1.0, description='Hill frac')
+        show_circle_toggle = widgets.ToggleButton(value=False, description='Show Hill', icon='circle')
+        cmap_options = ['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo']
+        cmap_dropdown = widgets.Dropdown(options=cmap_options, value='Spectral_r', description='Colormap')
+        update_button = widgets.Button(description="Update", icon="refresh")
+        map_options = ['Densidad', 'Energia', 'Velocidad']
+        map_dropdown = widgets.Dropdown(options=map_options, value='Densidad', description='Mapa')
+        vel_components = ['vx', 'vy', 'vz']
+        vel_dropdown = widgets.Dropdown(options=vel_components, value='vx', description='Componente v')
+        vel_dropdown.layout.display = 'none'  # Ocultar por defecto
 
-        # Check stellar mass in macros
-        if not hasattr(self, "simulation_macros") or 'MSTAR' not in self.simulation_macros:
-            raise ValueError("Stellar mass (MSTAR) not found. Run sim.load_macros() first.")
+        def is_fixed(var, slice_str):
+            import re
+            match = re.search(rf'{var}=([^\[\],]+)', slice_str.replace(' ', ''))
+            return match is not None
 
-        planet = self.planets[planet_index]
-        a_au = planet['distance']  # AU
-        m_jup = planet['mass'] * 1e3    # Msun
+        # show or hide velocity component dropdown based on map selection
+        def on_map_change(change):
+            if change['new'] == 'Velocidad':
+                vel_dropdown.layout.display = ''
+            else:
+                vel_dropdown.layout.display = 'none'
+        map_dropdown.observe(on_map_change, names='value')
 
-        # Get stellar mass in Msun and convert to grams
-        mstar_msun = self.simulation_macros['MSTAR']
-        mstar_g = float(mstar_msun) * Msun_to_g
+        def plot_density(change=None):
+            clear_output(wait=True)
+            display(
+                time_slider, slice_text, res_slider, interp_toggle, streamlines_toggle,
+                density_slider, hill_frac_slider, show_circle_toggle, cmap_dropdown, map_dropdown, vel_dropdown, progress, update_button
+            )
+            import numpy as np
+            import re
 
-        # Convert planet mass to grams and distance to cm
-        a_cm = a_au * AU_to_cm
-        m_p = m_jup * Mjup_to_g
+            slice_str = slice_text.value
+            res = res_slider.value
+            interpolate = interp_toggle.value
+            show_streamlines = streamlines_toggle.value
+            stream_density = density_slider.value
+            hill_frac = hill_frac_slider.value
+            show_circle = show_circle_toggle.value
+            cmap = cmap_dropdown.value
+            map_type = map_dropdown.value
+            vel_comp = vel_dropdown.value
 
-        # Hill radius formula
-        r_hill_cm = a_cm * (m_p / (3 * mstar_g))**(1/3)
-        r_hill_au = r_hill_cm / AU_to_cm
+            # --- Ejes y nombres de malla ---
+            if is_fixed('theta', slice_str):
+                xlabel, ylabel = 'X', 'Y'
+                mesh_x_name = 'var1_mesh'
+                mesh_y_name = 'var2_mesh'
+            elif is_fixed('phi', slice_str):
+                xlabel, ylabel = 'X', 'Z'
+                mesh_x_name = 'var1_mesh'
+                mesh_y_name = 'var3_mesh'
+            else:
+                print("Warning: Please fix either theta or phi for a valid 2D slice (XY or XZ plane).")
+                return
 
-        return r_hill_cm, r_hill_au
+            n = time_slider.value
+
+            if mesh_y_name == 'var2_mesh':
+                vel_dropdown.options = ['vx', 'vy']
+                if vel_dropdown.value not in vel_dropdown.options:
+                    vel_dropdown.value = 'vx'
+            elif mesh_y_name == 'var3_mesh':
+                vel_dropdown.options = ['vx', 'vz']
+                if vel_dropdown.value not in vel_dropdown.options:
+                    vel_dropdown.value = 'vx'
+
+            # --- Carga de datos según selección ---
+            if map_type == 'Densidad':
+                gasdens, gasv = self.load_field(
+                    fields=['gasdens', 'gasv'],
+                    slice=slice_str,
+                    snapshot=[n],
+                    interpolate=True
+                )
+            elif map_type == 'Energia':
+                gasenergy = self.load_field(
+                    fields='gasenergy',
+                    slice=slice_str,
+                    snapshot=[n],
+                    interpolate=True
+                )
+                gasv = self.load_field(
+                    fields='gasv',
+                    slice=slice_str,
+                    snapshot=[n],
+                    interpolate=True
+                )
+            elif map_type == 'Velocidad':
+                gasv = self.load_field(
+                    fields='gasv',
+                    slice=slice_str,
+                    snapshot=[n],
+                    interpolate=True
+                )
+
+            # --- Interpolación y selección de variable a graficar ---
+            if not interpolate:
+                if map_type == 'Densidad':
+                    X = getattr(gasdens, mesh_x_name)[0]
+                    Y = getattr(gasdens, mesh_y_name)[0]
+                    data_map = np.log10(gasdens.gasdens_mesh[0] * self.URHO)
+                elif map_type == 'Energia':
+                    X = getattr(gasenergy, mesh_x_name)[0]
+                    Y = getattr(gasenergy, mesh_y_name)[0]
+                    data_map = np.log10(gasenergy.gasenergy_mesh[0])
+                elif map_type == 'Velocidad':
+                    X = getattr(gasv, mesh_x_name)[0]
+                    Y = getattr(gasv, mesh_y_name)[0]
+                    idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
+                    data_map = gasv.gasv_mesh[0][idx]
+                vx = vy = vmag = None
+            else:
+                progress.value = "Interpolando..."
+                if mesh_y_name == 'var2_mesh':
+                    xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
+                    ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                    xs = np.linspace(xmin, xmax, res)
+                    ys = np.linspace(ymin, ymax, res)
+                    X, Y = np.meshgrid(xs, ys)
+                    if map_type == 'Densidad':
+                        data_map = gasdens.evaluate(time=n, var1=X, var2=Y)
+                        data_map = np.log10(data_map * self.URHO)
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        vx = vel[0]
+                        vy = vel[1]
+                        vmag = np.sqrt(vx**2 + vy**2)
+                    elif map_type == 'Energia':
+                        data_map = gasenergy.evaluate(time=n, var1=X, var2=Y)
+                        #data_map = np.log10(data_map)
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        vx = vel[0]
+                        vy = vel[1]
+                        vmag = np.sqrt(vx**2 + vy**2)
+                    elif map_type == 'Velocidad':
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
+                        data_map = vel[idx]
+                        vx = vel[0]
+                        vy = vel[1]
+                        vmag = np.sqrt(vx**2 + vy**2)
+                else:
+                    xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
+                    zmin, zmax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                    xs = np.linspace(xmin, xmax, res)
+                    zs = np.linspace(zmin, zmax, res)
+                    X, Y = np.meshgrid(xs, zs)
+                    if map_type == 'Densidad':
+                        data_map = gasdens.evaluate(time=n, var1=X, var3=Y)
+                        data_map = np.log10(data_map * self.URHO)
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                        vx = vel[0]
+                        vy = vel[2]
+                        vmag = np.sqrt(vx**2 + vy**2)
+                    elif map_type == 'Energia':
+                        data_map = gasenergy.evaluate(time=n, var1=X, var3=Y)
+                        #data_map = np.log10(data_map)
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                        vx = vel[0]
+                        vy = vel[2]
+                        vmag = np.sqrt(vx**2 + vy**2)
+                    elif map_type == 'Velocidad':
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                       
+                        idx = {'vx':  0, 'vy': 1, 'vz': 2}[vel_comp]
+                        data_map = vel[idx]
+                        vx = vel[0]
+                        vy = vel[2]
+                        vmag = np.sqrt(vx**2 + vy**2)
+
+            # --- Máscara por rango r (igual que antes) ---
+            r = np.sqrt(X**2 + Y**2)
+            r_match = re.search(r"r=\[([0-9\.]+),([0-9\.]+)\]", slice_str.replace(" ", ""))
+            if r_match:
+                r_min = float(r_match.group(1))
+                r_max = float(r_match.group(2))
+            else:
+                r_min = None
+                r_max = None
+
+            if r_min is not None and r_max is not None:
+                mask = (r >= r_min) & (r <= r_max)
+                data_map = np.where(mask, data_map, np.nan)
+                if show_streamlines and vx is not None and vy is not None and vmag is not None:
+                    vx = np.where(mask, vx, np.nan)
+                    vy = np.where(mask, vy, np.nan)
+                    vmag = np.where(mask, vmag, np.nan)
+
+            # --- Plot ---
+            fig, ax = plt.subplots(figsize=(7,5))
+            pcm = ax.pcolormesh(X*self.UL/self.AU, Y*self.UL/self.AU, data_map, shading='auto', cmap=cmap)
+
+            # Mostrar streamlines para cualquier tipo de mapa si están disponibles
+            stream_obj = None
+            if interpolate and show_streamlines and vx is not None and vy is not None:
+                stream_obj = ax.streamplot(
+                    X*self.UL/self.AU, Y*self.UL/self.AU, vx, vy,
+                    color=vmag*self.UL/self.UT*1e-5 if vmag is not None else None,
+                    linewidth=0.5,
+                    density=stream_density,
+                    cmap='viridis',
+                    arrowsize=1
+                )
+
+            # --- Hill radius
+            planets = self.load_planets(snapshot=n)
+            if planets:
+                center_x = planets[0].pos.x
+                center_y = planets[0].pos.y
+                radius = hill_frac * planets[0].hill_radius
+            else:
+                center_x = 0
+                center_y = 0
+                radius = 0
+
+            if show_circle:
+                if is_fixed('theta', slice_str):
+                    circle = plt.Circle((center_x*self.UL/self.AU, center_y*self.UL/self.AU), radius*self.UL/self.AU, color='black', fill=False, linestyle='--', linewidth=1)
+                    ax.add_patch(circle)
+                elif is_fixed('phi', slice_str):
+                    theta = np.linspace(0, np.pi, 100)
+                    x = center_x + radius * np.cos(theta)
+                    y = center_y + radius * np.sin(theta)
+                    ax.plot(x*self.UL/self.AU, y*self.UL/self.AU, color='black', linewidth=2)
+
+            ax.set_xlabel(xlabel+' [AU]')
+            ax.set_ylabel(ylabel+' [AU]')
+            #ax.axis('equal')
+
+            if interpolate and show_streamlines and stream_obj is not None and vmag is not None:
+                # Colorbar for velocity magnitude (streamlines)
+                cbar = fig.colorbar(stream_obj.lines, ax=ax, label=r'$|v|$ [km/s]')
+            else:
+                # Colorbar for main map
+                if map_type == 'Densidad':
+                    cbar_label = r'$\log_{10}(\rho) [g/cm^3]$'
+                elif map_type == 'Energia':
+                    cbar_label = r'$\log_{10}(\mathrm{energy})$'
+                else:
+                    cbar_label = f'{vel_comp} [AU]'
+                fig.colorbar(pcm, ax=ax, label=cbar_label)
+
+            fargopy.Plot.fargopy_mark(ax)
+            plt.show()
+
+        # --- Events ---
+        update_button.on_click(plot_density)
+        slice_text.on_submit(plot_density)
+        show_circle_toggle.observe(plot_density, names='value')
+        interp_toggle.observe(plot_density, names='value')
+        streamlines_toggle.observe(plot_density, names='value')
+        cmap_dropdown.observe(plot_density, names='value')
+        map_dropdown.observe(plot_density, names='value')
+        vel_dropdown.observe(plot_density, names='value')
+
+        # --- Display inicial ---
+        display(
+            time_slider, slice_text, res_slider, interp_toggle, streamlines_toggle,
+            density_slider, hill_frac_slider, show_circle_toggle, cmap_dropdown, map_dropdown, vel_dropdown, progress, update_button
+        )
+        plot_density()
