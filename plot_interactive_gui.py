@@ -13,6 +13,10 @@ import sys
 import fargopy as fp
 import matplotlib as plt
 plt.style.use('seaborn-v0_8-whitegrid')
+from matplotlib.animation import FuncAnimation
+from matplotlib.animation import FFMpegWriter
+import os
+import subprocess
 
 class SimInfoDialog(QDialog):
     def __init__(self, sim, parent=None):
@@ -226,34 +230,240 @@ class SimInfoDialog(QDialog):
         if self.parent() and hasattr(self.parent(), "plot_density"):
             self.parent().plot_density(self.units_combo.currentText())
 
+class PlotOptionsDialog(QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setWindowTitle("Graph Options")
+        self.setMinimumWidth(400)
+        self.parent = parent
+
+        layout = QFormLayout(self)
+
+        # Main colormap
+        self.cmap_dropdown = QComboBox()
+        self.cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        layout.addRow("Colormap:", self.cmap_dropdown)
+
+        # Streamlines colormap
+        self.stream_cmap_dropdown = QComboBox()
+        self.stream_cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        layout.addRow("Streamlines colormap:", self.stream_cmap_dropdown)
+
+        # Map type
+        self.map_dropdown = QComboBox()
+        self.map_dropdown.addItems(['Density', 'Energy', 'Velocity'])
+        layout.addRow("Map type:", self.map_dropdown)
+
+        # Velocity component
+        self.vel_dropdown = QComboBox()
+        self.vel_dropdown.addItems(['vx', 'vy', 'vz'])
+        layout.addRow("Velocity component:", self.vel_dropdown)
+
+        # Fixed colorbar
+        self.fixed_cbar_checkbox = QCheckBox("Fixed colorbar range")
+        layout.addRow(self.fixed_cbar_checkbox)
+
+        # Reference snapshot
+        self.fixed_cbar_snap_spin = QSpinBox()
+        self.fixed_cbar_snap_spin.setMinimum(0)
+        self.fixed_cbar_snap_spin.setMaximum(0)
+        self.fixed_cbar_snap_spin.setValue(1)
+        layout.addRow("Reference snapshot:", self.fixed_cbar_snap_spin)
+
+        # --- Manual vmin/vmax controls ---
+        self.manual_vmin_vmax_checkbox = QCheckBox("Set vmin/vmax manually (log10 scale)")
+        layout.addRow(self.manual_vmin_vmax_checkbox)
+
+        self.vmin_spin = QDoubleSpinBox()
+        self.vmin_spin.setDecimals(2)
+        self.vmin_spin.setMinimum(-30)
+        self.vmin_spin.setMaximum(30)
+        self.vmin_spin.setValue(0.0)
+        layout.addRow("vmin (log10):", self.vmin_spin)
+
+        self.vmax_spin = QDoubleSpinBox()
+        self.vmax_spin.setDecimals(2)
+        self.vmax_spin.setMinimum(-30)
+        self.vmax_spin.setMaximum(30)
+        self.vmax_spin.setValue(1.0)
+        layout.addRow("vmax (log10):", self.vmax_spin)
+
+        # Density min threshold
+        self.density_min_thresh_spin = QDoubleSpinBox()
+        self.density_min_thresh_spin.setDecimals(2)
+        self.density_min_thresh_spin.setMinimum(0)  # log10(1e-20)
+        self.density_min_thresh_spin.setMaximum(10)   # log10(1e20)
+        self.density_min_thresh_spin.setSingleStep(0.1)
+        self.density_min_thresh_spin.setValue(0)    # log10(1e-10)
+        layout.addRow("Density min threshold:", self.density_min_thresh_spin)
+
+        # Density max threshold
+        self.density_max_thresh_spin = QDoubleSpinBox()
+        self.density_max_thresh_spin.setDecimals(2)
+        self.density_max_thresh_spin.setMinimum(0)  # log10(1e-20)
+        self.density_max_thresh_spin.setMaximum(10)   # log10(1e20)
+        self.density_max_thresh_spin.setSingleStep(0.1)
+        self.density_max_thresh_spin.setValue(10)     # log10(1e10)
+        layout.addRow("Density max threshold:", self.density_max_thresh_spin)
+
+        # Buttons
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Apply)
+        layout.addRow(buttons)
+        buttons.accepted.connect(self.accept)
+        buttons.button(QDialogButtonBox.Apply).clicked.connect(self.apply_changes)
+
+        # Initialize values from parent
+        self.sync_from_parent()
+
+        # Connections
+        self.map_dropdown.currentTextChanged.connect(self.on_map_change)
+        self.fixed_cbar_checkbox.stateChanged.connect(self.on_fixed_cbar_toggle)
+        self.manual_vmin_vmax_checkbox.stateChanged.connect(self.on_manual_vmin_vmax_toggle)
+
+    def sync_from_parent(self):
+        p = self.parent
+        self.cmap_dropdown.setCurrentText(p.cmap_dropdown.currentText())
+        self.stream_cmap_dropdown.setCurrentText(p.stream_cmap_dropdown.currentText())
+        self.map_dropdown.setCurrentText(p.map_dropdown.currentText())
+        self.vel_dropdown.setCurrentText(p.vel_dropdown.currentText())
+        self.fixed_cbar_checkbox.setChecked(p.fixed_cbar_enabled)
+        self.fixed_cbar_snap_spin.setMaximum(p.fixed_cbar_snap_spin.maximum())
+        self.fixed_cbar_snap_spin.setValue(p.fixed_cbar_snap_spin.value())
+        self.density_min_thresh_spin.setValue(p.density_min_thresh_spin.value())
+        self.density_max_thresh_spin.setValue(p.density_max_thresh_spin.value())
+        self.vel_dropdown.setEnabled(self.map_dropdown.currentText() == 'Velocity')
+        self.manual_vmin_vmax_checkbox.setChecked(p.manual_vmin_vmax_enabled)
+        self.vmin_spin.setValue(p.manual_vmin)
+        self.vmax_spin.setValue(p.manual_vmax)
+        self.vmin_spin.setEnabled(p.manual_vmin_vmax_enabled)
+        self.vmax_spin.setEnabled(p.manual_vmin_vmax_enabled)
+
+    def apply_changes(self):
+        p = self.parent
+        p.cmap_dropdown.setCurrentText(self.cmap_dropdown.currentText())
+        p.stream_cmap_dropdown.setCurrentText(self.stream_cmap_dropdown.currentText())
+        p.map_dropdown.setCurrentText(self.map_dropdown.currentText())
+        p.vel_dropdown.setCurrentText(self.vel_dropdown.currentText())
+        p.fixed_cbar_enabled = self.fixed_cbar_checkbox.isChecked()
+        p.fixed_cbar_snap_spin.setValue(self.fixed_cbar_snap_spin.value())
+        p.density_min_thresh_spin.setValue(self.density_min_thresh_spin.value())
+        p.density_max_thresh_spin.setValue(self.density_max_thresh_spin.value())
+        p.manual_vmin_vmax_enabled = self.manual_vmin_vmax_checkbox.isChecked()
+        p.manual_vmin = self.vmin_spin.value()
+        p.manual_vmax = self.vmax_spin.value()
+        if p.fixed_cbar_enabled:
+            p.update_fixed_cbar_limits()
+        p.plot_density()
+        self.sync_from_parent()
+
+    def on_map_change(self, text):
+        self.vel_dropdown.setEnabled(text == 'Velocity')
+
+    def on_fixed_cbar_toggle(self, state):
+        # Cambia la llamada al método del padre
+        if self.parent.fixed_cbar_enabled:
+            self.parent.update_fixed_cbar_limits()
+        self.parent.plot_density()
+
+    def on_fixed_cbar_snap_change(self, value):
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
+            self.plot_density()
+
+    def on_manual_vmin_vmax_toggle(self, state):
+        enabled = bool(state)
+        self.vmin_spin.setEnabled(enabled)
+        self.vmax_spin.setEnabled(enabled)
+
+class VideoOptionsDialog(QDialog):
+    def __init__(self, parent=None, nmax=100):
+        super().__init__(parent)
+        self.setWindowTitle("Video Options")
+        self.setMinimumWidth(350)
+        layout = QFormLayout(self)
+
+        self.fps_spin = QSpinBox()
+        self.fps_spin.setMinimum(1)
+        self.fps_spin.setMaximum(60)
+        self.fps_spin.setValue(8)
+        layout.addRow("Frames per second (FPS):", self.fps_spin)
+
+        self.bitrate_spin = QSpinBox()
+        self.bitrate_spin.setMinimum(100)
+        self.bitrate_spin.setMaximum(10000)
+        self.bitrate_spin.setValue(1800)
+        layout.addRow("Bitrate (kbps):", self.bitrate_spin)
+
+        self.start_snap_spin = QSpinBox()
+        self.start_snap_spin.setMinimum(0)
+        self.start_snap_spin.setMaximum(nmax)
+        self.start_snap_spin.setValue(0)
+        layout.addRow("Start snapshot:", self.start_snap_spin)
+
+        self.end_snap_spin = QSpinBox()
+        self.end_snap_spin.setMinimum(0)
+        self.end_snap_spin.setMaximum(nmax)
+        self.end_snap_spin.setValue(nmax)
+        layout.addRow("End snapshot:", self.end_snap_spin)
+
+        self.stop_button = QPushButton("Stop recording")
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.stop_recording)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addRow(buttons)
+        layout.addRow(self.stop_button)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        self.setLayout(layout)
+        self._stop_requested = False
+
+    def stop_recording(self):
+        self._stop_requested = True
+
 class PlotInteractiveWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.sim = None
 
-        # --- Length scale factors for axes ---
-        self.length_scale_factors = {
-            "Simulation UL": 1.0,
-            "cm (CGS)": 1.0,
-            "m (MKS)": 1.0,
-            "AU": 1.495978707e13,         # CGS
-            "Earth radii": 6.371e8,       # CGS
-            "Jupiter radii": 7.1492e9,    # CGS
-            "Solar radii": 6.957e10       # CGS
-        }
-        self.length_scale_factors_mks = {
-            "Simulation UL": 1.0,
-            "cm (CGS)": 0.01,
-            "m (MKS)": 1.0,
-            "AU": 1.495978707e11,         # MKS
-            "Earth radii": 6.371e6,       # MKS
-            "Jupiter radii": 7.1492e7,    # MKS
-            "Solar radii": 6.957e8        # MKS
-        }
+        # --- Opciones de gráfico (widgets ocultos, solo para lógica y dialog) ---
+        self.cmap_dropdown = QComboBox()
+        self.cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.stream_cmap_dropdown = QComboBox()
+        self.stream_cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.map_dropdown = QComboBox()
+        self.map_dropdown.addItems(['Density', 'Energy', 'Velocity'])
+        self.vel_dropdown = QComboBox()
+        self.vel_dropdown.addItems(['vx', 'vy', 'vz'])
+        self.fixed_cbar_checkbox = QCheckBox("Fixed colorbar range")
+        self.fixed_cbar_snap_spin = QSpinBox()
+        self.fixed_cbar_snap_spin.setMinimum(0)
+        self.fixed_cbar_snap_spin.setMaximum(0)
+        self.fixed_cbar_snap_spin.setValue(1)
+        self.density_min_thresh_spin = QDoubleSpinBox()
+        self.density_min_thresh_spin.setDecimals(2)
+        self.density_min_thresh_spin.setMinimum(-20)  # log10(1e-20)
+        self.density_min_thresh_spin.setMaximum(20)   # log10(1e20)
+        self.density_min_thresh_spin.setSingleStep(0.1)
+        self.density_min_thresh_spin.setValue(-10)    # log10(1e-10)
+        self.density_max_thresh_spin = QDoubleSpinBox()
+        self.density_max_thresh_spin.setDecimals(2)
+        self.density_max_thresh_spin.setMinimum(-20)  # log10(1e-20)
+        self.density_max_thresh_spin.setMaximum(20)   # log10(1e20)
+        self.density_max_thresh_spin.setSingleStep(0.1)
+        self.density_max_thresh_spin.setValue(10)     # log10(1e10)
+
+        # --- Manual vmin/vmax state ---
+        self.manual_vmin_vmax_enabled = False
+        self.manual_vmin = 0.0  # log10 value
+        self.manual_vmax = 1.0  # log10 value
+
+        # --- Fixed colorbar state ---
+        self.fixed_cbar_enabled = False  # <-- Añade esta línea para inicializar el atributo
 
         self.init_ui()
-
-        self.slice_type = "theta"  # default
+        self.slice_type = "theta"
         self.last_slice_str = ""
 
     def init_ui(self):
@@ -414,39 +624,15 @@ class PlotInteractiveWindow(QWidget):
         controls_layout.addWidget(self.hill_frac_slider, 7, 1)
 
         self.show_circle_toggle = QCheckBox("Show Hill")
-        self.show_circle_toggle.setEnabled(False)
         controls_layout.addWidget(self.show_circle_toggle, 8, 0)
 
-        self.cmap_dropdown = QComboBox()
-        self.cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
-        self.cmap_dropdown.setEnabled(False)
-        controls_layout.addWidget(QLabel("Colormap:"), 9, 0)
-        controls_layout.addWidget(self.cmap_dropdown, 9, 1)
-
-        # --- New dropdown for streamlines colormap ---
-        self.stream_cmap_dropdown = QComboBox()
-        self.stream_cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
-        self.stream_cmap_dropdown.setEnabled(False)
-        controls_layout.addWidget(QLabel("Streamlines cmap:"), 10, 0)
-        controls_layout.addWidget(self.stream_cmap_dropdown, 10, 1)
-        # Adjust indices of following controls +1
-        self.map_dropdown = QComboBox()
-        self.map_dropdown.addItems(['Density', 'Energy', 'Velocity'])
-        self.map_dropdown.setEnabled(False)
-        controls_layout.addWidget(QLabel("Map type:"), 11, 0)
-        controls_layout.addWidget(self.map_dropdown, 11, 1)
-
-        self.vel_dropdown = QComboBox()
-        self.vel_dropdown.addItems(['vx', 'vy', 'vz'])
-        self.vel_dropdown.setEnabled(False)
-        controls_layout.addWidget(QLabel("Velocity component:"), 12, 0)
-        controls_layout.addWidget(self.vel_dropdown, 12, 1)
-
+        # --- Botón Update plot ---
         self.update_button = QPushButton("Update plot")
         self.update_button.setIcon(QIcon.fromTheme("view-refresh"))
         self.update_button.setEnabled(False)
         controls_layout.addWidget(self.update_button, 13, 0, 1, 2)
 
+        # --- Status label ---
         self.status_label = QLabel("")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setFont(QFont("Segoe UI", 12, QFont.Bold))
@@ -462,8 +648,38 @@ class PlotInteractiveWindow(QWidget):
         controls_layout.addWidget(self.length_scale_combo, 15, 1)
         self.length_scale_combo.currentTextChanged.connect(lambda _: self.plot_density())
 
-        # Remove slice_type_combo from controls_layout if present (now inside slice_box)
-        # ---
+        # --- Botón para opciones de gráfico ---
+        self.plot_options_button = QPushButton("Graph Options")
+        self.plot_options_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ff9800;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 8px;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #e65100;
+            }
+        """)
+        controls_layout.addWidget(self.plot_options_button, 20, 0, 1, 2)
+
+        # --- Button to create video ---
+        self.video_button = QPushButton("Create video")
+        controls_layout.addWidget(self.video_button, 21, 0, 1, 2)
+        self.video_button.clicked.connect(self.open_video_options_dialog)
+
+        # --- Eliminar controles que van al dialog ---
+        # NO crear ni agregar estos widgets al panel principal:
+        # self.cmap_dropdown
+        # self.stream_cmap_dropdown
+        # self.map_dropdown
+        # self.vel_dropdown
+        # self.fixed_cbar_checkbox
+        # self.fixed_cbar_snap_spin
+        # self.density_min_thresh_spin
+        # self.density_max_thresh_spin
 
         controls_group.setLayout(controls_layout)
         controls_group.setStyleSheet("""
@@ -509,12 +725,10 @@ class PlotInteractiveWindow(QWidget):
 
         left_panel_widget = QWidget()
         left_panel_layout = QVBoxLayout(left_panel_widget)
-        left_panel_layout.setSpacing(8)  # <-- reduce spacing between widgets
-        left_panel_layout.setContentsMargins(24, 12, 24, 12)  # <-- reduce top/bottom margin
+        left_panel_layout.setSpacing(8)
+        left_panel_layout.setContentsMargins(24, 12, 24, 12)
         left_panel_layout.addWidget(logo_label, alignment=Qt.AlignHCenter)
-        left_panel_layout.addWidget(controls_group, stretch=1)  # <-- prioritize space for controls
-        # Remove addStretch(1) so controls are not pushed down
-        # left_panel_layout.addStretch(1)  # <-- remove this line
+        left_panel_layout.addWidget(controls_group, stretch=1)
 
         left_panel_widget.setMinimumWidth(420)
         left_panel_widget.setMaximumWidth(520)
@@ -583,13 +797,12 @@ class PlotInteractiveWindow(QWidget):
 
         # Connect signals
         self.update_button.clicked.connect(self.update_plot)
-        self.map_dropdown.currentTextChanged.connect(self.on_map_change)
         self.browse_button.clicked.connect(self.select_simulation_path)
         self.info_button.clicked.connect(self.show_sim_info)
         for edit in [self.r_min, self.r_max, self.theta_min, self.theta_max, self.phi_min, self.phi_max]:
             edit.editingFinished.connect(lambda e=edit: self.normalize_decimal(e))
             edit.editingFinished.connect(self.on_slice_change)
-
+        self.plot_options_button.clicked.connect(self.show_plot_options_dialog)
         self.canvas.mpl_connect('button_release_event', self.on_zoom_release)
 
     def normalize_decimal(self, lineedit):
@@ -624,14 +837,13 @@ class PlotInteractiveWindow(QWidget):
         self.time_slider.setMinimum(0)
         self.time_slider.setMaximum(self.sim._get_nsnaps()-1)
         self.time_slider.setValue(1)
-        # --- Reset all slice fields and state ---
         self.r_min.setText("")
         self.r_max.setText("")
         self.theta_min.setText(str(self.sim.domains.theta.max()))
         self.theta_max.setText('')
         self.phi_min.setText("")
         self.phi_max.setText("")
-        self.last_slice_str = ""  # Reset slice string
+        self.last_slice_str = ""
         for edit in [self.r_min, self.r_max, self.theta_min, self.theta_max, self.phi_min, self.phi_max]:
             edit.setEnabled(True)
         self.res_slider.setEnabled(True)
@@ -640,13 +852,16 @@ class PlotInteractiveWindow(QWidget):
         self.density_slider.setEnabled(True)
         self.hill_frac_slider.setEnabled(True)
         self.show_circle_toggle.setEnabled(True)
-        self.cmap_dropdown.setEnabled(True)
-        self.stream_cmap_dropdown.setEnabled(True)  # <-- habilita el nuevo dropdown
-        self.map_dropdown.setEnabled(True)
-        self.vel_dropdown.setEnabled(True)
         self.update_button.setEnabled(True)
         self.info_button.setEnabled(True)
-        self.on_map_change(self.map_dropdown.currentText())
+        # Actualiza los límites del snapshot en el dialog
+        self.fixed_cbar_snap_spin.setMaximum(self.sim._get_nsnaps()-1)
+        self.fixed_cbar_snap_spin.setValue(1)
+        self.fixed_cbar_limits = {
+            'Density': None,
+            'Velocity': None,
+            'Energy': None
+        }
         self.plot_density()
 
     def show_sim_info(self):
@@ -824,6 +1039,117 @@ class PlotInteractiveWindow(QWidget):
         else:
             self.vel_dropdown.setEnabled(False)
 
+    def on_fixed_cbar_toggle(self, state):
+        # Cambia la llamada al método del padre
+        if self.parent.fixed_cbar_enabled:
+            self.parent.update_fixed_cbar_limits()
+        self.parent.plot_density()
+
+    def on_fixed_cbar_snap_change(self, value):
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
+            self.plot_density()
+
+    def on_density_min_thresh_change(self, value):
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
+            self.plot_density()
+
+    def on_density_max_thresh_change(self, value):
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
+            self.plot_density()
+
+    def update_fixed_cbar_limits(self):
+        # Sincroniza los valores de los spinboxes antes de calcular los límites
+        # Ahora los thresholds son log10, conviértelos a lineal
+        self.density_min_threshold = self.density_min_thresh_spin.value()
+        self.density_max_threshold = self.density_max_thresh_spin.value()
+        # Compute min/max for each map type at the reference snapshot
+        snap = self.fixed_cbar_snap_spin.value()
+        slice_str = self.build_slice_str()
+        res = self.res_slider.value()
+        interpolate = self.interp_toggle.isChecked()
+        map_types = ['Density', 'Velocity', 'Energy']
+        vel_comp = self.vel_dropdown.currentText() if hasattr(self, 'vel_dropdown') else 'vx'
+
+        for map_type in map_types:
+            try:
+                if map_type == 'Density':
+                    gasdens, gasv = self.sim.load_field(
+                        fields=['gasdens', 'gasv'],
+                        slice=slice_str,
+                        snapshot=snap,
+                        interpolate=True
+                    )
+                    if hasattr(gasdens, 'evaluate'):
+                        mesh_x_name = 'var1_mesh'
+                        mesh_y_name = 'var2_mesh'
+                        xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
+                        ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                        xs = np.linspace(xmin, xmax, res)
+                        ys = np.linspace(ymin, ymax, res)
+                        X, Y = np.meshgrid(xs, ys)
+                        data_map = gasdens.evaluate(time=snap, var1=X, var2=Y)
+                        # --- Apply both min and max thresholds before log10 ---
+                        dens_raw = data_map * self.sim.URHO
+                        valid_mask = (dens_raw > self.density_min_threshold) & (dens_raw < self.density_max_threshold)
+                        data_map = np.where(valid_mask, np.log10(dens_raw), np.nan)
+                    else:
+                        dens_raw = gasdens.gasdens_mesh[0] * self.sim.URHO
+                        valid_mask = dens_raw > self.density_min_threshold
+                        data_map = np.where(valid_mask, np.log10(dens_raw), np.nan)
+                elif map_type == 'Velocity':
+                    gasv = self.sim.load_field(
+                        fields='gasv',
+                        slice=slice_str,
+                        snapshot=snap,
+                        interpolate=True
+                    )
+                    if hasattr(gasv, 'evaluate'):
+                        mesh_x_name = 'var1_mesh'
+                        mesh_y_name = 'var2_mesh'
+                        xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
+                        ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                        xs = np.linspace(xmin, xmax, res)
+                        ys = np.linspace(ymin, ymax, res)
+                        X, Y = np.meshgrid(xs, ys)
+                        vel = gasv.evaluate(time=snap, var1=X, var2=Y)
+                        idx = {'vx': 0, 'vy': 1, 'vz': 2}.get(vel_comp, 0)
+                        data_map = vel[idx]
+                    else:
+                        vel = gasv.gasv_mesh[0]
+                        idx = {'vx': 0, 'vy': 1, 'vz': 2}.get(vel_comp, 0)
+                        data_map = vel[idx]
+                elif map_type == 'Energy':
+                    gasenergy = self.sim.load_field(
+                        fields='gasenergy',
+                        slice=slice_str,
+                        snapshot=snap,
+                        interpolate=True
+                    )
+                    if hasattr(gasenergy, 'evaluate'):
+                        mesh_x_name = 'var1_mesh'
+                        mesh_y_name = 'var2_mesh'
+                        xmin, xmax = getattr(gasenergy, mesh_x_name)[0].min(), getattr(gasenergy, mesh_x_name)[0].max()
+                        ymin, ymax = getattr(gasenergy, mesh_y_name)[0].min(), getattr(gasenergy, mesh_y_name)[0].max()
+                        xs = np.linspace(xmin, xmax, res)
+                        ys = np.linspace(ymin, ymax, res)
+                        X, Y = np.meshgrid(xs, ys)
+                        data_map = gasenergy.evaluate(time=snap, var1=X, var2=Y)
+                    else:
+                        data_map = gasenergy.gasenergy_mesh[0]
+                # Ignore NaNs for min/max
+                valid = np.isfinite(data_map)
+                if np.any(valid):
+                    vmin = np.nanmin(data_map)
+                    vmax = np.nanmax(data_map)
+                    self.fixed_cbar_limits[map_type] = (vmin, vmax)
+                else:
+                    self.fixed_cbar_limits[map_type] = None
+            except Exception:
+                self.fixed_cbar_limits[map_type] = None
+
     def plot_density(self, unitsys_override=None):
         import re
 
@@ -841,7 +1167,7 @@ class PlotInteractiveWindow(QWidget):
         hill_frac = self.hill_frac_slider.value()
         show_circle = self.show_circle_toggle.isChecked()
         cmap = self.cmap_dropdown.currentText()
-        stream_cmap = self.stream_cmap_dropdown.currentText()  # <-- use selected streamlines cmap
+        stream_cmap = self.stream_cmap_dropdown.currentText()
         map_type = self.map_dropdown.currentText()
         vel_comp = self.vel_dropdown.currentText()
         n = self.time_slider.value()
@@ -1116,7 +1442,19 @@ class PlotInteractiveWindow(QWidget):
         ax = self.figure.add_subplot(111)
         ax.set_facecolor('white')
         self.figure.set_facecolor('white')
-        pcm = ax.pcolormesh(X_plot, Y_plot, data_map, shading='auto', cmap=cmap)
+
+        # --- Set colorbar limits if fixed colorbar is enabled or manual vmin/vmax is enabled ---
+        vmin = vmax = None
+        if self.manual_vmin_vmax_enabled:
+            # El usuario ingresa el exponente x, aquí se convierte a 10^x
+            vmin =  self.manual_vmin
+            vmax =  self.manual_vmax
+        elif self.fixed_cbar_enabled:
+            limits = self.fixed_cbar_limits.get(map_type)
+            if limits is not None:
+                vmin, vmax = limits
+
+        pcm = ax.pcolormesh(X_plot, Y_plot, data_map, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
       # --- Axis label according to scaling ---
         axis_unit_label = axis_unit_label_map.get(length_unit, length_unit)
         xlabel, ylabel = f'X [{axis_unit_label}]', f'Y [{axis_unit_label}]'
@@ -1177,6 +1515,82 @@ class PlotInteractiveWindow(QWidget):
 
         self.canvas.draw()
         QTimer.singleShot(800, lambda: self.status_label.setText(""))
+
+    def show_plot_options_dialog(self):
+        dlg = PlotOptionsDialog(self)
+        dlg.exec_()
+
+    def open_video_options_dialog(self):
+        if not self.sim:
+            return
+        nmax = self.sim._get_nsnaps() - 1
+        dlg = VideoOptionsDialog(self, nmax=nmax)
+        dlg.stop_button.setEnabled(True)
+        result = dlg.exec_()
+        if result == QDialog.Accepted:
+            fps = dlg.fps_spin.value()
+            bitrate = dlg.bitrate_spin.value()
+            start_snap = dlg.start_snap_spin.value()
+            end_snap = dlg.end_snap_spin.value()
+            self.create_video_with_options(fps, bitrate, start_snap, end_snap, dlg)
+        # If cancelled, do nothing
+
+    def create_video_with_options(self, fps, bitrate, start_snap, end_snap, dlg):
+        from PyQt5.QtWidgets import QFileDialog, QMessageBox
+        video_path, _ = QFileDialog.getSaveFileName(self, "Save video", "fargopy_video.mp4", "MP4 Files (*.mp4)")
+        if not video_path:
+            self.video_button.setEnabled(True)
+            return
+
+        original_snapshot = self.time_slider.value()
+        fig = self.figure
+        ax = fig.gca()
+        self.video_button.setEnabled(False)
+        self._video_animating = True
+
+        frames = list(range(start_snap, end_snap + 1))
+
+        def update_frame(n):
+            if not getattr(self, "_video_animating", False):
+                return []
+            if hasattr(dlg, "_stop_requested") and dlg._stop_requested:
+                self._video_animating = False
+                return []
+            self.time_slider.blockSignals(True)
+            self.time_slider.setValue(n)
+            self.time_slider.blockSignals(False)
+            self.plot_density()
+            ax = fig.gca()
+            return ax.images + ax.collections
+
+        anim = FuncAnimation(fig, update_frame, frames=frames, blit=False, repeat=False)
+
+        writer = FFMpegWriter(fps=fps, metadata=dict(artist='FARGOpy'), bitrate=bitrate)
+        try:
+            anim.save(video_path, writer=writer)
+        except Exception as e:
+            QMessageBox.critical(self, "Error creating video", f"Could not create video:\n{e}")
+            self.time_slider.setValue(original_snapshot)
+            self.video_button.setEnabled(True)
+            self._video_animating = False
+            return
+
+        self._video_animating = False
+        self.time_slider.setValue(original_snapshot)
+        self.video_button.setEnabled(True)
+
+        try:
+            if sys.platform.startswith('linux'):
+                subprocess.Popen(['xdg-open', video_path])
+            elif sys.platform.startswith('darwin'):
+                subprocess.Popen(['open', video_path])
+            elif sys.platform.startswith('win'):
+                os.startfile(video_path)
+        except Exception:
+            pass
+
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Video created", f"Video saved at:\n{video_path}")
 
 if __name__ == "__main__":
     print("Starting GUI...")

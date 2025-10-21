@@ -1,3 +1,4 @@
 {
-    "makefile.configureOnOpen": true
+    "makefile.configureOnOpen": true,
+    "remote.autoForwardPortsFallback": 0
 }

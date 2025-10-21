@@ -98,18 +98,74 @@ class Surface:
 
         self._calculate_polygon_centers()
 
-        # Apply z_cut filter if specified
+        # Si hay z_cut, hacer clipping geométrico en vez de solo filtrar por centroide
         if self.z_cut is not None:
-            valid_indices = self.centers[:, 2] >= self.z_cut
-            self.centers = self.centers[valid_indices]
-            self.triangles = self.triangles[valid_indices]
-            self.areas = self.areas[valid_indices]
-            # Ensure normals are also filtered
+            def clip_triangle_with_plane(tri, z_plane):
+                # tri: (3,3) array
+                # returns list of triangles (each (3,3)) above or on the plane
+                verts = tri
+                z = verts[:, 2]
+                above = z >= z_plane
+                if np.all(above):
+                    return [verts]
+                elif np.all(~above):
+                    return []
+                # Identify configuration
+                idx_above = np.where(above)[0]
+                idx_below = np.where(~above)[0]
+                v = verts
+                tris = []
+                if len(idx_above) == 2 and len(idx_below) == 1:
+                    # Two above, one below: split into two triangles
+                    a, b = idx_above
+                    c = idx_below[0]
+                    va, vb, vc = v[a], v[b], v[c]
+                    # Intersect edges ac and bc with plane
+                    def interp(v1, v2):
+                        dz = v2[2] - v1[2]
+                        if dz == 0: return v1
+                        t = (z_plane - v1[2]) / dz
+                        return v1 + t * (v2 - v1)
+                    vab = va
+                    vbb = vb
+                    vac = interp(va, vc)
+                    vbc = interp(vb, vc)
+                    # Triangle 1: va, vb, vbc
+                    tris.append(np.array([va, vb, vbc]))
+                    # Triangle 2: va, vbc, vac
+                    tris.append(np.array([va, vbc, vac]))
+                elif len(idx_above) == 1 and len(idx_below) == 2:
+                    # One above, two below: split into one triangle
+                    a = idx_above[0]
+                    b, c = idx_below
+                    va, vb, vc = v[a], v[b], v[c]
+                    # Intersect edges ab and ac with plane
+                    def interp(v1, v2):
+                        dz = v2[2] - v1[2]
+                        if dz == 0: return v1
+                        t = (z_plane - v1[2]) / dz
+                        return v1 + t * (v2 - v1)
+                    vab = interp(va, vb)
+                    vac = interp(va, vc)
+                    # Triangle: va, vab, vac
+                    tris.append(np.array([va, vab, vac]))
+                return tris
 
-        self._calculate_all_triangle_areas()
-        self._calculate_normals()
+            new_triangles = []
+            for tri in self.triangles:
+                clipped = clip_triangle_with_plane(tri, self.z_cut)
+                new_triangles.extend(clipped)
+            self.triangles = np.array(new_triangles)
+            self.num_triangles = len(self.triangles)
+            self.centers = np.mean(self.triangles, axis=1)
+            self.areas = np.array([self._calculate_triangle_area(*tri) for tri in self.triangles])
+            self._calculate_normals()
+        else:
+            self._calculate_all_triangle_areas()
+            self._calculate_normals()
+
         self.volume = self.areas * (self.radius / 3)
-        self.normals = self.normals[valid_indices] 
+        
 
     def _tessellate_cylinder(self):
         """
@@ -296,6 +352,9 @@ class Surface:
         else:
             times = np.linspace(snapshot[0], snapshot[1], snapshot[1]-snapshot[0]+1)
         mass = np.zeros(len(times))
+        
+        planet = sim.load_planets(snapshot=0)[planet_index]
+        factor = self.radius/planet.hill_radius 
 
         for i, t in enumerate(tqdm(times, desc="Calculating total mass")):
             # Update surface if following planet
@@ -303,7 +362,7 @@ class Surface:
                 planet = sim.load_planets(snapshot=int(t))[planet_index]
                 self.center = np.array([planet.pos.x, planet.pos.y, planet.pos.z])
                 if hasattr(planet, 'hill_radius'):
-                    self.radius = planet.hill_radius
+                    self.radius = factor * planet.hill_radius
                 self.tessellate()
 
             # Generate random points inside the sphere
@@ -394,13 +453,15 @@ class Surface:
         times = np.linspace(snapshot[0], snapshot[1], steps)
         flux = np.zeros(len(times))
 
+        planet = sim.load_planets()[planet_index]
+        factor = self.radius/planet.hill_radius
         for i, t in enumerate(tqdm(times, desc="Calculating mass flux")):
             # Update surface parameters if following a planet
             if follow_planet:
                 planet = sim.load_planets(snapshot=int(t))[planet_index]
                 self.center = np.array([planet.pos.x, planet.pos.y, planet.pos.z])
                 if hasattr(planet, 'hill_radius'):
-                    self.radius = planet.hill_radius
+                    self.radius = factor*planet.hill_radius
                 self.tessellate()  # Recompute tessellation for new center/radius
 
             # Select centers, normals, and areas according to surface type
@@ -456,248 +517,3 @@ class Surface:
         return flux
 
 
-# class Analyzer:
-#     """
-#     General class for performing calculations and integrals on 3D surfaces or 2D slices
-#     using simulation data. Handles field loading, interpolation, and integration.
-#     """
-
-#     def __init__(self, simulation, surface=None, slice=None, fields=None, snapshots=(1, 10), interpolator='griddata', method='linear', interp_kwargs=None):
-#         """
-#         Initialize an Analyzer object.
-
-#         Parameters
-#         ----------
-#         simulation : Simulation
-#             The simulation object (e.g., fp.Simulation).
-#         surface : Surface, optional
-#             The 3D surface object for 3D calculations.
-#         slice : str, optional
-#             The 2D slice specification for 2D calculations.
-#         fields : list of str
-#             List of fields to load (e.g., ['gasdens', 'gasv']).
-#         snapshots : tuple
-#             Range of snapshots to load (e.g., (1, 10)).
-#         interpolator : str
-#             Interpolation algorithm.
-#         method : str
-#             Interpolation method.
-#         interp_kwargs : dict, optional
-#             Extra kwargs for the interpolator.
-#         """
-#         self.sim = simulation
-#         self.surface = surface
-#         self.slice = slice
-#         self.fields = fields
-#         self.snapshots = snapshots
-#         self.interpolator = interpolator
-#         self.method = method
-#         self.interp_kwargs = interp_kwargs or {}
-#         self.time = None
-#         self.interpolated_fields = None
-
-#         # Load fields with interpolation
-#         self.load_fields()
-
-#     def load_fields(self):
-#         """
-#         Load and interpolate the fields based on the provided configuration.
-#         Ensures self.interpolated_fields is always a list, even for a single field.
-#         """
-#         if self.surface is not None:  # 3D case
-#             self.interpolated_fields = self.sim.load_field(
-#                 fields=self.fields,
-#                 snapshot=self.snapshots,
-#                 interpolate=True
-#             )
-#             # Ensure it's always a list
-#             if not isinstance(self.interpolated_fields, (list, tuple)):
-#                 self.interpolated_fields = [self.interpolated_fields]
-#         elif self.slice is not None:  # 2D case
-#             self.interpolated_fields = self.sim.load_field(
-#                 fields=self.fields,
-#                 slice=self.slice,
-#                 snapshot=self.snapshots,
-#                 interpolate=True
-#             )
-#             if not isinstance(self.interpolated_fields, (list, tuple)):
-#                 self.interpolated_fields = [self.interpolated_fields]
-#         else:
-#             raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
-
-#     def evaluate_fields(
-#         self, time, coordinates,
-#         griddata_kwargs=None, rbf_kwargs=None, idw_kwargs=None, linearnd_kwargs=None
-#     ):
-#         """
-#         Evaluate interpolated fields at a given time and coordinates, allowing specific kwargs for each interpolator.
-
-#         Parameters
-#         ----------
-#         time : float
-#             The time at which to evaluate.
-#         coordinates : tuple of np.ndarray
-#             The coordinates (x, y, z) or (x, z).
-#         griddata_kwargs : dict, optional
-#             Optional kwargs for griddata.
-#         rbf_kwargs : dict, optional
-#             Optional kwargs for RBF.
-#         idw_kwargs : dict, optional
-#             Optional kwargs for IDW.
-#         linearnd_kwargs : dict, optional
-#             Optional kwargs for LinearND.
-
-#         Returns
-#         -------
-#         dict
-#             Dictionary with the field values.
-#         """
-#         results = {}
-#         for field, interp in zip(self.fields, self.interpolated_fields):
-#             # Prepare kwargs in the same format as FieldInterpolator.evaluate
-#             eval_kwargs = {}
-#             if griddata_kwargs is not None:
-#                 eval_kwargs["griddata_kwargs"] = griddata_kwargs
-#             if rbf_kwargs is not None:
-#                 eval_kwargs["rbf_kwargs"] = rbf_kwargs
-#             if idw_kwargs is not None:
-#                 eval_kwargs["idw_kwargs"] = idw_kwargs
-#             if linearnd_kwargs is not None:
-#                 eval_kwargs["linearnd_kwargs"] = linearnd_kwargs
-
-#             field_values = interp.evaluate(
-#                 time=time,
-#                 var1=coordinates[0],
-#                 var2=coordinates[1],
-#                 var3=coordinates[2] if len(coordinates) > 2 else None,
-#                 interpolator=self.interpolator,
-#                 method=self.method,
-#                 **eval_kwargs
-#             )
-
-#             if field == 'gasv':
-#                 results[field] = np.array(field_values).T
-#             else:
-#                 results[field] = field_values
-
-#         return results
-    
-
-#     def calculate_integral(self, integrand, time_steps, dtype):
-#         """
-#         Calculates an integral based on the provided integrand and integration type.
-
-#         Parameters
-#         ----------
-#         integrand : callable
-#             Function defining the integrand, accepting field values as keyword arguments.
-#         time_steps : int
-#             Number of time steps for the calculation.
-#         dtype : str
-#             Type of integration: 'area', 'volume', or 'line'.
-
-#         Returns
-#         -------
-#         np.ndarray
-#             Array of results for each time step.
-#         """
-#         self.time = np.linspace(0, 1, time_steps)
-#         results = np.zeros(len(self.time))
-
-#         if self.surface is not None:  # 3D case
-#             xc, yc, zc = self.surface.centers[:, 0], self.surface.centers[:, 1], self.surface.centers[:, 2]
-#             # Select weights according to the integration type
-#             if dtype == 'volume':
-#                 weights = self.surface.volume
-#             elif dtype == 'area':
-#                 weights = self.surface.areas
-#             else:
-#                 raise ValueError("For 3D, dtype must be 'area' or 'volume'.")
-#             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
-#                 field_values = self.evaluate_fields(t, (xc, yc, zc))
-#                 integrand_values = integrand(**field_values)
-#                 results[i] = np.sum(integrand_values * weights)
-
-#         elif self.slice is not None:  # 2D case
-#             n_points = len(self.surface.centers)
-#             angles = np.linspace(0, 2 * np.pi, n_points, endpoint=False)
-#             x = self.surface.center[0] + self.surface.radius * np.cos(angles)
-#             y = self.surface.center[1] + self.surface.radius * np.sin(angles)
-#             # Select weights according to the integration type
-#             if dtype == 'line':
-#                 dl = 2 * np.pi * self.surface.radius / n_points
-#                 weights = dl
-#             elif dtype == 'area':
-#                 weights = np.ones(n_points)  # You can define area elements if needed
-#             else:
-#                 raise ValueError("For 2D, dtype must be 'line' or 'area'.")
-#             for i, t in enumerate(tqdm(self.time, desc="Calculating integral")):
-#                 field_values = self.evaluate_fields(t, (x, y))
-#                 integrand_values = integrand(**field_values)
-#                 results[i] = np.sum(integrand_values * weights)
-
-#         else:
-#             raise ValueError("Either a surface (3D) or a slice (2D) must be specified.")
-
-#         return results
-    
-#     def total_masss(sim, time_steps, surface):
-#         """
-#         Calculate the total mass within the defined surface over time.
-
-#         Parameters
-#         ----------
-#         sim : Simulation
-#             Simulation object.
-#         time_steps : tuple
-#             Limits of time steps for the calculation.
-#         surface : Surface
-#             Surface object (must have .type, .center, .radius, .height if cylinder).
-
-#         Returns
-#         -------
-#         np.ndarray
-#             Array of total mass at each time step.
-#         """
-
-#         # Detect surface type and build the cut tuple
-#         if surface.type == "sphere":
-#             # cut = (xc, yc, zc, r)
-#             surface_cut = (surface.center[0], surface.center[1], surface.center[2], surface.radius)
-#             volume = surface.volume
-#             centers = surface.centers
-#         elif surface.type == "cylinder":
-#             # cut = (xc, yc, zc, rc, hc)
-#             surface_cut = (surface.center[0], surface.center[1], surface.center[2], surface.radius, surface.height)
-#             # For cylinder, you may want to use lateral_centers and lateral_areas, or combine all
-#             # Here, we use all points (top, bottom, lateral) and sum their contributions
-#             centers = np.concatenate([surface.top_centers, surface.bottom_centers, surface.lateral_centers], axis=0)
-#             volume = np.concatenate([
-#                 np.full(surface.top_centers.shape[0], surface.top_areas),
-#                 np.full(surface.bottom_centers.shape[0], surface.bottom_areas),
-#                 np.full(surface.lateral_centers.shape[0], surface.lateral_areas)
-#             ])
-#         else:
-#             raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
-
-#         steps = time_steps[1] - time_steps[0]
-#         time = np.linspace(time_steps[0], time_steps[1], steps)
-#         mass = np.zeros(len(time))
-
-#         gasdens = sim.load_field(
-#             fields=['gasdens'],
-#             snapshot=time_steps,
-#             cut=surface_cut,
-#             interpolate=True
-#         )
-
-#         for i, t in enumerate(tqdm(time, desc="Calculating total mass")):
-#             rho = gasdens.evaluate(
-#                 time=t,
-#                 var1=centers[:, 0],
-#                 var2=centers[:, 1],
-#                 var3=centers[:, 2]
-#             )
-#             mass[i] = np.sum(rho * volume)
-
-#         return mass
