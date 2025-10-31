@@ -306,6 +306,23 @@ class PlotOptionsDialog(QDialog):
         self.density_max_thresh_spin.setValue(10)     # log10(1e10)
         layout.addRow("Density max threshold:", self.density_max_thresh_spin)
 
+        # Streamlines arrow size
+        self.stream_arrow_size_spin = QDoubleSpinBox()
+        self.stream_arrow_size_spin.setDecimals(2)
+        self.stream_arrow_size_spin.setMinimum(0.1)
+        self.stream_arrow_size_spin.setMaximum(5.0)
+        self.stream_arrow_size_spin.setSingleStep(0.1)
+        self.stream_arrow_size_spin.setValue(parent.stream_arrow_size if hasattr(parent, "stream_arrow_size") else 1.0)
+        layout.addRow("Streamlines arrow size:", self.stream_arrow_size_spin)
+
+        # Hill radius color selector
+        self.hill_color_combo = QComboBox()
+        self.hill_color_combo.addItems([
+            "red", "blue", "white", "black", "green", "yellow", "magenta", "cyan", "orange", "gray"
+        ])
+        self.hill_color_combo.setCurrentText(getattr(parent, "hill_color", "red"))
+        layout.addRow("Hill radius color:", self.hill_color_combo)
+
         # Buttons
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Apply)
         layout.addRow(buttons)
@@ -337,6 +354,8 @@ class PlotOptionsDialog(QDialog):
         self.vmax_spin.setValue(p.manual_vmax)
         self.vmin_spin.setEnabled(p.manual_vmin_vmax_enabled)
         self.vmax_spin.setEnabled(p.manual_vmin_vmax_enabled)
+        self.stream_arrow_size_spin.setValue(getattr(p, "stream_arrow_size", 1.0))
+        self.hill_color_combo.setCurrentText(getattr(p, "hill_color", "red"))
 
     def apply_changes(self):
         p = self.parent
@@ -351,6 +370,8 @@ class PlotOptionsDialog(QDialog):
         p.manual_vmin_vmax_enabled = self.manual_vmin_vmax_checkbox.isChecked()
         p.manual_vmin = self.vmin_spin.value()
         p.manual_vmax = self.vmax_spin.value()
+        p.stream_arrow_size = self.stream_arrow_size_spin.value()
+        p.hill_color = self.hill_color_combo.currentText()
         if p.fixed_cbar_enabled:
             p.update_fixed_cbar_limits()
         p.plot_density()
@@ -453,6 +474,12 @@ class PlotInteractiveWindow(QWidget):
         self.density_max_thresh_spin.setMaximum(20)   # log10(1e20)
         self.density_max_thresh_spin.setSingleStep(0.1)
         self.density_max_thresh_spin.setValue(10)     # log10(1e10)
+        self.stream_arrow_size_spin = QDoubleSpinBox()
+        self.stream_arrow_size_spin.setDecimals(2)
+        self.stream_arrow_size_spin.setMinimum(0.1)
+        self.stream_arrow_size_spin.setMaximum(5.0)
+        self.stream_arrow_size_spin.setSingleStep(0.1)
+        self.stream_arrow_size_spin.setValue(1.0)
 
         # --- Manual vmin/vmax state ---
         self.manual_vmin_vmax_enabled = False
@@ -1467,7 +1494,7 @@ class PlotInteractiveWindow(QWidget):
                 linewidth=0.5,
                 density=stream_density,
                 cmap=stream_cmap,  # <-- use streamlines cmap
-                arrowsize=1
+                arrowsize=getattr(self, "stream_arrow_size", 1.0)  # <-- Usa el tamaño de flecha
             )
 
         planets = self.sim.load_planets(snapshot=n)
@@ -1480,16 +1507,17 @@ class PlotInteractiveWindow(QWidget):
             center_y = 0
             radius = 0
 
+        hill_color = getattr(self, "hill_color", "red")
         if show_circle:
             if is_fixed('theta', slice_str):
                 from matplotlib.patches import Circle
-                circle = Circle((center_x, center_y), radius, color='red', fill=False, linestyle='--', linewidth=3,label=fr'${hill_frac:.1f}\,R_H$')
+                circle = Circle((center_x, center_y), radius, color=hill_color, fill=False, linestyle='--', linewidth=3,label=fr'${hill_frac:.1f}\,R_H$')
                 ax.add_patch(circle)
             elif is_fixed('phi', slice_str):
                 theta = np.linspace(0, np.pi, 100)
                 x = center_x + radius * np.cos(theta)
                 y = center_y + radius * np.sin(theta)
-                ax.plot(x, y, color='red', linewidth=3,label=f'{hill_frac:.1f}'+r'$R_H$', linestyle='--')
+                ax.plot(x, y, color=hill_color, linewidth=3,label=f'{hill_frac:.1f}'+r'$R_H$', linestyle='--')
 
         # Change font and size of axis labels
         font_properties = {'fontsize': 15, 'fontname': 'Serif'}
