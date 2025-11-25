@@ -16,36 +16,48 @@ import fargopy as fp
 
 class Surface:
     """
-    Class to generate and manage 3D surfaces (e.g., spheres, cylinders) for integration and analysis
-    of simulation data. Provides tessellation, geometric properties, and methods for mass and flux
-    calculations over the defined surface.
+    Generate analytic surfaces (sphere, cylinder, plane) suitable for integrating simulation
+    quantities. Provides tessellation, geometric properties, and helpers for mass/flux estimates.
     """
 
-    def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1, center=(0.0, 0.0, 0.0), z_cut=None):
+    def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1,
+                 center=(0.0, 0.0, 0.0), z_cut=None, x_axis=1, y_axis=0, z_axis=0,
+                 width=None, length=None):
         """
-        Initialize a Surface object.
-
         Parameters
         ----------
-        type : str
-            Type of surface ('sphere' or 'cylinder').
-        radius : float
-            Radius of the surface.
+        type : str, optional
+            Surface type: 'sphere', 'cylinder', or 'plane'.
+        radius : float, optional
+            Radius of the sphere or radial extent of the plane.
         height : float, optional
-            Height of the cylinder (required if type='cylinder').
-        subdivisions : int
-            Number of subdivisions for tessellation (higher means finer mesh).
-        center : tuple of float
-            Center coordinates (x, y, z) of the surface.
+            Cylinder height (required when type='cylinder').
+        subdivisions : int, optional
+            Number of recursive subdivisions (sphere) or grid divisions (cylinder/plane).
+        center : tuple of float, optional
+            Cartesian coordinates of the surface center.
         z_cut : float, optional
-            If specified, only include triangles with center z >= z_cut (for hemispheres).
+            If provided, discard the portion of the tessellation with z < z_cut.
+        x_axis, y_axis, z_axis : int, optional
+            Axis-alignment flags (only one can be 1) used to orient planar surfaces.
+        width, length : float, optional
+            Explicit plane dimensions; default to 2 * radius when omitted.
         """
         self.type = type
         self.radius = radius
         self.height = height
         self.subdivisions = subdivisions
         self.center = np.array(center)
-        self.z_cut = z_cut  # New parameter for z-cut
+        self.z_cut = z_cut
+        self.x_axis = x_axis
+        self.y_axis = y_axis
+        self.z_axis = z_axis
+        # Plane dimensions: if not provided, fall back to diameter defined by radius
+        self.width = width if width is not None else 2.0 * self.radius
+        self.length = length if length is not None else 2.0 * self.radius
+        if self.width <= 0 or self.length <= 0:
+            raise ValueError("width and length must be positive numbers")
+        self.volume = None
 
         # Attributes for tessellation
         self.centers = None
@@ -63,14 +75,15 @@ class Surface:
             self._tessellate_sphere()
         elif self.type == "cylinder":
             self._tessellate_cylinder()
+        elif self.type == "plane":
+            self._tessellate_plane()
         else:
-            raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
+            raise ValueError("Unsupported surface type. Use 'sphere', 'cylinder', or 'plane'.")
 
     def _tessellate_sphere(self):
         """
-        Tessellate the sphere using recursive subdivision of an icosahedron.
-        Sets up the triangles, centers, and areas arrays.
-        Applies z_cut if specified.
+        Build a spherical tessellation by recursively subdividing an icosahedron and
+        optionally clipping triangles below the z_cut plane.
         """
         phi = (1.0 + np.sqrt(5.0)) / 2.0
         patterns = [
@@ -98,7 +111,8 @@ class Surface:
 
         self._calculate_polygon_centers()
 
-        # Si hay z_cut, hacer clipping geométrico en vez de solo filtrar por centroide
+        # If z_cut is provided, clip each triangle against the plane instead of
+        # simply filtering by centroid position.
         if self.z_cut is not None:
             def clip_triangle_with_plane(tri, z_plane):
                 # tri: (3,3) array
@@ -169,8 +183,8 @@ class Surface:
 
     def _tessellate_cylinder(self):
         """
-        Tessellate a cylinder into top, bottom, and lateral surfaces.
-        Sets up arrays for centers, normals, and areas for each part.
+        Discretize the cylinder into top, bottom, and lateral panels and populate
+        each panel’s centers, normals, and patch areas.
         """
         theta = np.linspace(0, 2 * np.pi, self.subdivisions, endpoint=False)
         r = np.linspace(0, self.radius, self.subdivisions)
@@ -197,33 +211,66 @@ class Surface:
         self.lateral_normals = np.stack([np.cos(Theta).ravel(), np.sin(Theta).ravel(), np.zeros_like(Z).ravel()], axis=1)
         self.lateral_areas = (2 * np.pi * self.radius / self.subdivisions) * (self.height / self.subdivisions)
 
+    def _tessellate_plane(self):
+        """
+        Discretize an axis-aligned plane into rectangular patches spanning the
+        requested width and length.
+        """
+        axis_flags = np.array([self.x_axis, self.y_axis, self.z_axis], dtype=int)
+        if np.any((axis_flags != 0) & (axis_flags != 1)) or axis_flags.sum() != 1:
+            raise ValueError("Plane normal must align with exactly one axis using 0/1 flags.")
+        if self.subdivisions <= 0:
+            raise ValueError("subdivisions must be >= 1 for plane tessellation.")
+        normal_axis = int(np.argmax(axis_flags))
+        plane_axes = [idx for idx in range(3) if idx != normal_axis]
+        #        lin = np.linspace(-self.radius, self.radius, self.subdivisions + 1)
+        #        centers_axis = 0.5 * (lin[:-1] + lin[1:])
+        #        grid_a, grid_b = np.meshgrid(centers_axis, centers_axis, indexing='ij')
+        #        num_cells = self.subdivisions ** 2
+        #        centers = np.zeros((num_cells, 3))
+        #        centers[:, plane_axes[0]] = grid_a.ravel() + self.center[plane_axes[0]]
+        #        centers[:, plane_axes[1]] = grid_b.ravel() + self.center[plane_axes[1]]
+        #        centers[:, normal_axis] = self.center[normal_axis]
+        #        self.centers = centers
+        #        normal_vector = np.zeros(3)
+        #        normal_vector[normal_axis] = 1.0
+        #        self.normals = np.tile(normal_vector, (num_cells, 1))
+        #        cell_edge = (2 * self.radius) / self.subdivisions
+        #        self.areas = np.full(num_cells, cell_edge ** 2)
+        #        self.num_triangles = num_cells
+        #        self.triangles = None
+        # Use width and length (span) to build grid along the two in-plane axes
+        lin_a = np.linspace(-self.width/2.0, self.width/2.0, self.subdivisions + 1)
+        lin_b = np.linspace(-self.length/2.0, self.length/2.0, self.subdivisions + 1)
+        centers_a = 0.5 * (lin_a[:-1] + lin_a[1:])
+        centers_b = 0.5 * (lin_b[:-1] + lin_b[1:])
+        grid_a, grid_b = np.meshgrid(centers_a, centers_b, indexing='ij')
+        num_cells = self.subdivisions ** 2
+        centers = np.zeros((num_cells, 3))
+        centers[:, plane_axes[0]] = grid_a.ravel() + self.center[plane_axes[0]]
+        centers[:, plane_axes[1]] = grid_b.ravel() + self.center[plane_axes[1]]
+        centers[:, normal_axis] = self.center[normal_axis]
+        self.centers = centers
+        normal_vector = np.zeros(3)
+        normal_vector[normal_axis] = 1.0
+        self.normals = np.tile(normal_vector, (num_cells, 1))
+        cell_edge_a = (self.width) / self.subdivisions
+        cell_edge_b = (self.length) / self.subdivisions
+        self.areas = np.full(num_cells, cell_edge_a * cell_edge_b)
+        self.num_triangles = num_cells
+        self.triangles = None
+
     @staticmethod
     def _normalize(v):
         """
-        Normalize a vector.
-
-        Parameters
-        ----------
-        v : np.ndarray
-            Input vector.
-
-        Returns
-        -------
-        np.ndarray
-            Normalized vector.
+        Return a unit-length copy of the supplied vector.
         """
         return v / np.linalg.norm(v)
 
     def _subdivide_triangle(self, v1, v2, v3, depth):
         """
-        Recursively subdivide a triangle for tessellation.
-
-        Parameters
-        ----------
-        v1, v2, v3 : np.ndarray
-            Vertices of the triangle.
-        depth : int
-            Subdivision depth.
+        Recursively subdivide a base triangle until the requested depth is reached,
+        storing the resulting leaf triangles.
         """
         if depth == 0:
             self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
@@ -239,24 +286,14 @@ class Surface:
 
     def _calculate_polygon_centers(self):
         """
-        Calculate the centroid of each triangle in the tessellation.
+        Compute and cache the centroid for every triangle in the tessellation.
         """
         self.centers = np.mean(self.triangles, axis=1)
 
     @staticmethod
     def _calculate_triangle_area(v1, v2, v3):
         """
-        Calculate the area of a triangle given its vertices.
-
-        Parameters
-        ----------
-        v1, v2, v3 : np.ndarray
-            Vertices of the triangle.
-
-        Returns
-        -------
-        float
-            Area of the triangle.
+        Return the area of the triangle defined by vertices v1, v2, and v3.
         """
         side1 = v2 - v1
         side2 = v3 - v1
@@ -266,15 +303,14 @@ class Surface:
 
     def _calculate_all_triangle_areas(self):
         """
-        Calculate the area for all triangles in the tessellation.
+        Evaluate and cache areas for all triangles currently stored.
         """
         for i, (v1, v2, v3) in enumerate(self.triangles):
             self.areas[i] = self._calculate_triangle_area(v1, v2, v3)
 
     def _calculate_normals(self):
         """
-        Calculate the normal vector for each triangle in the tessellation.
-        Ensures normals point outward from the surface.
+        Compute outward-facing normals for each triangle using the right-hand rule.
         """
         self.normals = np.zeros((self.num_triangles, 3))
         for i, tri in enumerate(self.triangles):
@@ -290,23 +326,20 @@ class Surface:
 
     def tessellate(self):
         """
-        Re-tessellate the surface (sphere or cylinder) based on current parameters.
+        Recompute the tessellation using current parameters (type, radius, etc.).
         """
         if self.type == "sphere":
             self._tessellate_sphere()
         elif self.type == "cylinder":
             self._tessellate_cylinder()
+        elif self.type == "plane":
+            self._tessellate_plane()
         else:
-            raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
+            raise ValueError("Unsupported surface type. Use 'sphere', 'cylinder', or 'plane'.")
 
     def generate_dataframe(self):
         """
-        Generate a pandas DataFrame with tessellation data (centers, normals, areas).
-
-        Returns
-        -------
-        pd.DataFrame
-            DataFrame with columns: 'Center', 'Normal', 'Area'.
+        Export tessellation metadata (center, normal, area) as a pandas DataFrame.
         """
         data = []
         for i, (center, normal, area) in enumerate(zip(self.centers, self.normals, self.areas)):
@@ -317,35 +350,16 @@ class Surface:
             })
         return pd.DataFrame(data)
 
-    def total_mass(self, sim, field='gasdens', n_samples=10000, snapshot=[0,1], interpolator='griddata', method='linear', cut_r=None, follow_planet=True, planet_index=0):
+    def total_mass_mtc(self, sim, field='gasdens', n_samples=10000, snapshot=[0,1],
+                   interpolator='griddata', method='linear', cut_r=None,
+                   follow_planet=True, planet_index=0):
         """
-        Estimate the total mass inside the surface using Monte Carlo sampling.
-
-        Parameters
-        ----------
-        sim : Simulation
-            Simulation object (must have load_field method).
-        field : str
-            Density field name (default 'gasdens').
-        n_samples : int
-            Number of random points for Monte Carlo integration.
-        snapshot : int or list
-            Snapshot(s) to evaluate the field.
-        interpolator : str
-            Interpolation algorithm.
-        method : str
-            Interpolation method.
-        cut_r : float, optional
-            Cut radius for loading field data.
-        follow_planet : bool
-            If True, update surface to follow planet at each snapshot.
-        planet_index : int
-            Index of the planet to follow.
+        Estimate enclosed mass via Monte Carlo sampling of the provided density field.
 
         Returns
         -------
         float or np.ndarray
-            Estimated total mass (array if multiple snapshots).
+            Single value for one snapshot or an array for a snapshot range.
         """
         if isinstance(snapshot, int):
             times = [snapshot]
@@ -421,95 +435,139 @@ class Surface:
             return mass[0]
         return mass
 
-    def mass_flux(self, sim, field_density='gasdens', field_velocity='gasv', snapshot=[0, 1], interpolator='griddata', method='linear', follow_planet=True, planet_index=0):
-        """
-        Compute the total mass flux through the surface for a range of snapshots.
 
-        Parameters
-        ----------
-        sim : Simulation
-            Simulation object (must have load_field and load_planets methods).
-        field_density : str
-            Name of the density field (default 'gasdens').
-        field_velocity : str
-            Name of the velocity field (default 'gasv').
-        snapshot : list
-            Range of snapshots (e.g., [0, 1]).
-        interpolator : str
-            Interpolation algorithm.
-        method : str
-            Interpolation method.
-        follow_planet : bool
-            If True, update surface to follow planet at each snapshot.
-        planet_index : int
-            Index of the planet to follow.
-
-        Returns
-        -------
-        np.ndarray
-            Array with the total mass flux for each snapshot.
+    def mass_flux(self, sim, field_density='gasdens', field_velocity='gasv',
+                snapshot=[0, 1], interpolator='griddata', method='linear',
+                follow_planet=True, planet_index=0,
+                correct_normals=True, relative_velocity=True):
         """
+        Compute the mass flux across the surface for each snapshot.
+        The flux is computed as:
+            Φ = ∑ ρ * (v_rel ⋅ n_out) * dA
+        where v_rel = v - v_planet and n_out is the outward-pointing normal.
+
+        This version is compatible with the unified DataFrame returned
+        by FieldInterpolator when multiple fields are loaded simultaneously.
+        """
+
         steps = snapshot[1] - snapshot[0] + 1
         times = np.linspace(snapshot[0], snapshot[1], steps)
         flux = np.zeros(len(times))
 
-        planet = sim.load_planets()[planet_index]
-        factor = self.radius/planet.hill_radius
+        # Initial planet for scaling
+        planet0 = sim.load_planets()[planet_index]
+        factor = self.radius / planet0.hill_radius
+
         for i, t in enumerate(tqdm(times, desc="Calculating mass flux")):
-            # Update surface parameters if following a planet
+
+            # -------------------------------------------------------------
+            # Update the surface position and scale if following the planet
+            # -------------------------------------------------------------
             if follow_planet:
                 planet = sim.load_planets(snapshot=int(t))[planet_index]
                 self.center = np.array([planet.pos.x, planet.pos.y, planet.pos.z])
-                if hasattr(planet, 'hill_radius'):
-                    self.radius = factor*planet.hill_radius
-                self.tessellate()  # Recompute tessellation for new center/radius
 
-            # Select centers, normals, and areas according to surface type
+                if hasattr(planet, 'hill_radius'):
+                    self.radius = factor * planet.hill_radius
+
+                self.tessellate()
+
+            # Planet velocity (for relative velocities)
+            vpx, vpy, vpz = planet.vel.x, planet.vel.y, planet.vel.z
+
+            # -------------------------------------------------------------
+            # Select geometric properties of the surface
+            # -------------------------------------------------------------
             if self.type == "sphere":
                 centers = self.centers
                 normals = self.normals
                 areas = self.areas
                 surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius)
+
             elif self.type == "cylinder":
-                centers = np.concatenate([self.top_centers, self.bottom_centers, self.lateral_centers], axis=0)
-                normals = np.concatenate([self.top_normals, self.bottom_normals, self.lateral_normals], axis=0)
+                centers = np.concatenate([self.top_centers,
+                                        self.bottom_centers,
+                                        self.lateral_centers], axis=0)
+                normals = np.concatenate([self.top_normals,
+                                        self.bottom_normals,
+                                        self.lateral_normals], axis=0)
                 areas = np.concatenate([
                     np.full(self.top_centers.shape[0], self.top_areas),
                     np.full(self.bottom_centers.shape[0], self.bottom_areas),
                     np.full(self.lateral_centers.shape[0], self.lateral_areas)
                 ])
-                surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius, 2*self.height)
-            else:
-                raise ValueError("Unsupported surface type. Use 'sphere' or 'cylinder'.")
+                surface_cut = (self.center[0], self.center[1], self.center[2],
+                            2*self.radius, 2*self.height)
 
-            # Load fields for this snapshot and cut
+            elif self.type == "plane":
+                centers = self.centers
+                normals = self.normals
+                areas = self.areas
+                surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius)
+
+            else:
+                raise ValueError("Unsupported surface type.")
+
+            # -------------------------------------------------------------
+            # Load both fields simultaneously into a single DataFrame
+            # -------------------------------------------------------------
             fields = sim.load_field(
                 fields=[field_density, field_velocity],
                 snapshot=[int(t)],
                 interpolate=True,
                 cut=surface_cut
             )
+        
 
-            # Evaluate density at the surface centers
-            rho = fields[0].evaluate(
+            # -------------------------------------------------------------
+            # Interpolate density
+            # -------------------------------------------------------------
+            rho = fields.evaluate(
                 time=t,
                 var1=centers[:, 0],
                 var2=centers[:, 1],
                 var3=centers[:, 2],
                 interpolator=interpolator,
-                method=method
+                method=method,
+                field="gasdens"
             )
-            # Evaluate velocity at the surface centers
-            vel = fields[1].evaluate(
+
+            # -------------------------------------------------------------
+            # Interpolate velocity vector
+            # -------------------------------------------------------------
+            vel = fields.evaluate(
                 time=t,
                 var1=centers[:, 0],
                 var2=centers[:, 1],
                 var3=centers[:, 2],
                 interpolator=interpolator,
-                method=method
+                method=method,
+                field="gasv"
             )
-            if vel.shape[0] == 3 and vel.shape[1] == len(rho):
-                vel = vel.T  # (N, 3)
+
+            # Shape fix (3,N → N,3)
+            if vel.ndim == 2 and vel.shape[0] == 3:
+                vel = vel.T
+
+            # -------------------------------------------------------------
+            # Ensure normals point outward
+            # -------------------------------------------------------------
+            if correct_normals:
+                to_centers = centers - self.center
+                flip = (np.einsum('ij,ij->i', normals, to_centers) < 0)
+                normals[flip] *= -1
+
+            # -------------------------------------------------------------
+            # Convert to velocity in planet's rest frame
+            # -------------------------------------------------------------
+            if relative_velocity:
+                vel[:, 0] -= vpx
+                vel[:, 1] -= vpy
+                vel[:, 2] -= vpz
+
+            # -------------------------------------------------------------
+            # Compute flux for each surface element
+            # -------------------------------------------------------------
             v_dot_n = np.einsum('ij,ij->i', vel, normals)
             dF = rho * v_dot_n * areas
             flux[i] = np.nansum(dF)
@@ -517,3 +575,158 @@ class Surface:
         return flux
 
 
+
+    def total_mass(self,
+                sim,
+                field='gasdens',
+                snapshot=[0,1],
+                follow_planet=True,
+                planet_index=0,
+                return_resolution=False):
+        """
+        Compute enclosed gas mass using exact grid integration (no Monte Carlo),
+        automatically detecting whether the Surface object represents a sphere
+        or a cylinder based on self.type.
+
+        Supported Surface types:
+            - type='sphere'   → spherical region of radius self.radius
+            - type='cylinder' → cylindrical region: radius self.radius, height=self.height
+
+        Parameters
+        ----------
+        sim : Simulation
+        field : str
+            Density field name (typically 'gasdens').
+        snapshot : int or [start, end]
+        follow_planet : bool
+        planet_index : int
+        return_resolution : bool
+
+        Returns
+        -------
+        float or dict or array
+        """
+
+        # --------------------
+        # Handle snapshot list
+        # --------------------
+        if isinstance(snapshot, int):
+            times = [snapshot]
+        else:
+            s0, s1 = snapshot
+            times = np.arange(s0, s1+1)
+
+        masses = []
+        resolutions = []
+
+        # ----------------------------
+        # Load grid info once
+        # ----------------------------
+        gas0 = sim.load_field(field, snapshot=times[0], interpolate=False)
+        r_arr  = gas0.domains.r
+        th_arr = gas0.domains.theta
+        ph_arr = gas0.domains.phi
+
+        TH, RR, PH = np.meshgrid(th_arr, r_arr, ph_arr, indexing='ij')
+
+        X = RR * np.sin(TH) * np.cos(PH)
+        Y = RR * np.sin(TH) * np.sin(PH)
+        Z = RR * np.cos(TH)
+
+        # ----------------------------------------
+        # Precompute cell volumes (FARGO3D metric)
+        # ----------------------------------------
+        dr  = np.diff(r_arr)
+        dth = np.diff(th_arr)
+        dph = np.diff(ph_arr)
+
+        dr_full  = np.empty_like(r_arr);     dr_full[:-1]  = dr;  dr_full[-1]  = dr[-1]
+        dth_full = np.empty_like(th_arr);    dth_full[:-1] = dth; dth_full[-1] = dth[-1]
+        dph_full = np.empty_like(ph_arr);    dph_full[:-1] = dph; dph_full[-1] = dph[-1]
+
+        DR  = dr_full[np.newaxis, :, np.newaxis]
+        DTH = dth_full[:, np.newaxis, np.newaxis]
+        DPH = dph_full[np.newaxis, np.newaxis, :]
+
+        dV = (RR**2) * np.sin(TH) * DR * DTH * DPH
+
+        # ----------------------------------------
+        # Detect geometry
+        # ----------------------------------------
+        geom = self.type.lower()
+
+        if geom not in ['sphere', 'cylinder']:
+            raise ValueError("Surface.type must be 'sphere' or 'cylinder'")
+
+        # Loop over snapshots
+        for t in times:
+
+            # Follow planet
+            if follow_planet:
+                planet = sim.load_planets(snapshot=t)[planet_index]
+                xp, yp, zp = planet.pos.x, planet.pos.y, planet.pos.z
+
+                # Update center and radius according to Hill radius
+                factor = self.radius / sim.load_planets(snapshot=times[0])[planet_index].hill_radius
+                self.center = (xp, yp, zp)
+                self.radius = factor * planet.hill_radius
+
+            else:
+                xp, yp, zp = self.center
+
+            Xc = X - xp
+            Yc = Y - yp
+            Zc = Z - zp
+
+            # ---------------------------------------
+            # Apply geometry mask
+            # ---------------------------------------
+            if geom == 'sphere':
+                Rlim = self.radius
+                mask = (Xc**2 + Yc**2 + Zc**2) <= Rlim**2
+
+                # If z_cut exists → semisphere
+                if hasattr(self, 'z_cut') and (self.z_cut is not None):
+                    mask &= (Z >= self.z_cut)
+
+                Hlim = None
+
+            elif geom == 'cylinder':
+                Rlim = self.radius
+                Hlim = self.height   # provided by Surface(type='cylinder', height=...)
+
+                Rcyl = np.sqrt(Xc**2 + Yc**2)
+    
+                mask = (Rcyl <= Rlim) & (np.abs(Zc) <= Hlim) & (np.abs(Zc) >= -Hlim)
+
+            # ---------------------------------------
+            # Load density for this snapshot
+            # ---------------------------------------
+            rho = sim.load_field(field, snapshot=t, interpolate=False).data
+
+            # Enclosed mass
+            M = np.sum(rho[mask] * dV[mask])
+            masses.append(M)
+
+            # Resolution info
+            if return_resolution:
+                idx_th, idx_r, idx_ph = np.where(mask)
+
+                resolutions.append({
+                    "snapshot": t,
+                    "mass": M,
+                    "geometry": geom,
+                    "R_extent": Rlim,
+                    "H_extent": Hlim,
+                    "N_theta": len(np.unique(idx_th)),
+                    "N_r":     len(np.unique(idx_r)),
+                    "N_phi":   len(np.unique(idx_ph)),
+                    "N_total": mask.sum()
+                })
+
+        # Return logic
+        if return_resolution:
+            return resolutions
+        if len(masses) == 1:
+            return masses[0]
+        return np.array(masses)

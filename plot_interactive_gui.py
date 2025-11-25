@@ -16,7 +16,76 @@ plt.style.use('seaborn-v0_8-whitegrid')
 from matplotlib.animation import FuncAnimation
 from matplotlib.animation import FFMpegWriter
 import os
+import re
 import subprocess
+
+COLORMAPS = ['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo']
+MAP_TYPES = ['Density', 'Energy', 'Velocity']
+VELOCITY_COMPONENTS = ['vx', 'vy', 'vz']
+VEL_INDEX = {'vx': 0, 'vy': 1, 'vz': 2}
+
+# Unit helpers reused across dialogs and plotting
+LENGTH_FACTORS = {
+    "cgs": {
+        "cm (CGS)": 1.0,
+        "m (MKS)": 100.0,
+        "AU": 1.495978707e13,
+        "Earth radii": 6.371e8,
+        "Jupiter radii": 7.1492e9,
+        "Solar radii": 6.957e10,
+    },
+    "mks": {
+        "cm (CGS)": 0.01,
+        "m (MKS)": 1.0,
+        "AU": 1.495978707e11,
+        "Earth radii": 6.371e6,
+        "Jupiter radii": 7.1492e7,
+        "Solar radii": 6.957e8,
+    },
+}
+
+MASS_FACTORS = {
+    "cgs": {
+        "g (CGS)": 1.0,
+        "kg (MKS)": 1000.0,
+        "Earth masses": 5.9722e27,
+        "Jupiter masses": 1.89813e30,
+        "Solar masses": 1.98847e33,
+    },
+    "mks": {
+        "g (CGS)": 0.001,
+        "kg (MKS)": 1.0,
+        "Earth masses": 5.9722e24,
+        "Jupiter masses": 1.89813e27,
+        "Solar masses": 1.98847e30,
+    },
+}
+
+AXIS_UNIT_LABELS = {
+    "cgs": {
+        "Simulation UL": "UL",
+        "cm (CGS)": "cm",
+        "m (MKS)": "m",
+        "AU": "AU",
+        "Earth radii": "R$_\\oplus$",
+        "Jupiter radii": "R$_J$",
+        "Solar radii": "R$_\\odot$",
+    },
+    "mks": {
+        "Simulation UL": "UL (m)",
+        "cm (CGS)": "cm",
+        "m (MKS)": "m",
+        "AU": "AU",
+        "Earth radii": "R$_\\oplus$",
+        "Jupiter radii": "R$_J$",
+        "Solar radii": "R$_\\odot$",
+    },
+}
+
+
+def _units_table(unitsys: str, table: dict):
+    """Return the conversion table for the requested unit system."""
+    return table["mks"] if str(unitsys).lower() == "mks" else table["cgs"]
 
 class SimInfoDialog(QDialog):
     def __init__(self, sim, parent=None):
@@ -91,43 +160,42 @@ class SimInfoDialog(QDialog):
 
     def update_ul_display(self):
         ul = getattr(self.sim, "UL", 1.0)
-        unitsys = self.units_combo.currentText().upper()
-        AU = 1.495978707e13 if unitsys == "CGS" else 1.495978707e11
-        RE = 6.371e8 if unitsys == "CGS" else 6.371e6
-        RJ = 7.1492e9 if unitsys == "CGS" else 7.1492e7
-        RS = 6.957e10 if unitsys == "CGS" else 6.957e8
-        if self.ul_unit_combo.currentText().startswith("Earth radii"):
-            value = ul / RE
-        elif self.ul_unit_combo.currentText().startswith("Jupiter radii"):
-            value = ul / RJ
-        elif self.ul_unit_combo.currentText().startswith("Solar radii"):
-            value = ul / RS
-        elif self.ul_unit_combo.currentText().endswith("AU"):
-            value = ul / AU
-        elif self.ul_unit_combo.currentText().endswith("cm"):
-            value = ul if unitsys == "CGS" else ul * 100
-        elif self.ul_unit_combo.currentText().endswith("m"):
-            value = ul if unitsys == "MKS" else ul / 100
+        unitsys = self.units_combo.currentText()
+        factors = _units_table(unitsys, LENGTH_FACTORS)
+        unit_label = self.ul_unit_combo.currentText()
+
+        if unit_label.startswith("Earth radii"):
+            value = ul / factors["Earth radii"]
+        elif unit_label.startswith("Jupiter radii"):
+            value = ul / factors["Jupiter radii"]
+        elif unit_label.startswith("Solar radii"):
+            value = ul / factors["Solar radii"]
+        elif unit_label.endswith("AU"):
+            value = ul / factors["AU"]
+        elif unit_label.endswith("cm"):
+            value = ul / factors["cm (CGS)"]
+        elif unit_label.endswith("m"):
+            value = ul / factors["m (MKS)"]
         else:
             value = ul
         self.ul_spin.setValue(value)
 
     def update_um_display(self):
         um = getattr(self.sim, "UM", 1.0)
-        unitsys = self.units_combo.currentText().upper()
-        ME = 5.9722e27 if unitsys == "CGS" else 5.9722e24
-        MJ = 1.89813e30 if unitsys == "CGS" else 1.89813e27
-        MS = 1.98847e33 if unitsys == "CGS" else 1.98847e30
-        if self.um_unit_combo.currentText().startswith("Earth masses"):
-            value = um / ME
-        elif self.um_unit_combo.currentText().startswith("Jupiter masses"):
-            value = um / MJ
-        elif self.um_unit_combo.currentText().startswith("Solar masses"):
-            value = um / MS
-        elif self.um_unit_combo.currentText().endswith("g"):
-            value = um if unitsys == "CGS" else um * 1000
-        elif self.um_unit_combo.currentText().endswith("kg"):
-            value = um if unitsys == "MKS" else um / 1000
+        unitsys = self.units_combo.currentText()
+        factors = _units_table(unitsys, MASS_FACTORS)
+        unit_label = self.um_unit_combo.currentText()
+
+        if unit_label.startswith("Earth masses"):
+            value = um / factors["Earth masses"]
+        elif unit_label.startswith("Jupiter masses"):
+            value = um / factors["Jupiter masses"]
+        elif unit_label.startswith("Solar masses"):
+            value = um / factors["Solar masses"]
+        elif unit_label.endswith("g"):
+            value = um / factors["g (CGS)"]
+        elif unit_label.endswith("kg"):
+            value = um / factors["kg (MKS)"]
         else:
             value = um
         self.um_spin.setValue(value)
@@ -170,44 +238,46 @@ class SimInfoDialog(QDialog):
             self.parent().plot_density(self.units_combo.currentText())
 
     def apply_changes(self):
-        unitsys = self.units_combo.currentText().upper()
-        AU = 1.495978707e13 if unitsys == "CGS" else 1.495978707e11
-        RE = 6.371e8 if unitsys == "CGS" else 6.371e6
-        RJ = 7.1492e9 if unitsys == "CGS" else 7.1492e7
-        RS = 6.957e10 if unitsys == "CGS" else 6.957e8
-        ME = 5.9722e27 if unitsys == "CGS" else 5.9722e24
-        MJ = 1.89813e30 if unitsys == "CGS" else 1.89813e27
-        MS = 1.98847e33 if unitsys == "CGS" else 1.98847e30
+        unitsys = self.units_combo.currentText()
+        length_factors = _units_table(unitsys, LENGTH_FACTORS)
+        mass_factors = _units_table(unitsys, MASS_FACTORS)
+        unitsys_upper = str(unitsys).upper()
 
         ul_val = self.ul_spin.value()
         ul_unit = self.ul_unit_combo.currentText()
         if ul_unit.startswith("Earth radii"):
-            ul = ul_val * RE
+            ul = ul_val * length_factors["Earth radii"]
         elif ul_unit.startswith("Jupiter radii"):
-            ul = ul_val * RJ
+            ul = ul_val * length_factors["Jupiter radii"]
         elif ul_unit.startswith("Solar radii"):
-            ul = ul_val * RS
+            ul = ul_val * length_factors["Solar radii"]
         elif ul_unit.endswith("AU"):
-            ul = ul_val * AU
+            ul = ul_val * length_factors["AU"]
         elif ul_unit.endswith("cm"):
-            ul = ul_val if unitsys == "CGS" else ul_val * 100
+            ul = ul_val if unitsys_upper == "CGS" else ul_val * 100
         elif ul_unit.endswith("m"):
-            ul = ul_val if unitsys == "MKS" else ul_val / 100
+            ul = ul_val if unitsys_upper == "MKS" else ul_val / 100
         else:
             ul = ul_val
 
         um_val = self.um_spin.value()
         um_unit = self.um_unit_combo.currentText()
         if um_unit.startswith("Earth masses"):
-            um = um_val * ME
+            um = um_val * mass_factors["Earth masses"]
         elif um_unit.startswith("Jupiter masses"):
-            um = um_val * MJ
+            um = um_val * mass_factors["Jupiter masses"]
         elif um_unit.startswith("Solar masses"):
-            um = um_val * MS
+            um = um_val * mass_factors["Solar masses"]
         elif um_unit.endswith("g"):
-            um = um_val if unitsys == "CGS" else um_val * 1000
+            if unitsys_upper == "CGS":
+                um = um_val * mass_factors["g (CGS)"]
+            else:
+                um = um_val * 1000
         elif um_unit.endswith("kg"):
-            um = um_val if unitsys == "MKS" else um_val / 1000
+            if unitsys_upper == "MKS":
+                um = um_val * mass_factors["kg (MKS)"]
+            else:
+                um = um_val / 1000
         else:
             um = um_val
 
@@ -241,22 +311,22 @@ class PlotOptionsDialog(QDialog):
 
         # Main colormap
         self.cmap_dropdown = QComboBox()
-        self.cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.cmap_dropdown.addItems(COLORMAPS)
         layout.addRow("Colormap:", self.cmap_dropdown)
 
         # Streamlines colormap
         self.stream_cmap_dropdown = QComboBox()
-        self.stream_cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.stream_cmap_dropdown.addItems(COLORMAPS)
         layout.addRow("Streamlines colormap:", self.stream_cmap_dropdown)
 
         # Map type
         self.map_dropdown = QComboBox()
-        self.map_dropdown.addItems(['Density', 'Energy', 'Velocity'])
+        self.map_dropdown.addItems(MAP_TYPES)
         layout.addRow("Map type:", self.map_dropdown)
 
         # Velocity component
         self.vel_dropdown = QComboBox()
-        self.vel_dropdown.addItems(['vx', 'vy', 'vz'])
+        self.vel_dropdown.addItems(VELOCITY_COMPONENTS)
         layout.addRow("Velocity component:", self.vel_dropdown)
 
         # Fixed colorbar
@@ -287,24 +357,6 @@ class PlotOptionsDialog(QDialog):
         self.vmax_spin.setMaximum(30)
         self.vmax_spin.setValue(1.0)
         layout.addRow("vmax (log10):", self.vmax_spin)
-
-        # Density min threshold
-        self.density_min_thresh_spin = QDoubleSpinBox()
-        self.density_min_thresh_spin.setDecimals(2)
-        self.density_min_thresh_spin.setMinimum(0)  # log10(1e-20)
-        self.density_min_thresh_spin.setMaximum(10)   # log10(1e20)
-        self.density_min_thresh_spin.setSingleStep(0.1)
-        self.density_min_thresh_spin.setValue(0)    # log10(1e-10)
-        layout.addRow("Density min threshold:", self.density_min_thresh_spin)
-
-        # Density max threshold
-        self.density_max_thresh_spin = QDoubleSpinBox()
-        self.density_max_thresh_spin.setDecimals(2)
-        self.density_max_thresh_spin.setMinimum(0)  # log10(1e-20)
-        self.density_max_thresh_spin.setMaximum(10)   # log10(1e20)
-        self.density_max_thresh_spin.setSingleStep(0.1)
-        self.density_max_thresh_spin.setValue(10)     # log10(1e10)
-        layout.addRow("Density max threshold:", self.density_max_thresh_spin)
 
         # Streamlines arrow size
         self.stream_arrow_size_spin = QDoubleSpinBox()
@@ -346,8 +398,6 @@ class PlotOptionsDialog(QDialog):
         self.fixed_cbar_checkbox.setChecked(p.fixed_cbar_enabled)
         self.fixed_cbar_snap_spin.setMaximum(p.fixed_cbar_snap_spin.maximum())
         self.fixed_cbar_snap_spin.setValue(p.fixed_cbar_snap_spin.value())
-        self.density_min_thresh_spin.setValue(p.density_min_thresh_spin.value())
-        self.density_max_thresh_spin.setValue(p.density_max_thresh_spin.value())
         self.vel_dropdown.setEnabled(self.map_dropdown.currentText() == 'Velocity')
         self.manual_vmin_vmax_checkbox.setChecked(p.manual_vmin_vmax_enabled)
         self.vmin_spin.setValue(p.manual_vmin)
@@ -365,8 +415,6 @@ class PlotOptionsDialog(QDialog):
         p.vel_dropdown.setCurrentText(self.vel_dropdown.currentText())
         p.fixed_cbar_enabled = self.fixed_cbar_checkbox.isChecked()
         p.fixed_cbar_snap_spin.setValue(self.fixed_cbar_snap_spin.value())
-        p.density_min_thresh_spin.setValue(self.density_min_thresh_spin.value())
-        p.density_max_thresh_spin.setValue(self.density_max_thresh_spin.value())
         p.manual_vmin_vmax_enabled = self.manual_vmin_vmax_checkbox.isChecked()
         p.manual_vmin = self.vmin_spin.value()
         p.manual_vmax = self.vmax_spin.value()
@@ -427,21 +475,29 @@ class VideoOptionsDialog(QDialog):
         self.end_snap_spin.setValue(nmax)
         layout.addRow("End snapshot:", self.end_snap_spin)
 
-        self.stop_button = QPushButton("Stop recording")
-        self.stop_button.setEnabled(False)
-        self.stop_button.clicked.connect(self.stop_recording)
-
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         layout.addRow(buttons)
-        layout.addRow(self.stop_button)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-
         self.setLayout(layout)
-        self._stop_requested = False
 
-    def stop_recording(self):
-        self._stop_requested = True
+class RecordingProgressDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Recording video")
+        self.setModal(True)
+        layout = QVBoxLayout(self)
+        self.status_label = QLabel("Recording... Press Stop to finish early.")
+        layout.addWidget(self.status_label)
+        self.stop_button = QPushButton("Stop recording")
+        layout.addWidget(self.stop_button)
+        self.stop_button.clicked.connect(self._request_stop)
+        self.stop_requested = False
+
+    def _request_stop(self):
+        self.stop_requested = True
+        self.stop_button.setEnabled(False)
+        self.status_label.setText("Stopping… finishing current frame.")
 
 class PlotInteractiveWindow(QWidget):
     def __init__(self):
@@ -450,30 +506,18 @@ class PlotInteractiveWindow(QWidget):
 
         # --- Opciones de gráfico (widgets ocultos, solo para lógica y dialog) ---
         self.cmap_dropdown = QComboBox()
-        self.cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.cmap_dropdown.addItems(COLORMAPS)
         self.stream_cmap_dropdown = QComboBox()
-        self.stream_cmap_dropdown.addItems(['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo'])
+        self.stream_cmap_dropdown.addItems(COLORMAPS)
         self.map_dropdown = QComboBox()
-        self.map_dropdown.addItems(['Density', 'Energy', 'Velocity'])
+        self.map_dropdown.addItems(MAP_TYPES)
         self.vel_dropdown = QComboBox()
-        self.vel_dropdown.addItems(['vx', 'vy', 'vz'])
+        self.vel_dropdown.addItems(VELOCITY_COMPONENTS)
         self.fixed_cbar_checkbox = QCheckBox("Fixed colorbar range")
         self.fixed_cbar_snap_spin = QSpinBox()
         self.fixed_cbar_snap_spin.setMinimum(0)
         self.fixed_cbar_snap_spin.setMaximum(0)
         self.fixed_cbar_snap_spin.setValue(1)
-        self.density_min_thresh_spin = QDoubleSpinBox()
-        self.density_min_thresh_spin.setDecimals(2)
-        self.density_min_thresh_spin.setMinimum(-20)  # log10(1e-20)
-        self.density_min_thresh_spin.setMaximum(20)   # log10(1e20)
-        self.density_min_thresh_spin.setSingleStep(0.1)
-        self.density_min_thresh_spin.setValue(-10)    # log10(1e-10)
-        self.density_max_thresh_spin = QDoubleSpinBox()
-        self.density_max_thresh_spin.setDecimals(2)
-        self.density_max_thresh_spin.setMinimum(-20)  # log10(1e-20)
-        self.density_max_thresh_spin.setMaximum(20)   # log10(1e20)
-        self.density_max_thresh_spin.setSingleStep(0.1)
-        self.density_max_thresh_spin.setValue(10)     # log10(1e10)
         self.stream_arrow_size_spin = QDoubleSpinBox()
         self.stream_arrow_size_spin.setDecimals(2)
         self.stream_arrow_size_spin.setMinimum(0.1)
@@ -492,6 +536,57 @@ class PlotInteractiveWindow(QWidget):
         self.init_ui()
         self.slice_type = "theta"
         self.last_slice_str = ""
+
+    def _set_velocity_options(self, components):
+        """Only touch the velocity dropdown if the options actually change."""
+        desired = list(components)
+        current = [self.vel_dropdown.itemText(i) for i in range(self.vel_dropdown.count())]
+        if current == desired:
+            return
+        self.vel_dropdown.blockSignals(True)
+        self.vel_dropdown.clear()
+        self.vel_dropdown.addItems(desired)
+        self.vel_dropdown.blockSignals(False)
+
+    def _length_scale_info(self):
+        if not self.sim:
+            return None, None, getattr(self, "length_scale_combo", None), "cgs"
+        sim_unitsys = getattr(self.sim, "unitsystem", "cgs").lower()
+        length_unit = self.length_scale_combo.currentText()
+        unit_factors = dict(_units_table(sim_unitsys, LENGTH_FACTORS))
+        unit_factors["Simulation UL"] = self.sim.UL
+        scale_factor = unit_factors.get(length_unit, self.sim.UL)
+        axis_labels = AXIS_UNIT_LABELS.get(sim_unitsys, AXIS_UNIT_LABELS["cgs"])
+        axis_label = axis_labels.get(length_unit, length_unit)
+        return scale_factor, axis_label, sim_unitsys, length_unit
+
+    def _length_input_to_sim_units(self, value_str):
+        if not value_str or not self.sim:
+            return value_str
+        try:
+            value = float(value_str)
+        except ValueError:
+            return value_str
+        scale_factor, _, _, _ = self._length_scale_info()
+        if not scale_factor:
+            return value_str
+        converted = value * scale_factor / self.sim.UL
+        return f"{converted:.10g}"
+
+    def _sim_length_to_display(self, value):
+        if value is None or not self.sim:
+            return value
+        scale_factor, _, _, _ = self._length_scale_info()
+        if not scale_factor:
+            return value
+        display_val = value * self.sim.UL / scale_factor
+        return f"{display_val:.3f}"
+
+    def _format_angle(self, value):
+        try:
+            return f"{float(value):.3f}"
+        except (TypeError, ValueError):
+            return str(value) if value is not None else ""
 
     def init_ui(self):
         self.setFont(QFont("Segoe UI", 13))
@@ -866,7 +961,7 @@ class PlotInteractiveWindow(QWidget):
         self.time_slider.setValue(1)
         self.r_min.setText("")
         self.r_max.setText("")
-        self.theta_min.setText(str(self.sim.domains.theta.max()))
+        self.theta_min.setText(self._format_angle(self.sim.domains.theta.max()))
         self.theta_max.setText('')
         self.phi_min.setText("")
         self.phi_max.setText("")
@@ -900,13 +995,15 @@ class PlotInteractiveWindow(QWidget):
         self.slice_type = text
         # When changing slice type, reset fields according to convention
         if self.slice_type == "theta":
-            self.theta_min.setText(str(self.sim.domains.theta.max()))
+            theta_val = self._format_angle(self.sim.domains.theta.max())
+            self.theta_min.setText(theta_val)
             self.theta_max.setText('')
             self.phi_min.setText("")
             self.phi_max.setText("")
         else:
-            self.phi_min.setText("0")
-            self.phi_max.setText("0")
+            zero = self._format_angle(0.0)
+            self.phi_min.setText(zero)
+            self.phi_max.setText(zero)
             self.theta_min.setText("")
             self.theta_max.setText("")
         self.r_min.setText("")
@@ -921,16 +1018,17 @@ class PlotInteractiveWindow(QWidget):
         ax = self.figure.gca()
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        scale_label = self.length_scale_combo.currentText()
-
+        scale_factor, _, _, _ = self._length_scale_info()
+        if not self.sim or not scale_factor:
+            return
         x_min_plot, x_max_plot = xlim
         y_min_plot, y_max_plot = ylim
-        x_min_ul = x_min_plot
-        x_max_ul = x_max_plot
-        y_min_ul = y_min_plot
-        y_max_ul = y_max_plot
+        to_ul = scale_factor / self.sim.UL
+        x_min_ul = x_min_plot * to_ul
+        x_max_ul = x_max_plot * to_ul
+        y_min_ul = y_min_plot * to_ul
+        y_max_ul = y_max_plot * to_ul
 
-        # Now, x_ul, y_ul are in UL (simulation units)
         corners = [
             (x_min_ul, y_min_ul),
             (x_min_ul, y_max_ul),
@@ -967,30 +1065,30 @@ class PlotInteractiveWindow(QWidget):
         phi_max = np.max(phi_list)
 
         if self.slice_type == "theta":
-            theta_val = str(self.sim.domains.theta.max())
+            theta_val = self._format_angle(self.sim.domains.theta.max())
             self.theta_min.setText(theta_val)
             self.theta_max.setText(theta_val)
-            self.r_min.setText(f"{r_min:.5f}")
-            self.r_max.setText(f"{r_max:.5f}")
-            self.phi_min.setText(f"{phi_min:.5f}")
-            self.phi_max.setText(f"{phi_max:.5f}")
+            self.r_min.setText(self._sim_length_to_display(r_min))
+            self.r_max.setText(self._sim_length_to_display(r_max))
+            self.phi_min.setText(self._format_angle(phi_min))
+            self.phi_max.setText(self._format_angle(phi_max))
             slice_str = (
                 f"theta={theta_val},"
-                f"r=[{r_min:.5f},{r_max:.5f}],"
-                f"phi=[{phi_min:.5f},{phi_max:.5f}]"
+                f"r=[{r_min:.3f},{r_max:.3f}],"
+                f"phi=[{phi_min:.3f},{phi_max:.3f}]"
             )
         else:
-            phi_val = self.phi_min.text() if self.phi_min.text() != "" else "0"
+            phi_val = self.phi_min.text() if self.phi_min.text() != "" else self._format_angle(0.0)
             self.phi_min.setText(phi_val)
             self.phi_max.setText(phi_val)
-            self.r_min.setText(f"{r_min:.5f}")
-            self.r_max.setText(f"{r_max:.5f}")
-            self.theta_min.setText(f"{theta_min:.5f}")
-            self.theta_max.setText(f"{theta_max:.5f}")
+            self.r_min.setText(self._sim_length_to_display(r_min))
+            self.r_max.setText(self._sim_length_to_display(r_max))
+            self.theta_min.setText(self._format_angle(theta_min))
+            self.theta_max.setText(self._format_angle(theta_max))
             slice_str = (
                 f"phi={phi_val},"
-                f"r=[{r_min:.5f},{r_max:.5f}],"
-                f"theta=[{theta_min:.5f},{theta_max:.5f}]"
+                f"r=[{r_min:.3f},{r_max:.3f}],"
+                f"theta=[{theta_min:.3f},{theta_max:.3f}]"
             )
         self.last_slice_str = slice_str
         self._fields_edited = False
@@ -1014,6 +1112,9 @@ class PlotInteractiveWindow(QWidget):
         theta_max_val = norm(self.theta_max.text())
         phi_min_val = norm(self.phi_min.text())
         phi_max_val = norm(self.phi_max.text())
+
+        r_min_val = self._length_input_to_sim_units(r_min_val)
+        r_max_val = self._length_input_to_sim_units(r_max_val)
 
         slice_parts = []
         # Si ambos r_min y r_max están vacíos, y ambos phi_min y phi_max están vacíos, y theta está definido, es un slice en theta
@@ -1077,54 +1178,37 @@ class PlotInteractiveWindow(QWidget):
             self.update_fixed_cbar_limits()
             self.plot_density()
 
-    def on_density_min_thresh_change(self, value):
-        if self.fixed_cbar_enabled:
-            self.update_fixed_cbar_limits()
-            self.plot_density()
-
-    def on_density_max_thresh_change(self, value):
-        if self.fixed_cbar_enabled:
-            self.update_fixed_cbar_limits()
-            self.plot_density()
-
     def update_fixed_cbar_limits(self):
-        # Sincroniza los valores de los spinboxes antes de calcular los límites
-        # Ahora los thresholds son log10, conviértelos a lineal
-        self.density_min_threshold = self.density_min_thresh_spin.value()
-        self.density_max_threshold = self.density_max_thresh_spin.value()
-        # Compute min/max for each map type at the reference snapshot
-        snap = self.fixed_cbar_snap_spin.value()
         slice_str = self.build_slice_str()
         res = self.res_slider.value()
         interpolate = self.interp_toggle.isChecked()
-        map_types = ['Density', 'Velocity', 'Energy']
+        map_types = MAP_TYPES
         vel_comp = self.vel_dropdown.currentText() if hasattr(self, 'vel_dropdown') else 'vx'
+        snap = self.fixed_cbar_snap_spin.value()
 
         for map_type in map_types:
             try:
                 if map_type == 'Density':
-                    gasdens, gasv = self.sim.load_field(
+                    data = self.sim.load_field(
                         fields=['gasdens', 'gasv'],
                         slice=slice_str,
                         snapshot=snap,
                         interpolate=True
                     )
-                    if hasattr(gasdens, 'evaluate'):
+                    if hasattr(data, 'evaluate'):
                         mesh_x_name = 'var1_mesh'
                         mesh_y_name = 'var2_mesh'
-                        xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
-                        ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                        xmin, xmax = getattr(data, mesh_x_name)[0].min(), getattr(data, mesh_x_name)[0].max()
+                        ymin, ymax = getattr(data, mesh_y_name)[0].min(), getattr(data, mesh_y_name)[0].max()
                         xs = np.linspace(xmin, xmax, res)
                         ys = np.linspace(ymin, ymax, res)
                         X, Y = np.meshgrid(xs, ys)
-                        data_map = gasdens.evaluate(time=snap, var1=X, var2=Y)
-                        # --- Apply both min and max thresholds before log10 ---
+                        data_map = data.evaluate(field='gasdens',time=snap, var1=X, var2=Y)
                         dens_raw = data_map * self.sim.URHO
-                        valid_mask = (dens_raw > self.density_min_threshold) & (dens_raw < self.density_max_threshold)
-                        data_map = np.where(valid_mask, np.log10(dens_raw), np.nan)
+                        data_map = np.where(dens_raw > 0, np.log10(dens_raw), np.nan)
                     else:
-                        dens_raw = gasdens.gasdens_mesh[0] * self.sim.URHO
-                        valid_mask = dens_raw > self.density_min_threshold
+                        dens_raw = data.gasdens_mesh[0] * self.sim.URHO
+                        valid_mask = dens_raw > 0
                         data_map = np.where(valid_mask, np.log10(dens_raw), np.nan)
                 elif map_type == 'Velocity':
                     gasv = self.sim.load_field(
@@ -1133,6 +1217,7 @@ class PlotInteractiveWindow(QWidget):
                         snapshot=snap,
                         interpolate=True
                     )
+                    
                     if hasattr(gasv, 'evaluate'):
                         mesh_x_name = 'var1_mesh'
                         mesh_y_name = 'var2_mesh'
@@ -1142,11 +1227,11 @@ class PlotInteractiveWindow(QWidget):
                         ys = np.linspace(ymin, ymax, res)
                         X, Y = np.meshgrid(xs, ys)
                         vel = gasv.evaluate(time=snap, var1=X, var2=Y)
-                        idx = {'vx': 0, 'vy': 1, 'vz': 2}.get(vel_comp, 0)
+                        idx = VEL_INDEX.get(vel_comp, 0)
                         data_map = vel[idx]
                     else:
                         vel = gasv.gasv_mesh[0]
-                        idx = {'vx': 0, 'vy': 1, 'vz': 2}.get(vel_comp, 0)
+                        idx = VEL_INDEX.get(vel_comp, 0)
                         data_map = vel[idx]
                 elif map_type == 'Energy':
                     gasenergy = self.sim.load_field(
@@ -1178,8 +1263,6 @@ class PlotInteractiveWindow(QWidget):
                 self.fixed_cbar_limits[map_type] = None
 
     def plot_density(self, unitsys_override=None):
-        import re
-
         if not self.sim:
             return
 
@@ -1203,58 +1286,9 @@ class PlotInteractiveWindow(QWidget):
         sim_unitsys = getattr(self.sim, "unitsystem", "cgs").lower()
         length_unit = self.length_scale_combo.currentText()
 
-        unit_factors_cgs = {
-            "Simulation UL": self.sim.UL,
-            "cm (CGS)": 1.0,
-            "m (MKS)": 100.0,
-            "AU": 1.495978707e13,
-            "Earth radii": 6.371e8,
-            "Jupiter radii": 7.1492e9,
-            "Solar radii": 6.957e10
-        }
-        unit_factors_mks = {
-            "Simulation UL": self.sim.UL,
-            "cm (CGS)": 0.01,
-            "m (MKS)": 1.0,
-            "AU": 1.495978707e11,
-            "Earth radii": 6.371e6,
-            "Jupiter radii": 7.1492e7,
-            "Solar radii": 6.957e8
-        }
-
-        if sim_unitsys == "mks":
-            unit_factors = unit_factors_mks
-            axis_unit_label_map = {
-                "Simulation UL": f"UL (m)",
-                "cm (CGS)": "cm",
-                "m (MKS)": "m",
-                "AU": "AU",
-                "Earth radii": "R$_\\oplus$",
-                "Jupiter radii": "R$_J$",
-                "Solar radii": "R$_\\odot$"
-            }
-        elif sim_unitsys == "cgs":
-            unit_factors = unit_factors_cgs
-            axis_unit_label_map = {
-                "Simulation UL": f"UL",
-                "cm (CGS)": "cm",
-                "m (MKS)": "m",
-                "AU": "AU",
-                "Earth radii": "R$_\\oplus$",
-                "Jupiter radii": "R$_J$",
-                "Solar radii": "R$_\\odot$"
-            }
-        else:
-            unit_factors = unit_factors_cgs  # Default to CGS if unknown
-            axis_unit_label_map = {
-                "Simulation UL": f"UL",
-                "cm (CGS)": "cm",
-                "m (MKS)": "m",
-                "AU": "AU",
-                "Earth radii": "R$_\\oplus$",
-                "Jupiter radii": "R$_J$",
-                "Solar radii": "R$_\\odot$"
-            }
+        unit_factors = dict(_units_table(sim_unitsys, LENGTH_FACTORS))
+        unit_factors["Simulation UL"] = self.sim.UL
+        axis_unit_label_map = AXIS_UNIT_LABELS.get(sim_unitsys, AXIS_UNIT_LABELS["cgs"])
 
         scale_factor = unit_factors.get(length_unit, self.sim.UL)
 
@@ -1278,22 +1312,19 @@ class PlotInteractiveWindow(QWidget):
         if is_fixed('theta', slice_str):
             mesh_x_name = 'var1_mesh'
             mesh_y_name = 'var2_mesh'
-            self.vel_dropdown.clear()
-            self.vel_dropdown.addItems(['vx', 'vy'])
+            self._set_velocity_options(['vx', 'vy'])
         elif is_fixed('phi', slice_str):
             mesh_x_name = 'var1_mesh'
             mesh_y_name = 'var3_mesh'
-            self.vel_dropdown.clear()
-            self.vel_dropdown.addItems(['vx', 'vz'])
+            self._set_velocity_options(['vx', 'vz'])
         else:
             mesh_x_name = 'var1_mesh'
             mesh_y_name = 'var2_mesh'
-            self.vel_dropdown.clear()
-            self.vel_dropdown.addItems(['vx', 'vy'])
+            self._set_velocity_options(['vx', 'vy'])
 
         # Load data according to selection
         if map_type == 'Density':
-            gasdens, gasv = self.sim.load_field(
+            data = self.sim.load_field(
                 fields=['gasdens', 'gasv'],
                 slice=slice_str,
                 snapshot=n,
@@ -1320,18 +1351,26 @@ class PlotInteractiveWindow(QWidget):
                 interpolate=True
             )
 
+        # Select the object that provides the mesh arrays (used for xmin/xmax/ymin/ymax)
+        if map_type == 'Density':
+            mesh_source = data
+        elif map_type == 'Energy':
+            mesh_source = gasenergy
+        else:  # Velocity
+            mesh_source = gasv
+
         # --- Interpolation ---
         if interpolate:
             if mesh_y_name == 'var2_mesh':
-                xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
-                ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                xmin, xmax = getattr(mesh_source, mesh_x_name)[0].min(), getattr(mesh_source, mesh_x_name)[0].max()
+                ymin, ymax = getattr(mesh_source, mesh_y_name)[0].min(), getattr(mesh_source, mesh_y_name)[0].max()
                 xs = np.linspace(xmin, xmax, res)
                 ys = np.linspace(ymin, ymax, res)
                 X, Y = np.meshgrid(xs, ys)
                 if map_type == 'Density':
-                    data_map = gasdens.evaluate(time=n, var1=X, var2=Y)
+                    data_map = data.evaluate(field='gasdens', time=n, var1=X, var2=Y)
                     data_map = np.log10(data_map * self.sim.URHO)
-                    vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                    vel = data.evaluate(field='gasv', time=n, var1=X, var2=Y)
                     vx = vel[0]
                     vy = vel[1]
                     vmag = np.sqrt(vx**2 + vy**2)
@@ -1343,21 +1382,21 @@ class PlotInteractiveWindow(QWidget):
                     vmag = np.sqrt(vx**2 + vy**2)
                 elif map_type == 'Velocity':
                     vel = gasv.evaluate(time=n, var1=X, var2=Y)
-                    idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
+                    idx = VEL_INDEX[vel_comp]
                     data_map = vel[idx]
                     vx = vel[0]
                     vy = vel[1]
                     vmag = np.sqrt(vx**2 + vy**2)
             else:
-                xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
-                zmin, zmax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
+                xmin, xmax = getattr(mesh_source, mesh_x_name)[0].min(), getattr(mesh_source, mesh_x_name)[0].max()
+                zmin, zmax = getattr(mesh_source, mesh_y_name)[0].min(), getattr(mesh_source, mesh_y_name)[0].max()
                 xs = np.linspace(xmin, xmax, res)
                 zs = np.linspace(zmin, zmax, res)
                 X, Y = np.meshgrid(xs, zs)
                 if map_type == 'Density':
-                    data_map = gasdens.evaluate(time=n, var1=X, var3=Y)
+                    data_map = data.evaluate(field='gasdens', time=n, var1=X, var3=Y)
                     data_map = np.log10(data_map * self.sim.URHO)
-                    vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                    vel = data.evaluate(field='gasv', time=n, var1=X, var3=Y)
                     vx = vel[0]
                     vy = vel[2]
                     vmag = np.sqrt(vx**2 + vy**2)
@@ -1369,18 +1408,18 @@ class PlotInteractiveWindow(QWidget):
                     vmag = np.sqrt(vx**2 + vy**2)
                 elif map_type == 'Velocity':
                     vel = gasv.evaluate(time=n, var1=X, var3=Y)
-                    idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
+                    idx = VEL_INDEX[vel_comp]
                     data_map = vel[idx]
                     vx = vel[0]
                     vy = vel[2]
                     vmag = np.sqrt(vx**2 + vy**2)
         else:
             if mesh_y_name == 'var2_mesh':
-                X = getattr(gasv, mesh_x_name)[0]
-                Y = getattr(gasv, mesh_y_name)[0]
+                X = getattr(mesh_source, mesh_x_name)[0]
+                Y = getattr(mesh_source, mesh_y_name)[0]
                 if map_type == 'Density':
-                    data_map = np.log10(gasdens.gasdens_mesh[0] * self.sim.URHO)
-                    vel = gasv.gasv_mesh[0]
+                    data_map = np.log10(data.gasdens_mesh[0] * self.sim.URHO)
+                    vel = data.gasv_mesh[0]
                     vx = vel[0]
                     vy = vel[1]
                     vmag = np.sqrt(vx**2 + vy**2)
@@ -1392,17 +1431,17 @@ class PlotInteractiveWindow(QWidget):
                     vmag = np.sqrt(vx**2 + vy**2)
                 elif map_type == 'Velocity':
                     vel = gasv.gasv_mesh[0]
-                    idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
+                    idx = VEL_INDEX[vel_comp]
                     data_map = vel[idx]
                     vx = vel[0]
                     vy = vel[1]
                     vmag = np.sqrt(vx**2 + vy**2)
             else:
-                X = getattr(gasv, mesh_x_name)[0]
-                Y = getattr(gasv, mesh_y_name)[0]
+                X = getattr(mesh_source, mesh_x_name)[0]
+                Y = getattr(mesh_source, mesh_y_name)[0]
                 if map_type == 'Density':
-                    data_map = np.log10(gasdens.gasdens_mesh[0] * self.sim.URHO)
-                    vel = gasv.gasv_mesh[0]
+                    data_map = np.log10(data.gasdens_mesh[0] * self.sim.URHO)
+                    vel = data.gasv_mesh[0]
                     vx = vel[0]
                     vy = vel[2]
                     vmag = np.sqrt(vx**2 + vy**2)
@@ -1425,20 +1464,56 @@ class PlotInteractiveWindow(QWidget):
         X_plot = X * self.sim.UL / scale_factor
         Y_plot = Y * self.sim.UL / scale_factor
 
+        # Convert velocities consistently:
+        # - data returned by evaluate / meshes is in simulation velocity units (UL/UT).
+        # - vx_phys, vy_phys, vmag_phys => physical units (cm/s for CGS, m/s for MKS)
+        # - vx_plot, vy_plot => units matching X_plot/Y_plot (needed by streamplot)
+        # - vmag_kms => km/s for colorbar (always)
+        vx_phys = vy_phys = vmag_phys = None
+        vx_plot = vy_plot = vmag_kms = None
+
         if map_type == 'Velocity':
-            vx = vx * v_factor
-            vy = vy * v_factor
-            vmag = vmag * v_factor
-        # --- Always convert vmag to km/s for streamlines colorbar ---
-        vmag_kms = None
-        if show_streamlines and vmag is not None:
-            # vmag está en cm/s o m/s, convertir a km/s
-            if sim_unitsys == "cgs":
-                vmag_kms = vmag
-            elif sim_unitsys == "mks":
-                vmag_kms = vmag
-            else:
-                vmag_kms = vmag
+            # data_map, vx, vy, vmag were set above (in sim units)
+            try:
+                vx_phys = vx * v_factor
+                vy_phys = vy * v_factor
+                vmag_phys = vmag * v_factor
+            except Exception:
+                vx_phys = vy_phys = vmag_phys = None
+
+            # Convert physical velocities to plotting units (axis units per second)
+            if vx_phys is not None and scale_factor is not None:
+                vx_plot = vx_phys / scale_factor
+            if vy_phys is not None and scale_factor is not None:
+                vy_plot = vy_phys / scale_factor
+
+            # Convert physical velocities to km/s for colorbar (always)
+            if vmag_phys is not None:
+                if sim_unitsys == "cgs":
+                    denom = 1e5   # 1 km = 1e5 cm
+                else:
+                    denom = 1e3   # 1 km = 1e3 m
+                vmag_kms = vmag_phys / denom
+
+            # Also convert the scalar field used by pcolormesh (data_map) to km/s
+            if 'data_map' in locals() and data_map is not None:
+                try:
+                    data_map = (data_map * v_factor) / (1e5 if sim_unitsys == "cgs" else 1e3)
+                except Exception:
+                    pass
+        else:
+            # For non-velocity maps, still prepare vmag_kms if streamlines requested
+            if 'vmag' in locals() and vmag is not None:
+                try:
+                    vmag_phys = vmag * v_factor
+                    denom = 1e5 if sim_unitsys == "cgs" else 1e3
+                    vmag_kms = vmag_phys / denom
+                    # streamline vector components must be in plot units for correct arrows:
+                    if 'vx' in locals() and 'vy' in locals():
+                        vx_plot = (vx * v_factor) / scale_factor
+                        vy_plot = (vy * v_factor) / scale_factor
+                except Exception:
+                    vmag_kms = None
 
         # --- Masking and plotting ---
         # r in plot units (same as X_plot/Y_plot)
@@ -1487,14 +1562,15 @@ class PlotInteractiveWindow(QWidget):
         xlabel, ylabel = f'X [{axis_unit_label}]', f'Y [{axis_unit_label}]'
 
         stream_obj = None
-        if show_streamlines and vx is not None and vy is not None:
+        # Use vx_plot/vy_plot (axis-units per second) for streamplot so arrows scale correctly.
+        if show_streamlines and vx_plot is not None and vy_plot is not None:
             stream_obj = ax.streamplot(
-                X_plot, Y_plot, vx, vy,
+                X_plot, Y_plot, vx_plot, vy_plot,
                 color=vmag_kms if vmag_kms is not None else None,
                 linewidth=0.5,
                 density=stream_density,
-                cmap=stream_cmap,  # <-- use streamlines cmap
-                arrowsize=getattr(self, "stream_arrow_size", 1.0)  # <-- Usa el tamaño de flecha
+                cmap=stream_cmap,
+                arrowsize=getattr(self, "stream_arrow_size", 1.0)
             )
 
         planets = self.sim.load_planets(snapshot=n)
@@ -1537,9 +1613,10 @@ class PlotInteractiveWindow(QWidget):
             elif map_type == 'Energy':
                 cbar_label = r'$\log_{10}(\mathrm{{energy}})$'
             else:
-                cbar_label = f'{vel_comp} [{vel_unit}]'
-            cbar = self.figure.colorbar(pcm, ax=ax)
-            cbar.set_label(cbar_label, fontsize=18, fontname='Serif')
+                # Always show velocity colorbar in km/s
+                cbar_label = f'{vel_comp} [km/s]'
+                cbar = self.figure.colorbar(pcm, ax=ax)
+                cbar.set_label(cbar_label, fontsize=18, fontname='Serif')
 
         self.canvas.draw()
         QTimer.singleShot(800, lambda: self.status_label.setText(""))
@@ -1553,17 +1630,14 @@ class PlotInteractiveWindow(QWidget):
             return
         nmax = self.sim._get_nsnaps() - 1
         dlg = VideoOptionsDialog(self, nmax=nmax)
-        dlg.stop_button.setEnabled(True)
-        result = dlg.exec_()
-        if result == QDialog.Accepted:
+        if dlg.exec_() == QDialog.Accepted:
             fps = dlg.fps_spin.value()
             bitrate = dlg.bitrate_spin.value()
             start_snap = dlg.start_snap_spin.value()
             end_snap = dlg.end_snap_spin.value()
-            self.create_video_with_options(fps, bitrate, start_snap, end_snap, dlg)
-        # If cancelled, do nothing
+            self.create_video_with_options(fps, bitrate, start_snap, end_snap)
 
-    def create_video_with_options(self, fps, bitrate, start_snap, end_snap, dlg):
+    def create_video_with_options(self, fps, bitrate, start_snap, end_snap):
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         video_path, _ = QFileDialog.getSaveFileName(self, "Save video", "fargopy_video.mp4", "MP4 Files (*.mp4)")
         if not video_path:
@@ -1572,40 +1646,50 @@ class PlotInteractiveWindow(QWidget):
 
         original_snapshot = self.time_slider.value()
         fig = self.figure
-        ax = fig.gca()
         self.video_button.setEnabled(False)
         self._video_animating = True
 
         frames = list(range(start_snap, end_snap + 1))
-
-        def update_frame(n):
-            if not getattr(self, "_video_animating", False):
-                return []
-            if hasattr(dlg, "_stop_requested") and dlg._stop_requested:
-                self._video_animating = False
-                return []
-            self.time_slider.blockSignals(True)
-            self.time_slider.setValue(n)
-            self.time_slider.blockSignals(False)
-            self.plot_density()
-            ax = fig.gca()
-            return ax.images + ax.collections
-
-        anim = FuncAnimation(fig, update_frame, frames=frames, blit=False, repeat=False)
+        progress = RecordingProgressDialog(self)
+        progress.show()
+        QApplication.processEvents()
 
         writer = FFMpegWriter(fps=fps, metadata=dict(artist='FARGOpy'), bitrate=bitrate)
+        frames_written = 0
+
         try:
-            anim.save(video_path, writer=writer)
+            with writer.saving(fig, video_path, dpi=fig.dpi or 100):
+                for snap in frames:
+                    QApplication.processEvents()
+                    if progress.stop_requested:
+                        break
+                    self.time_slider.blockSignals(True)
+                    self.time_slider.setValue(snap)
+                    self.time_slider.blockSignals(False)
+                    self.plot_density()
+                    writer.grab_frame()
+                    frames_written += 1
         except Exception as e:
+            progress.close()
             QMessageBox.critical(self, "Error creating video", f"Could not create video:\n{e}")
             self.time_slider.setValue(original_snapshot)
             self.video_button.setEnabled(True)
             self._video_animating = False
             return
+        finally:
+            progress.close()
 
         self._video_animating = False
         self.time_slider.setValue(original_snapshot)
         self.video_button.setEnabled(True)
+
+        if frames_written == 0:
+            try:
+                os.remove(video_path)
+            except Exception:
+                pass
+            QMessageBox.warning(self, "Video not created", "Recording stopped before any frame was captured.")
+            return
 
         try:
             if sys.platform.startswith('linux'):
@@ -1617,8 +1701,10 @@ class PlotInteractiveWindow(QWidget):
         except Exception:
             pass
 
-        from PyQt5.QtWidgets import QMessageBox
-        QMessageBox.information(self, "Video created", f"Video saved at:\n{video_path}")
+        msg = "Video saved successfully."
+        if progress.stop_requested:
+            msg += f"\nStopped early after {frames_written} frame(s)."
+        QMessageBox.information(self, "Video created", f"{msg}\nPath:\n{video_path}")
 
 if __name__ == "__main__":
     print("Starting GUI...")

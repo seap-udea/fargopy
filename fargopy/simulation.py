@@ -74,105 +74,6 @@ if not fargopy.IN_COLAB:
 # Classes
 ###############################################################
 
-class Planet:
-    """
-    Represents a planet in the simulation, holding its physical state and properties.
-
-    Attributes
-    ----------
-    name : str
-        Name or label of the planet.
-    mass : float
-        Planet mass (in Msun or simulation units).
-    pos : Planet.Vector
-        Current cartesian position (x, y, z) in AU.
-    vel : Planet.Vector
-        Current cartesian velocity (vx, vy, vz) in AU/UT.
-    posi : Planet.Vector
-        Initial cartesian position (x, y, z) in AU.
-    mstar : float
-        Stellar mass (in Msun or simulation units).
-
-    Properties
-    ----------
-    hill_radius : float
-        The Hill radius of the planet (in AU), computed from its current position and mass.
-
-    Example
-    -------
-    >>> jupiter = planets[0]
-    >>> print(jupiter.pos.x, jupiter.vel.y, jupiter.hill_radius)
-    """
-    def __init__(self, name, pos, vel, mass, posi, mstar):
-        self.name = name
-        self.mass = mass
-        self.pos = Planet._Vector(*pos)
-        self.vel = Planet._Vector(*vel)
-        self.posi = Planet._Vector(*posi)
-        self.mstar = mstar
-
-    class _Vector:
-        """
-        Simple vector class for 3D coordinates, allowing attribute and index access.
-
-        Attributes
-        ----------
-        x : float
-            X coordinate.
-        y : float
-            Y coordinate.
-        z : float
-            Z coordinate.
-        """
-        def __init__(self, x, y, z):
-            self.x = x
-            self.y = y
-            self.z = z
-        def __getitem__(self, idx):
-            return [self.x, self.y, self.z][idx]
-        def __array__(self):
-            import numpy as np
-            return np.array([self.x, self.y, self.z])
-        def __repr__(self):
-            return f"[{self.x}, {self.y}, {self.z}]"
-
-    @property
-    def hill_radius(self):
-        """
-        .. :no-index:
-
-        Returns the Hill radius in AU, using the current position and mass.
-
-        Returns
-        -------
-        float
-            Hill radius in AU.
-        """
-        AU_to_cm = 1.495978707e13
-        Mjup_to_g = 1.898e30
-        Msun_to_g = 1.989e33
-
-        # Distance to star (AU)
-        r_au = (self.pos.x**2 + self.pos.y**2 + self.pos.z**2)**0.5
-        m_jup = self.mass * 1e3  # Msun to Mjup
-        mstar_g = float(self.mstar) * Msun_to_g
-        r_cm = r_au * AU_to_cm
-        m_p = m_jup * Mjup_to_g
-
-        r_hill_cm = r_cm * (m_p / (3 * mstar_g))**(1/3)
-        r_hill_au = r_hill_cm / AU_to_cm
-        return r_hill_au
-
-    def __repr__(self):
-        """
-        String representation of the Planet object.
-
-        Returns
-        -------
-        str
-        """
-        return f"Planet(name={self.name}, mass={self.mass}, pos={self.pos}, vel={self.vel}, posi={self.posi})"
-
 class Simulation(fargopy.Fargobj):
     """
     Main class for managing a FARGOpy simulation. Handles setup, compilation, running, and data access
@@ -201,23 +102,31 @@ class Simulation(fargopy.Fargobj):
         >>> sim = fargopy.Simulation(setup='fargo', load=True)
     """
     def __init__(self,**kwargs):
-        """Initialize a simulation.
+        """
+        Initialize a simulation instance and optionally bind it to an existing setup/output.
 
-        Examples:
-            Create an empty simulation (no setup chosen):
+        Parameters
+        ----------
+        **kwargs : dict
+            Accepted keys include:
+            - ``setup``: name of the setup directory.
+            - ``fargo3d_dir``: root directory where FARGO3D is installed.
+            - ``output_dir``: path to an existing output directory.
+            - ``load``: when True, load metadata from ``fargopy_simulation.json`` inside the setup.
+
+        Examples
+        --------
+        Create an empty simulation:
             >>> sim = fargopy.Simulation()
 
-            Create a simulation using a specific base FARGO3D directory (no setup chosen):
+        Point to a specific FARGO3D installation:
             >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
 
-            Create a simulation starting with setup directory: 
-            >>> sim = fargopy.Simulation(setup='fargo')
-            
-            Connect to an existing simulation:
-            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+        Attach to a setup and load metadata:
+            >>> sim = fargopy.Simulation(setup='fargo', load=True)
 
-            Load an already existing simulation:
-            >>> sim = fargopy.Simulation(setup='fargo',load=True)
+        Connect to previously generated outputs:
+            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
         """
         super().__init__(**kwargs)
 
@@ -296,7 +205,7 @@ class Simulation(fargopy.Fargobj):
         
     # ##########################################################################
     # Set special properties
-    # ##########################################################################  
+    # #########################################a#################################  
     def set_fargo3d_dir(self,dir=None):
         """
         Set the FARGO3D directory for the simulation.
@@ -1399,60 +1308,46 @@ class Simulation(fargopy.Fargobj):
         return domains        
 
 
-    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False,cut=None):
+    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False, cut=None):
         """
-        Load a field from the simulation.
-
-        Parameters
-        ----------
-        fields : str or list of str
-            Field name(s) to load.
-        slice : str, optional
-            Slice for 2D data (e.g., 'theta=1.5').
-        snapshot : int or list, optional
-            Snapshot index or indices to load.
-        type : str, optional
-            Type of the field ('scalar' or 'vector'). Default is 'scalar'.
-        interpolate : bool, optional
-            Whether to interpolate the field. Default is False.
-        cut : tuple, optional
-            Spatial cut for loading a subset of the field.
-
-        Returns
-        -------
-        fargopy.Field or list of fargopy.Field
-            The loaded field(s) or DataHandler object(s).
+        Load a field or multiple fields from the simulation.
         """
+
         # Ensure fields is a list
         if isinstance(fields, str):
             fields = [fields]
 
-        # Interpolation case
-        if interpolate==True:
-            fields_data = []
-            for field in fields:
-                field_data = fargopy.FieldInterpolator(self)
-                # Pass the current field instead of the entire list
-                field_data.load_data(field, slice, snapshot, cut=cut)
-                fields_data.append(field_data)
-            return fields_data if len(fields_data) > 1 else fields_data[0]
+        # ==========================================================
+        # ===  CASE 1: interpolate=True  → unify multiple fields ===
+        # ==========================================================
+        if interpolate is True:
 
-        # Non-interpolation case
-        else :
+            # Crear un *solo* FieldInterpolator
+            handler = fargopy.FieldInterpolator(self)
+
+            # Llamar load_data UNA vez pasando todos los fields
+            handler.load_data(
+                fields=fields,
+                slice=slice,
+                snapshots=snapshot,
+                cut=cut
+            )
+
+            # Devolver solo este objeto (no lista)
+            return handler
+
+        # ==========================================================
+        # ===  CASE 2: interpolate=False → comportamiento antiguo ===
+        # ==========================================================
+        else:
             if not self.has('vars'):
-                # If the simulation has not loaded the variables
                 dims, vars, domains = self.load_properties()
 
-            # Use snapshot 0 by default if not provided
             snapshot = 0 if snapshot is None else snapshot
-
-            # Load data from simulation (macros)
             loaded_fields = []
-            
-            for field in fields:
-                field_data = []
 
-                # Determine the field type if not specified
+            for field in fields:
+                # Infer field type unless provided
                 field_type = type
                 if field_type is None:
                     if field in ['gasdens', 'gasenergy']:
@@ -1460,44 +1355,41 @@ class Simulation(fargopy.Fargobj):
                     elif field == 'gasv':
                         field_type = 'vector'
                     else:
-                        raise ValueError(f"Field type for '{field}' could not be inferred. Please specify it explicitly.")
+                        raise ValueError(f"Field type for '{field}' could not be inferred.")
 
+                # Load scalar
                 if field_type == 'scalar':
-                    file_name = f"{field}{str(snapshot)}.dat"
+                    file_name = f"{field}{snapshot}.dat"
                     file_field = os.path.join(self.output_dir, file_name)
-                    field_data = self._load_field_scalar(file_field)
-                elif field_type == 'vector':
-                    field_data = []
-                    variables = ['x', 'y']
-                    if self.vars.DIM == 3:
-                        variables += ['z']
-                    for variable in variables:
-                        file_name = f"{field}{variable}{str(snapshot)}.dat"
-                        file_field = os.path.join(self.output_dir, file_name)
-                        field_data.append(self._load_field_scalar(file_field))
-                else:
-                    raise ValueError(f"fargopy.Field type '{field_type}' not recognized.")
+                    data = self._load_field_scalar(file_field)
 
-                # Create the field object
+                # Load vector
+                elif field_type == 'vector':
+                    data = []
+                    components = ['x','y'] + (['z'] if self.vars.DIM == 3 else [])
+                    for comp in components:
+                        file_name = f"{field}{comp}{snapshot}.dat"
+                        file_field = os.path.join(self.output_dir, file_name)
+                        data.append(self._load_field_scalar(file_field))
+                    data = np.array(data)
+
+                # Create Field
                 loaded_field = fargopy.Field(
-                    data=np.array(field_data),
+                    data=np.array(data),
                     coordinates=self.vars.COORDINATES,
                     domains=self.domains,
                     type=field_type
                 )
 
-                # Apply meshslice if a slice is provided
+                # Apply slicing
                 if slice:
                     sliced_data, mesh = loaded_field.meshslice(slice=slice)
-                    # Pass a single dictionary to Dictobj
                     loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
 
-
-
                 loaded_fields.append(loaded_field)
-            #print(f'Slice: {slice}.')
-            # Return a single field if only one was provided, or a list if multiple were provided
+
             return loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
+
 
     def _load_field_scalar(self,file):
         """
@@ -1673,7 +1565,12 @@ class Simulation(fargopy.Fargobj):
     @staticmethod
     def list_setups():
         """
-        List setups available in the FARGO3D directory.
+        Print all valid setup directories detected under ``FP_FARGO3D_DIR``.
+
+        Returns
+        -------
+        None
+            The setups are printed to stdout; nothing is returned.
         """
         error,output = fargopy.Sys.run(f"ls -d {fargopy.Conf.FP_FARGO3D_DIR}/setups/*")
         list = ''
@@ -1688,7 +1585,12 @@ class Simulation(fargopy.Fargobj):
     @staticmethod
     def list_precomputed():
         """
-        List the available precomputed simulations.
+        Display the catalog of downloadable precomputed simulations with descriptions and sizes.
+
+        Returns
+        -------
+        None
+            The listing is printed to stdout.
         """
         for key,item in PRECOMPUTED_SIMULATIONS.items():
             print(f"{key}:\n\tDescription: {item['description']}\n\tSize: {item['size']} MB")
@@ -1696,23 +1598,23 @@ class Simulation(fargopy.Fargobj):
     @staticmethod
     def download_precomputed(setup=None,download_dir=None,quiet=False,clean=True):
         """
-        Download a precomputed output from the Google Drive FARGOpy public repository.
+        Download and extract a precomputed output archive from the public repository.
 
         Parameters
         ----------
         setup : str, optional
-            Name of the setup. For a list see PRECOMPUTED_SIMULATIONS.
+            Name of the entry in ``PRECOMPUTED_SIMULATIONS``.
         download_dir : str, optional
-            Directory where the output will be downloaded and uncompressed.
+            Destination directory for the compressed file and extracted output.
         quiet : bool, optional
-            If True, download quietly (no progress bar).
+            When True, suppress download progress indicators.
         clean : bool, optional
-            If True, remove the tgz file after uncompressing it.
+            Remove the downloaded archive after extraction when set to True.
 
         Returns
         -------
         str
-            Output directory if successful, empty string otherwise.
+            Absolute path to the extracted output directory, or an empty string on failure.
         """
         if setup is None:
             print(f"You must provide a setup name. Available setups: {list(PRECOMPUTED_SIMULATIONS.keys())}")
@@ -1826,6 +1728,184 @@ class Simulation(fargopy.Fargobj):
 
             else:
                 raise ValueError("Invalid scale. Choose either 'orbits' or 'duration'.")
+
+
+
+    def to_paraview(self, snapshot=0, dir='.', basename=None):
+        
+        """
+        Export a snapshot to a VTU (UnstructuredGrid) file with physical XYZ coordinates
+        and point data arrays for density and Cartesian velocity.
+
+        Parameters
+        ----------
+        snapshot : int
+            Snapshot index to export (default: 0).
+        dir : str
+            Output directory where the .vtu file will be written (default: current directory).
+        basename : str or None
+            Base name for the output file (without extension). If None, a default name
+            using the simulation setup and snapshot is created.
+
+        Notes
+        -----
+        - Requires the 'vtk' Python package (and vtk.util.numpy_support).
+        - Expects self.load_field('gasdens') and self.load_field('gasv') to return
+          fargopy.Field-like objects where .data is a numpy array with shapes:
+            rho: (nt, nr, nphi)
+            vel: either (3, nt, nr, nphi) or (nt, nr, nphi, 3)
+        - Domains expected in self.domains as theta, r, phi arrays.
+        - Output is a single .vtu unstructured grid with VTK_VOXEL cells and point data arrays:
+            - "rho" (scalar)
+            - "vel_cart" (3-component vector)
+        """
+        import os
+        import numpy as np
+        try:
+            import vtk
+            from vtk.util import numpy_support as ns
+        except Exception as e:
+            raise RuntimeError("VTK is required for to_paraview. Install the 'vtk' package.") from e
+
+        # prepare output path
+        os.makedirs(dir, exist_ok=True)
+        if basename is None:
+            base = getattr(self, 'setup', 'simulation')
+            basename = f"{base}_snap{snapshot}"
+            
+        filename = os.path.join(dir, basename)
+
+        # Load fields (tolerant to different return types)
+        gasdens = self.load_field(fields='gasdens', snapshot=snapshot, interpolate=False)
+        gasv = self.load_field(fields='gasv', snapshot=snapshot, interpolate=False)
+
+        
+        rho = np.log10(getattr(gasdens, 'data', gasdens)*self.URHO)  # convert to physical units and log10
+        vel = getattr(gasv, 'data', gasv)*self.UL/self.UT*1e-5
+
+        # Normalize shapes
+        if rho.ndim == 4 and rho.shape[0] == 1:
+            rho = rho[0]
+        if rho.ndim != 3:
+            raise ValueError(f"Unexpected rho shape: {rho.shape}. Expected (nt,nr,nphi).")
+
+        # velocity can be (3,nt,nr,nphi) or (nt,nr,nphi,3)
+        if vel.ndim == 4 and vel.shape[0] == 3:
+            vel_components = vel
+        elif vel.ndim == 4 and vel.shape[-1] == 3:
+            vel_components = np.moveaxis(vel, -1, 0)
+        else:
+            raise ValueError(f"Unexpected vel shape: {vel.shape}. Expected (3,nt,nr,nphi) or (nt,nr,nphi,3).")
+
+        # Get spherical coordinate grids from self.domains
+        try:
+            theta = self.domains.theta 
+            r = self.domains.r  *self.UL/self.AU
+            phi = self.domains.phi
+        except Exception:
+            # If domain attribute names differ, try common alternatives
+            try:
+                theta = self.domains.theta
+                r = self.domains.r*self.UL/self.AU
+                phi = self.domains.phi
+            except Exception as e:
+                raise RuntimeError("Could not find theta, r, phi in self.domains") from e
+
+        # Create meshgrid (vectorized)
+        TT, RR, PP = np.meshgrid(theta, r, phi, indexing='ij')  # shape (nt,nr,nphi)
+
+        # Coordinates in Cartesian
+        X = (RR * np.sin(TT) * np.cos(PP)).ravel(order='C').astype(np.float64)
+        Y = (RR * np.sin(TT) * np.sin(PP)).ravel(order='C').astype(np.float64)
+        Z = (RR * np.cos(TT)).ravel(order='C').astype(np.float64)
+        pts = np.column_stack([X, Y, Z])
+
+        # Cartesian velocity components (vectorized)
+        v_theta = vel_components[0]
+        v_r = vel_components[1]
+        v_phi = vel_components[2]
+
+        v_x = (v_r * np.sin(TT) * np.cos(PP) +
+               v_theta * np.cos(TT) * np.cos(PP) -
+               v_phi * np.sin(PP)).ravel(order='C').astype(np.float64)
+
+        v_y = (v_r * np.sin(TT) * np.sin(PP) +
+               v_theta * np.cos(TT) * np.sin(PP) +
+               v_phi * np.cos(PP)).ravel(order='C').astype(np.float64)
+
+        v_z = (v_r * np.cos(TT) -
+               v_theta * np.sin(TT)).ravel(order='C').astype(np.float64)
+
+        vel_cart = np.column_stack([v_x, v_y, v_z])
+
+        # Density flattened
+        rho_flat = rho.ravel(order='C').astype(np.float64)
+
+        # VTK points
+        vtk_points = vtk.vtkPoints()
+        vtk_points.SetData(ns.numpy_to_vtk(pts, deep=True))
+
+        # Build VOXEL connectivity (vectorized)
+        nt, nr, nphi = rho.shape
+        ntm = nt - 1
+        nrm = nr - 1
+        npm = nphi - 1
+        ncells = ntm * nrm * npm
+
+        it, ir_, ip = np.meshgrid(
+            np.arange(ntm),
+            np.arange(nrm),
+            np.arange(npm),
+            indexing='ij'
+        )
+        it = it.ravel()
+        ir_ = ir_.ravel()
+        ip = ip.ravel()
+        base = it * nr * nphi + ir_ * nphi + ip
+
+        p000 = base
+        p001 = base + 1
+        p010 = base + nphi
+        p011 = base + nphi + 1
+        p100 = base + nr * nphi
+        p101 = base + nr * nphi + 1
+        p110 = base + nr * nphi + nphi
+        p111 = base + nr * nphi + nphi + 1
+
+        cells = np.column_stack([
+            np.full(ncells, 8, dtype=np.int64),
+            p000, p001, p010, p011,
+            p100, p101, p110, p111
+        ]).ravel()
+
+        vtk_cells = vtk.vtkCellArray()
+        vtk_cells.SetCells(ncells, ns.numpy_to_vtkIdTypeArray(cells, deep=True))
+
+        # Unstructured grid
+        grid = vtk.vtkUnstructuredGrid()
+        grid.SetPoints(vtk_points)
+        grid.SetCells(vtk.VTK_VOXEL, vtk_cells)
+
+        # Point data arrays
+        vtk_rho = ns.numpy_to_vtk(rho_flat, deep=True)
+        vtk_rho.SetName("rho")
+        vtk_vel = ns.numpy_to_vtk(vel_cart, deep=True)
+        vtk_vel.SetNumberOfComponents(3)
+        vtk_vel.SetName("vel_cart")
+
+        grid.GetPointData().AddArray(vtk_rho)
+        grid.GetPointData().AddArray(vtk_vel)
+
+        # Write VTU
+        writer = vtk.vtkXMLUnstructuredGridWriter()
+        writer.SetFileName(filename + ".vtu")
+        writer.SetInputData(grid)
+        if writer.Write() == 0:
+            raise RuntimeError(f"Failed writing VTU file '{filename}.vtu'.")
+
+        return filename + ".vtu"
+
+
 
 
     ######################################
@@ -2115,3 +2195,255 @@ class Simulation(fargopy.Fargobj):
             density_slider, hill_frac_slider, show_circle_toggle, cmap_dropdown, map_dropdown, vel_dropdown, progress, update_button
         )
         plot_density()
+
+
+
+    def plot_mesh(self, snapshot=0, slice='theta=1.56', planet=0, draw_hill=True, hill_frac=1.0,
+                  figsize=(8,8), point_size=1, line_alpha=0.5, cmap='viridis', show=True):
+        """
+        Plot the simulation mesh in the XY plane and (optionally) the planet Hill circle.
+
+        Returns
+        -------
+        (fig, ax, nr_celdas_radial, nr_celdas_azimutal, n_inside)
+            Matplotlib figure and axes, max contiguous radial cells, max contiguous azimuthal cells,
+            and the number of mesh cells inside the hill_frac * Hill radius.
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        import numpy as np
+
+        # Load a 2D interpolated field (keeps same interface used elsewhere)
+        gasdens = self.load_field(fields=['gasdens'], snapshot=snapshot, slice=slice, interpolate=True)
+
+        # Expect interpolator result with var1_mesh / var2_mesh (as used in plot_interactive)
+        try:
+            X = gasdens.var1_mesh[0]
+            Y = gasdens.var2_mesh[0]
+        except Exception:
+            # Fallback: if a raw Field-like object is returned with mesh names var1_mesh/var2_mesh attributes
+            X = getattr(gasdens, 'var1_mesh', None)
+            Y = getattr(gasdens, 'var2_mesh', None)
+            if X is None or Y is None:
+                raise RuntimeError("Could not obtain var1_mesh/var2_mesh from loaded field. Use interpolate=True and a valid slice.")
+
+        # Prepare figure
+        plt.close('all')
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Plot points (convert to AU for axis if simulation units defined)
+        scale = getattr(self, 'UL', 1.0) / getattr(self, 'AU', 1.0)
+        ax.scatter((X * scale).ravel(), (Y * scale).ravel(), s=point_size, c=(X*0+0.5).ravel(),
+                   cmap=cmap, marker='.', linewidths=0)
+
+        # If mesh is 2D arrays, draw grid lines
+        if X.ndim == 2 and Y.ndim == 2:
+            # rows
+            for i in range(X.shape[0]):
+                ax.plot(X[i, :]*scale, Y[i, :]*scale, color='gray', linewidth=0.5, alpha=line_alpha)
+            # columns
+            for j in range(X.shape[1]):
+                ax.plot(X[:, j]*scale, Y[:, j]*scale, color='gray', linewidth=0.5, alpha=line_alpha)
+
+        # Planet selection
+        planets = self.load_planets(snapshot=snapshot)
+        center_x = center_y = None
+        radius = 0.0
+        if planets:
+            sel = None
+            if isinstance(planet, int):
+                try:
+                    sel = planets[planet]
+                except Exception:
+                    sel = planets[0]
+            else:
+                # name lookup
+                for p in planets:
+                    if getattr(p, 'name', None) == planet:
+                        sel = p
+                        break
+                if sel is None:
+                    sel = planets[0]
+            # planet object expected to have pos.x / pos.y and hill_radius property
+            center_x = sel.pos.x
+            center_y = sel.pos.y
+            if draw_hill:
+                radius = hill_frac * getattr(sel, 'hill_radius', 0.0)
+
+        # Draw Hill circle if requested and compute counts
+        nr_celdas_radial = 0
+        nr_celdas_azimutal = 0
+        n_inside = 0
+        if draw_hill and center_x is not None and center_y is not None and radius > 0:
+            circle = patches.Circle((center_x*scale, center_y*scale), radius*scale,
+                                    edgecolor='red', facecolor='lightblue', linestyle='-', linewidth=1.5)
+            ax.add_patch(circle)
+
+            # Count mesh cells (points) inside the requested fraction of Hill radius
+            try:
+                # X,Y are in simulation length units (same as center_x, center_y)
+                mask_inside = ((X - center_x)**2 + (Y - center_y)**2) <= (radius**2)
+                n_inside = int(np.count_nonzero(mask_inside))
+
+                # If mesh is structured 2D array, compute contiguous runs:
+                if X.ndim == 2 and Y.ndim == 2:
+                    # Helper to get max contiguous True length in a 1D boolean array
+                    def max_contiguous_true(arr1d):
+                        idx = np.flatnonzero(arr1d)
+                        if idx.size == 0:
+                            return 0
+                        splits = np.split(idx, np.where(np.diff(idx) > 1)[0] + 1)
+                        lengths = [s.size for s in splits]
+                        return max(lengths) if lengths else 0
+
+                    # Azimutal: along rows (axis 1) -> for each row find longest contiguous True segment
+                    max_az = 0
+                    for i in range(mask_inside.shape[0]):
+                        l = max_contiguous_true(mask_inside[i, :])
+                        if l > max_az:
+                            max_az = l
+                    nr_celdas_azimutal = int(max_az)
+
+                    # Radial: along columns (axis 0) -> for each column find longest contiguous True segment
+                    max_rad = 0
+                    for j in range(mask_inside.shape[1]):
+                        l = max_contiguous_true(mask_inside[:, j])
+                        if l > max_rad:
+                            max_rad = l
+                    nr_celdas_radial = int(max_rad)
+
+                else:
+                    # Unstructured/1D mesh: only total count is reliable
+                    nr_celdas_radial = 0
+                    nr_celdas_azimutal = 0
+
+            except Exception:
+                nr_celdas_radial = nr_celdas_azimutal = 0
+                n_inside = 0
+
+        ax.set_xlabel("X [AU]")
+        ax.set_ylabel("Y [AU]")
+        ax.set_title(f"Simulation Mesh")
+        ax.set_aspect('equal', adjustable='box')
+        fargopy.Plot.fargopy_mark(ax)
+
+         # Print statistics
+
+        print(f'Number of mesh cells inside {hill_frac} x Hill radius: {n_inside}')
+        print(f'Max contiguous radial cells inside: {nr_celdas_radial}')
+        print(f'Max contiguous azimutal cells inside: {nr_celdas_azimutal}')
+        if show:
+            plt.show()
+
+        return fig, ax
+
+class Planet:
+    """
+    Represents a planet in the simulation, holding its physical state and properties.
+
+    Attributes
+    ----------
+    name : str
+        Name or label of the planet.
+    mass : float
+        Planet mass (in Msun or simulation units).
+    pos : Planet.Vector
+        Current cartesian position (x, y, z) in AU.
+    vel : Planet.Vector
+        Current cartesian velocity (vx, vy, vz) in AU/UT.
+    posi : Planet.Vector
+        Initial cartesian position (x, y, z) in AU.
+    mstar : float
+        Stellar mass (in Msun or simulation units).
+
+    Properties
+    ----------
+    hill_radius : float
+        The Hill radius of the planet (in AU), computed from its current position and mass.
+
+    Example
+    -------
+    >>> jupiter = planets[0]
+    >>> print(jupiter.pos.x, jupiter.vel.y, jupiter.hill_radius)
+    """
+    def __init__(self, name, pos, vel, mass, posi, mstar):
+        self.name = name
+        self.mass = mass
+        self.pos = Planet._Vector(*pos)
+        self.vel = Planet._Vector(*vel)
+        self.posi = Planet._Vector(*posi)
+        self.mstar = mstar
+
+    class _Vector:
+        """
+        Simple vector class for 3D coordinates, allowing attribute and index access.
+
+        Attributes
+        ----------
+        x : float
+            X coordinate.
+        y : float
+            Y coordinate.
+        z : float
+            Z coordinate.
+        """
+        def __init__(self, x, y, z):
+            self.x = x
+            self.y = y
+            self.z = z
+
+        def __getitem__(self, idx):
+            """
+            Return the coordinate at index ``idx`` (0→x, 1→y, 2→z).
+            """
+            return [self.x, self.y, self.z][idx]
+
+        def __array__(self):
+            """
+            Expose the vector as a NumPy array for downstream numerical routines.
+            """
+            import numpy as np
+            return np.array([self.x, self.y, self.z])
+
+        def __repr__(self):
+            """
+            Debug-friendly string showing the three Cartesian components.
+            """
+            return f"[{self.x}, {self.y}, {self.z}]"
+
+    @property
+    def hill_radius(self):
+        """
+        .. :no-index:
+
+        Returns the Hill radius in AU, using the current position and mass.
+
+        Returns
+        -------
+        float
+            Hill radius in AU.
+        """
+        AU_to_cm = 1.495978707e13
+        Mjup_to_g = 1.898e30
+        Msun_to_g = 1.989e33
+
+        # Distance to star (AU)
+        r_au = (self.pos.x**2 + self.pos.y**2 + self.pos.z**2)**0.5
+        m_jup = self.mass * 1e3  # Msun to Mjup
+        mstar_g = float(self.mstar) * Msun_to_g
+        r_cm = r_au * AU_to_cm
+        m_p = m_jup * Mjup_to_g
+
+        r_hill_cm = r_cm * (m_p / (3 * mstar_g))**(1/3)
+        r_hill_au = r_hill_cm / AU_to_cm
+        return r_hill_au
+
+    def __repr__(self):
+        """
+        String representation of the Planet object.
+
+        Returns
+        -------
+        str
+        """
+        return f"Planet(name={self.name}, mass={self.mass}, pos={self.pos}, vel={self.vel}, posi={self.posi})"
