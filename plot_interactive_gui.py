@@ -444,6 +444,45 @@ class PlotOptionsDialog(QDialog):
         self.vmin_spin.setEnabled(enabled)
         self.vmax_spin.setEnabled(enabled)
 
+class ReflectDialog(QDialog):
+    """Lightweight dialog to toggle the reflection overlay."""
+
+    AXES = ["X-axis", "Y-axis", "Origin"]
+
+    def __init__(self, parent=None, enabled=False, axis="X-axis"):
+        super().__init__(parent)
+        self.setWindowTitle("Reflect Overlay")
+        self.setMinimumWidth(320)
+
+        layout = QVBoxLayout(self)
+        description = QLabel("Reflect the current slice across a selected axis \nand overlay it on top of the original map.")
+        description.setWordWrap(True)
+        layout.addWidget(description)
+
+        form = QFormLayout()
+        self.enabled_checkbox = QCheckBox("Show reflected copy")
+        self.enabled_checkbox.setChecked(enabled)
+        form.addRow(self.enabled_checkbox)
+
+        self.axis_combo = QComboBox()
+        self.axis_combo.addItems(self.AXES)
+        if axis in self.AXES:
+            self.axis_combo.setCurrentText(axis)
+        self.axis_combo.setEnabled(enabled)
+        form.addRow("Axis:", self.axis_combo)
+        layout.addLayout(form)
+
+        # Keep controls in sync
+        self.enabled_checkbox.stateChanged.connect(self.axis_combo.setEnabled)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def values(self):
+        return self.enabled_checkbox.isChecked(), self.axis_combo.currentText()
+
 class VideoOptionsDialog(QDialog):
     def __init__(self, parent=None, nmax=100):
         super().__init__(parent)
@@ -533,6 +572,10 @@ class PlotInteractiveWindow(QWidget):
         # --- Fixed colorbar state ---
         self.fixed_cbar_enabled = False  # <-- Añade esta línea para inicializar el atributo
 
+        # --- Reflection overlay state ---
+        self.reflect_enabled = False
+        self.reflect_axis = "X-axis"
+
         self.init_ui()
         self.slice_type = "theta"
         self.last_slice_str = ""
@@ -547,6 +590,20 @@ class PlotInteractiveWindow(QWidget):
         self.vel_dropdown.clear()
         self.vel_dropdown.addItems(desired)
         self.vel_dropdown.blockSignals(False)
+
+    def _reflect_coordinates(self, axis, X, Y):
+        if axis == "X-axis":
+            return X, -Y
+        if axis == "Y-axis":
+            return -X, Y
+        return -X, -Y  # Origin (both axes)
+
+    def _reflect_vectors(self, axis, vx, vy):
+        if axis == "X-axis":
+            return vx, -vy
+        if axis == "Y-axis":
+            return -vx, vy
+        return -vx, -vy
 
     def _length_scale_info(self):
         if not self.sim:
@@ -748,6 +805,26 @@ class PlotInteractiveWindow(QWidget):
         self.show_circle_toggle = QCheckBox("Show Hill")
         controls_layout.addWidget(self.show_circle_toggle, 8, 0)
 
+        self.reflect_button = QPushButton("Reflect")
+        self.reflect_button.setEnabled(False)
+        self.reflect_button.setCursor(Qt.PointingHandCursor)
+        self.reflect_button.setFixedHeight(32)
+        self.reflect_button.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #3949ab;
+                color: white;
+                font-size: 13px;
+                border-radius: 6px;
+                padding: 4px 10px;
+            }
+            QPushButton:hover {
+                background-color: #283593;
+            }
+            """
+        )
+        controls_layout.addWidget(self.reflect_button, 8, 1, alignment=Qt.AlignRight)
+
         # --- Botón Update plot ---
         self.update_button = QPushButton("Update plot")
         self.update_button.setIcon(QIcon.fromTheme("view-refresh"))
@@ -925,6 +1002,7 @@ class PlotInteractiveWindow(QWidget):
             edit.editingFinished.connect(lambda e=edit: self.normalize_decimal(e))
             edit.editingFinished.connect(self.on_slice_change)
         self.plot_options_button.clicked.connect(self.show_plot_options_dialog)
+        self.reflect_button.clicked.connect(self.open_reflect_dialog)
         self.canvas.mpl_connect('button_release_event', self.on_zoom_release)
 
     def normalize_decimal(self, lineedit):
@@ -974,6 +1052,7 @@ class PlotInteractiveWindow(QWidget):
         self.density_slider.setEnabled(True)
         self.hill_frac_slider.setEnabled(True)
         self.show_circle_toggle.setEnabled(True)
+        self.reflect_button.setEnabled(True)
         self.update_button.setEnabled(True)
         self.info_button.setEnabled(True)
         # Actualiza los límites del snapshot en el dialog
@@ -1261,6 +1340,38 @@ class PlotInteractiveWindow(QWidget):
                     self.fixed_cbar_limits[map_type] = None
             except Exception:
                 self.fixed_cbar_limits[map_type] = None
+
+    def _plot_reflection_overlay(self, ax, X_plot, Y_plot, data_map, cmap, vmin, vmax,
+                                 show_streamlines, stream_density, stream_cmap,
+                                 vx_plot, vy_plot, vmag_kms):
+        if data_map is None:
+            return
+        axis = getattr(self, "reflect_axis", "X-axis")
+        X_ref, Y_ref = self._reflect_coordinates(axis, X_plot, Y_plot)
+        ax.pcolormesh(
+            X_ref,
+            Y_ref,
+            data_map,
+            shading='auto',
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax
+            
+        )
+
+        if show_streamlines and vx_plot is not None and vy_plot is not None:
+            vx_ref, vy_ref = self._reflect_vectors(axis, vx_plot, vy_plot)
+            ax.streamplot(
+                X_ref,
+                Y_ref,
+                vx_ref,
+                vy_ref,
+                color=vmag_kms if vmag_kms is not None else None,
+                linewidth=0.45,
+                density=stream_density,
+                cmap=stream_cmap,
+                arrowsize=getattr(self, "stream_arrow_size", 1.0),
+            )
 
     def plot_density(self, unitsys_override=None):
         if not self.sim:
@@ -1573,6 +1684,23 @@ class PlotInteractiveWindow(QWidget):
                 arrowsize=getattr(self, "stream_arrow_size", 1.0)
             )
 
+        if self.reflect_enabled:
+            self._plot_reflection_overlay(
+                ax,
+                X_plot,
+                Y_plot,
+                data_map,
+                cmap,
+                vmin,
+                vmax,
+                show_streamlines,
+                stream_density,
+                stream_cmap,
+                vx_plot,
+                vy_plot,
+                vmag_kms,
+            )
+
         planets = self.sim.load_planets(snapshot=n)
         if planets:
             center_x = planets[0].pos.x * self.sim.UL / scale_factor
@@ -1624,6 +1752,16 @@ class PlotInteractiveWindow(QWidget):
     def show_plot_options_dialog(self):
         dlg = PlotOptionsDialog(self)
         dlg.exec_()
+
+    def open_reflect_dialog(self):
+        if not self.sim:
+            return
+        dlg = ReflectDialog(self, enabled=self.reflect_enabled, axis=self.reflect_axis)
+        if dlg.exec_() == QDialog.Accepted:
+            enabled, axis = dlg.values()
+            self.reflect_enabled = enabled
+            self.reflect_axis = axis
+            self.plot_density()
 
     def open_video_options_dialog(self):
         if not self.sim:

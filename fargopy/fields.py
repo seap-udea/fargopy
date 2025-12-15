@@ -1028,7 +1028,7 @@ class FieldInterpolator:
             self, time, var1, var2=None, var3=None, dataframe=None,
             interpolator="griddata", method="linear",
             rbf_kwargs=None, griddata_kwargs=None, idw_kwargs=None,
-            sigma_smooth=None, field=None
+            sigma_smooth=None, field=None, reflect=False
         ):
         """
         Evaluate the selected field at arbitrary spatial coordinates using
@@ -1153,6 +1153,8 @@ class FieldInterpolator:
             xi = np.asarray(xi)
 
             mask = self._domain_mask(xi)
+            if reflect:
+                mask = np.ones(xi.shape[0], dtype=bool)
             out = np.zeros(xi.shape[0])
             tree = cKDTree(coords)
             k = idw_kwargs.get("k", 8)
@@ -1182,6 +1184,8 @@ class FieldInterpolator:
             xi = np.asarray(xi)
 
             mask = self._domain_mask(xi)
+            if reflect:
+                mask = np.ones(xi.shape[0], dtype=bool)
             out = np.full(xi.shape[0], np.nan)
 
             # Try interpolate where mask True
@@ -1203,6 +1207,8 @@ class FieldInterpolator:
         def griddata_interp(coords, values, xi):
             # --- Apply domain mask: only interpolate inside the simulation domain ---
             mask = self._domain_mask(xi)
+            if reflect:
+                mask = np.ones(xi.shape[0], dtype=bool)
             out = np.full(xi.shape[0], np.nan)
 
             # If mask has selected points, interpolate only there
@@ -1225,6 +1231,8 @@ class FieldInterpolator:
             xi = np.asarray(xi)
 
             mask = self._domain_mask(xi)
+            if reflect:
+                mask = np.ones(xi.shape[0], dtype=bool)
             out = np.full(xi.shape[0], np.nan)
             obj = LinearNDInterpolator(coords, values)
 
@@ -1282,6 +1290,58 @@ class FieldInterpolator:
                     data = data[..., comp].ravel()
                 else:
                     raise ValueError(f"Cannot extract vector component from {data.shape}")
+
+            # -------------------------------------------------
+            # Reflection augmentation for XZ cuts (phi fixed)
+            # If `reflect=True` we augment the interpolation
+            # dataset with the reflection of the field across
+            # the x-axis (for XZ plane: z -> -z). For 3D
+            # coords this means (x,y,z)->(x,-y,-z). For vector
+            # fields the perpendicular components change sign.
+            # -------------------------------------------------
+            if reflect and (slice_type == 'phi' or (self.dim == 2 and slice_type != 'theta')):
+                try:
+                    # Work with flattened coords and values
+                    if self.dim == 3:
+                        coords_orig = coords.reshape(-1, 3)
+                        coords_ref = coords_orig.copy()
+                        coords_ref[:, 1] *= -1
+                        coords_ref[:, 2] *= -1
+                    elif self.dim == 2:
+                        # In 2D XZ cut coords are (x,z)
+                        coords_orig = coords.reshape(-1, 2)
+                        coords_ref = coords_orig.copy()
+                        coords_ref[:, 1] *= -1
+                    else:
+                        coords_orig = coords
+                        coords_ref = coords_orig
+
+                    # Prepare data values (flattened)
+                    data_flat = np.asarray(data).ravel()
+
+                    # For vector components, reflect sign for the
+                    # components perpendicular to x-axis (vy,vz)
+                    if field_name == 'gasv_mesh' and comp is not None:
+                        # comp: 0->vx (no sign change), 1->vy (flip), 2->vz (flip)
+                        if comp in (1, 2):
+                            data_ref = -data_flat
+                        else:
+                            data_ref = data_flat.copy()
+                    else:
+                        # Scalars or already selected components
+                        data_ref = data_flat.copy()
+
+                    # Augment coords and data for interpolation
+                    if hasattr(coords_orig, 'shape'):
+                        coords = np.vstack([coords_orig, coords_ref])
+                    else:
+                        coords = np.concatenate([coords_orig, coords_ref])
+                    data = np.concatenate([data_flat, data_ref])
+                except Exception:
+                    # If anything goes wrong with reflection augmentation,
+                    # fall back to original coords/data (do not raise here)
+                    coords = coords
+                    data = np.asarray(data)
 
             # Dispatch backend
             if interpolator == "rbf":

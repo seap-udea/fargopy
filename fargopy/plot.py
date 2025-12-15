@@ -33,7 +33,7 @@ class Plot(object):
         #Options of the water mark
         args=dict(
             rotation=270,ha='left',va='top',
-            transform=ax.transAxes,color='pink',fontsize=6*fig_factor,zorder=100
+            transform=ax.transAxes,color='pink',fontsize=10*fig_factor,zorder=100
         )
         
         #Text of the water mark
