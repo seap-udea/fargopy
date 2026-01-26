@@ -1489,20 +1489,22 @@ class FieldInterpolator:
         return _smooth(v.item() if is_scalar else v.reshape(result_shape))
 
 
-    def plot(self, title="Field Colormap", t=0, contour_levels=10, component='vz', smoothing_sigma=None):
+    def plot(self, t=0, contour_levels=10, component='vz', smoothing_sigma=None, field=None):
         """
         Automatically determines the plane (XY, XZ, or 3D) and plots the field data.
 
         Parameters
         ----------
-        title : str, optional
-            Title of the plot.
         t : int, optional
             Index of the snapshot/time to plot.
         contour_levels : int, optional
             Number of contour levels for 2D plots.
         component : str, optional
             Component to plot for vector fields ('vx', 'vy', 'vz').
+        field : str or None, optional
+            Which field to plot when multiple fields were loaded (e.g. 'gasdens', 'gasv', 'gasenergy').
+            If None and exactly one field is present, that field is plotted. If None and multiple
+            candidate fields exist, a ValueError is raised instructing the user to pick one.
         """
         
         if self.df is None:
@@ -1514,16 +1516,68 @@ class FieldInterpolator:
             comp = 1
         if component=='vx':
             comp = 0   
+        df_names = self.df.columns.tolist()
 
-        df_names =  self.df.columns.tolist()
-        # Load the original field (before slicing) to get the original mesh sizes
-        d3 = self.sim._load_field_raw("gasdens", snapshot=int(self.df['snapshot'][t]), field_type='scalar')
+        # Map short names to dataframe column names
+        field_map = {
+            'gasdens': 'gasdens_mesh',
+            'gasv': 'gasv_mesh',
+            'gasenergy': 'gasenergy_mesh'
+        }
+
+        # Detect candidate fields present in the DataFrame
+        candidates = [c for c in df_names if c in ('gasdens_mesh', 'gasv_mesh', 'gasenergy_mesh')]
+
+        # Resolve user-requested field
+        if field is not None:
+            # allow short names or full column names
+            if field in field_map:
+                field_col = field_map[field]
+            else:
+                field_col = field
+            if field_col not in df_names:
+                raise ValueError(f"Requested field '{field}' not present. Available: {candidates}")
+        else:
+            if len(candidates) == 1:
+                field_col = candidates[0]
+            else:
+                raise ValueError(
+                    f"Multiple fields present {candidates}. Specify which to plot using field='gasdens' or 'gasv'."
+                )
 
         # Extract the mesh grids and field data after slicing
         var1 = self.df['var1_mesh'][t]
         var2 = self.df['var2_mesh'][t]
         var3 = self.df['var3_mesh'][t]
-        field_data = np.log10(self.df[self.df.columns[-1]][t])  # Last column is the field data (e.g., gasdens_mesh)
+
+        # Load the original field (before slicing) if needed elsewhere
+        d3 = self.sim._load_field_raw('gasdens', snapshot=int(self.df['snapshot'][t]), field_type='scalar')
+
+        # Prepare field_data according to selected field
+        raw_field = self.df[field_col][t]
+        is_vector = (field_col == 'gasv_mesh')
+        if is_vector:
+            # choose component or compute magnitude if needed
+            data_arr = np.asarray(raw_field)
+            # handle common memory layouts: (3, ... ) or (..., 3)
+            if data_arr.ndim >= 1 and data_arr.shape[0] == 3:
+                # shape (3, N...) -> select component
+                field_data = data_arr[comp]
+            elif data_arr.ndim >= 1 and data_arr.shape[-1] == 3:
+                field_data = data_arr[..., comp]
+            else:
+                # fallback: try to interpret as magnitude
+                try:
+                    field_data = np.sqrt(np.sum(data_arr**2, axis=0))
+                except Exception:
+                    field_data = data_arr
+            # do not apply log to vector components
+        else:
+            # scalar field: apply safe log10 for plotting
+            field_data = np.asarray(raw_field)
+            # avoid log of non-positive numbers
+            with np.errstate(divide='ignore'):
+                field_data = np.log10(np.where(field_data <= 0, np.nan, field_data))
 
         # Get the shapes of the resulting mesh grids after applying the slice
         sliced_shape = var1.shape  # Assuming var1, var2, var3 have the same shape after slicing
@@ -1547,16 +1601,21 @@ class FieldInterpolator:
             var1_flat = var1.ravel()
             var2_flat = var2.ravel()
             var3_flat = var3.ravel()
-            data = np.log10(field_data.ravel())
+            data = field_data.ravel()
 
             fig = plt.figure(figsize=(8, 6))
             ax = fig.add_subplot(111, projection='3d')
             scatter = ax.scatter(var1_flat, var2_flat, var3_flat, c=data, cmap='Spectral_r', s=5)
-            fig.colorbar(scatter, ax=ax, label=r"$\log_{10}(field)$")
-            ax.set_xlabel("X")
-            ax.set_ylabel("Y")
-            ax.set_zlabel("Z")
-            ax.set_title(title)
+            cbar = fig.colorbar(scatter, ax=ax)
+            cbar.ax.tick_params(labelsize=12)
+            if is_vector:
+                cbar.set_label(rf"{component} [units]", size=14)
+            else:
+                cbar.set_label(rf"$\log_{{10}}(field)$", size=14)
+            ax.set_xlabel("X",size=14)
+            ax.set_ylabel("Y",size=14)
+            ax.set_zlabel("Z",size=14)
+            
             fp.Plot.fargopy_mark(ax)
             plt.show()
         
@@ -1572,28 +1631,43 @@ class FieldInterpolator:
             if plane == 'XY':
                 fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var2, field_data, shading='auto', cmap='Spectral_r')
-                fig.colorbar(mesh, label=r"$\log_{10}(field)$")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
-                ax.set_title(title)
+                cbar = fig.colorbar(mesh)
+                cbar.ax.tick_params(labelsize=12)
+                if is_vector:
+                    cbar.set_label(rf"{component} [units]", size=14)
+                else:
+                    cbar.set_label(rf"$\log_{{10}}(field)$", size=14)
+                ax.set_xlabel("X",size=14)
+                ax.set_ylabel("Y",size=14)
+                ax.tick_params(axis='both', which='major', labelsize=12)
+                
                 fp.Plot.fargopy_mark(ax)
                 plt.show()
             elif plane == 'XZ':
                 fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var3, field_data, shading='auto', cmap='Spectral_r')
-                fig.colorbar(mesh, label=rf"$\log_{10}(field)$")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Z")
-                ax.set_title(title)
+                cbar = fig.colorbar(mesh)
+                cbar.ax.tick_params(labelsize=12)
+                if is_vector:
+                    cbar.set_label(rf"{component} [units]", size=14)
+                else:
+                    cbar.set_label(rf"$\log_{{10}}(field)$", size=14)
+                ax.set_xlabel("X",size=14)
+                ax.set_ylabel("Z",size=14)
+                ax.tick_params(axis='both', which='major', labelsize=12)
+                
                 fp.Plot.fargopy_mark(ax)
                 plt.show()
             else:
                 fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var2, field_data, shading='auto', cmap='Spectral_r')
-                fig.colorbar(mesh, label=r"$\log_{10}(field)$")
-                ax.set_xlabel("X")
-                ax.set_ylabel("Y")
-                ax.set_title(title)
+                cbar = fig.colorbar(mesh)
+                cbar.ax.tick_params(labelsize=12)
+                cbar.set_label(rf"$\log_{{10}}(field)$", size=14)
+                ax.set_xlabel("X",size=14)
+                ax.set_ylabel("Y",size=14)
+                ax.tick_params(axis='both', which='major', labelsize=12)
+                
                 fp.Plot.fargopy_mark(ax)
                 plt.show()
 

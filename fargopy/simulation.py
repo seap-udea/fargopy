@@ -62,6 +62,12 @@ PRECOMPUTED_SIMULATIONS = dict(
         id='12ZWoQS_9ISe6eDij5KWWbqR-bHyyVs2N',
         description="""Disk around a binary with the properties of Kepler-38 in 2D""",
         size=140
+    ),                  
+        # Download link: https://drive.google.com/file/d/1Xhunx2-eiW770p91OeTg1kvQdGwOOHhZ/view?usp=sharing
+    pds70iso=dict(
+        id='1Xhunx2-eiW770p91OeTg1kvQdGwOOHhZ',
+        description="""PDS70c - isothermal protoplanetary disk and circumplanetary disk in [3D]""",
+        size=140
     ),
 )
 
