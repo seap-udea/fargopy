@@ -194,9 +194,15 @@ class Fargobj(object):
 ###############################################################
 # Basic (unmodifiable) variables
 Conf = Dictobj()
-Conf.FP_HOME = os.environ['HOME']
-Conf.FP_DOTDIR = f"{Conf.FP_HOME}/.fargopy" 
-Conf.FP_RCFILE = f"{Conf.FP_DOTDIR}/fargopyrc"
+
+# Cross-platform home directory detection
+if os.name == 'nt':  # Windows
+    Conf.FP_HOME = os.environ.get('USERPROFILE', os.path.expanduser('~'))
+else:  # Unix-like systems (Linux, macOS)
+    Conf.FP_HOME = os.environ.get('HOME', os.path.expanduser('~'))
+
+Conf.FP_DOTDIR = os.path.join(Conf.FP_HOME, '.fargopy')
+Conf.FP_RCFILE = os.path.join(Conf.FP_DOTDIR, 'fargopyrc')
 
 # Default configuration file content
 Conf.FP_CONFIGURATION = f"""# This is the configuration variables for FARGOpy

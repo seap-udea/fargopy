@@ -51,8 +51,8 @@ setuptools.setup(
     # DEPENDENCIES
     # ######################################################################
 
-    install_requires=['scipy','matplotlib','tqdm','numpy','ipython',
-                      'joblib','celluloid','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy','virtualenv','pytest'],
+    install_requires=['scipy','matplotlib','PyQt5','tqdm','numpy','ipython','scikit-learn','ipympl',
+                      'joblib','celluloid','vtk','psutil','gdown','pandas','plotly','ipywidgets','nbformat','cartopy','virtualenv','pytest'],
 
     # ######################################################################
     # OPTIONS
