@@ -75,58 +75,36 @@ if not fargopy.IN_COLAB:
 ###############################################################
 
 class Simulation(fargopy.Fargobj):
-    """
-    Main class for managing a FARGOpy simulation. Handles setup, compilation, running, and data access
-    for FARGO3D simulations, including units, directories, and output management.
+    """Manage a FARGO3D simulation and its filesystem, execution and I/O.
+
+    The ``Simulation`` object centralizes configuration, units, setup
+    discovery, compilation and runtime control for a FARGO3D case. It
+    stores derived paths (setup directory, output directory), unit
+    conversion factors and exposes convenience methods to compile,
+    launch and inspect simulation outputs.
 
     Parameters
     ----------
     **kwargs : dict
-        Keyword arguments for simulation configuration. See examples below.
-
-    Examples
-    --------
-    Create an empty simulation (no setup chosen):
-        >>> sim = fargopy.Simulation()
-
-    Create a simulation using a specific base FARGO3D directory (no setup chosen):
-        >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
-
-    Create a simulation starting with setup directory:
-        >>> sim = fargopy.Simulation(setup='fargo')
-
-    Connect to an existing simulation:
-        >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
-
-    Load an already existing simulation:
-        >>> sim = fargopy.Simulation(setup='fargo', load=True)
+        Configuration keywords. Typical keys include ``setup``,
+        ``fargo3d_dir``, ``output_dir`` and ``load``. When ``load=True``
+        the object attempts to read serialized metadata from the
+        specified setup directory.
     """
     def __init__(self,**kwargs):
-        """
-        Initialize a simulation instance and optionally bind it to an existing setup/output.
+        """Create and configure the simulation object.
+
+        The constructor initializes unit systems, default paths and
+        optionally loads previously saved simulation metadata when the
+        ``load`` flag is provided in ``kwargs``.
 
         Parameters
         ----------
         **kwargs : dict
-            Accepted keys include:
-            - ``setup``: name of the setup directory.
-            - ``fargo3d_dir``: root directory where FARGO3D is installed.
-            - ``output_dir``: path to an existing output directory.
-            - ``load``: when True, load metadata from ``fargopy_simulation.json`` inside the setup.
-
-        Examples
-        --------
-        Create an empty simulation:
-            >>> sim = fargopy.Simulation()
-
-        Point to a specific FARGO3D installation:
-            >>> sim = fargopy.Simulation(fargo3d_dir='/tmp/public')
-
-        Attach to a setup and load metadata:
-            >>> sim = fargopy.Simulation(setup='fargo', load=True)
-
-        Connect to previously generated outputs:
-            >>> sim = fargopy.Simulation(output_dir='/tmp/public/outputs/fargo')
+            Same as described in the class-level docstring. When
+            ``load=True`` the object expects a valid ``setup`` name and
+            a FARGO3D base directory to locate a
+            ``fargopy_simulation.json`` file to restore state.
         """
         super().__init__(**kwargs)
 
@@ -207,18 +185,19 @@ class Simulation(fargopy.Fargobj):
     # Set special properties
     # #########################################a#################################  
     def set_fargo3d_dir(self,dir=None):
-        """
-        Set the FARGO3D directory for the simulation.
+        """Set the base FARGO3D installation directory.
 
         Parameters
         ----------
-        dir : str, optional
-            Directory where FARGO3D is installed.
+        dir : str or None
+            Path to the FARGO3D installation. When ``None`` the method
+            is a no-op.
 
         Returns
         -------
-        bool or None
-            True if the directory exists and the header file is found, False otherwise.
+        None
+            The method does not return meaningful data; it updates
+            internal path attributes and prints diagnostics.
         """
         if dir is None:
             return
@@ -238,18 +217,18 @@ class Simulation(fargopy.Fargobj):
         self.setups_dir = os.path.join(self.fargo3d_dir, 'setups')
     
     def set_setup(self,setup):
-        """
-        Connect the simulation to a given setup.
+        """Associate the simulation with a named setup directory.
 
         Parameters
         ----------
-        setup : str
-            Name of the setup.
+        setup : str or None
+            Setup name present under the configured ``setups_dir``. If
+            ``None`` the setup association is cleared.
 
         Returns
         -------
         str or None
-            The setup name if successful, None otherwise.
+            The assigned setup name on success, otherwise ``None``.
         """
         if setup is None:
             self.setup_dir = None
@@ -261,18 +240,18 @@ class Simulation(fargopy.Fargobj):
         return setup
     
     def set_setup_dir(self,dir):
-        """
-        Set the setup directory.
+        """Set the absolute path to a setup directory and validate it.
 
         Parameters
         ----------
         dir : str
-            Directory where setup is available.
+            Filesystem path to the setup directory.
 
         Returns
         -------
         bool
-            True if the setup directory exists, False otherwise.
+            ``True`` when the directory exists and is accepted,
+            otherwise ``False``.
         """
         if dir is None:
             return False
@@ -286,13 +265,13 @@ class Simulation(fargopy.Fargobj):
         return True
 
     def set_output_dir(self,dir):
-        """
-        Connect a simulation with a directory where the outputs are stored.
+        """Set the output directory where FARGO3D stores run results.
 
         Parameters
         ----------
-        dir : str
-            Output directory path.
+        dir : str or None
+            Output directory path. When present the method attempts to
+            load simulation properties from a ``variables.par`` file.
         """
         if dir is None:
             return
@@ -315,13 +294,13 @@ class Simulation(fargopy.Fargobj):
     ################################
 
     def units(self, system):
-        """
-        Set the units system for the simulation.
+        """Switch the simulation unit system between ``'CGS'`` and
+        ``'MKS'``.
 
         Parameters
         ----------
-        system : str
-            The units system to use ('CGS' or 'MKS').
+        system : {'CGS','MKS'}
+            Unit system identifier.
         """
         if system.upper() == 'CGS':
             self._set_constants_cgs()
@@ -335,9 +314,7 @@ class Simulation(fargopy.Fargobj):
             raise ValueError("Invalid units system. Use 'CGS' or 'MKS'.")
 
     def _set_constants_cgs(self):
-        """
-        Set physical constants in CGS units.
-        """
+        """Configure physical constants for the CGS unit system."""
         self.KB = 1.380650424e-16  # Boltzmann constant: erg/K
         self.MP = 1.672623099e-24  # Mass of the proton, g
         self.GCONST = 6.67259e-8  # Gravitational constant, cm^3/g/s^2
@@ -347,9 +324,7 @@ class Simulation(fargopy.Fargobj):
         self.YEAR = 31557600.0  # Year, s
 
     def _set_constants_mks(self):
-        """
-        Set physical constants in MKS units.
-        """
+        """Configure physical constants for the MKS unit system."""
         self.KB = 1.380649e-23  # Boltzmann constant: J/K
         self.MP = 1.6726219e-27  # Mass of the proton, kg
         self.GCONST = 6.67430e-11  # Gravitational constant, m^3/kg/s^2
@@ -359,8 +334,7 @@ class Simulation(fargopy.Fargobj):
         self.YEAR = 31557600.0  # Year, s
 
     def set_units(self,UM=MSUN,UL=AU,G=1,mu=2.35):
-        """
-        Set the units of the simulation.
+        """Define simulation base units and derived unit scales.
 
         Parameters
         ----------
@@ -369,9 +343,9 @@ class Simulation(fargopy.Fargobj):
         UL : float
             Length unit (default: AU).
         G : float
-            Gravitational constant (default: 1).
+            Dimensionless gravitational constant (default: 1).
         mu : float
-            Mean molecular weight (default: 2.35).
+            Mean molecular weight used to compute temperature units.
         """
         # Basic
         self.UM = UM
@@ -393,21 +367,21 @@ class Simulation(fargopy.Fargobj):
     # Control methods
     # ##########################################################################  
     def compile(self,setup=None,parallel=0,gpu=0,options='',force=False):
-        """
-        Compile the FARGO3D binary for the current setup.
+        """Compile the FARGO3D executable for the active setup.
 
         Parameters
         ----------
         setup : str, optional
-            Name of the setup to compile.
+            Setup name to compile. When provided the method will try to
+            set the setup before compiling.
         parallel : int, optional
-            Use parallel compilation (default: 0).
+            Parallel compilation flag (default: 0).
         gpu : int, optional
-            Use GPU compilation (default: 0).
+            GPU-enabled compilation flag (default: 0).
         options : str, optional
-            Additional compilation options.
+            Additional make options passed to the build system.
         force : bool, optional
-            If True, clean the directory before compiling.
+            If ``True`` perform a clean before building.
         """
         if setup is not None:
             if not self.set_setup(setup):
@@ -447,22 +421,24 @@ class Simulation(fargopy.Fargobj):
             print(f"Something failed when compiling FARGO3D. For details check '{self.setup_dir}/compilation.log")
             
     def _generate_binary_name(self,parallel=0,gpu=0,options=''):
-        """
-        Generate the binary name for the compiled FARGO3D executable.
+        """Produce the target binary filename and the make options.
 
         Parameters
         ----------
         parallel : int
-            Parallel option.
+            Parallel compilation flag.
         gpu : int
-            GPU option.
+            GPU compilation flag.
         options : str
-            Additional options.
+            Extra options appended to the make command.
 
         Returns
         -------
         tuple
-            (binary_name, compile_options)
+            ``(binary_name, compile_options)`` where ``binary_name`` is
+            the filename to expect after a successful build and
+            ``compile_options`` is the command fragment passed to
+            ``make``.
         """
         compile_options = f"SETUP={self.setup} PARALLEL={parallel} GPU={gpu} "+options
         fargo3d_binary = f"fargo3d-{compile_options.replace(' ','-').replace('=','_').strip('-')}"
@@ -592,8 +568,12 @@ class Simulation(fargopy.Fargobj):
             return
                     
     def stop(self):
-        """
-        Stop the running FARGO3D process and unlock the simulation directory.
+        """Stop a running FARGO3D process and release the lock on the setup.
+
+        If a process is associated with the simulation the method attempts
+        to terminate it and then unlock the setup directory. If no
+        process handler is available the method simply tries to remove
+        any filesystem lock.
         """
         # Check if the directory is locked
         lock_info = fargopy.Sys.is_locked(self.setup_dir)
@@ -618,15 +598,17 @@ class Simulation(fargopy.Fargobj):
             print(f"The process has finished. Check logfile {self.logfile}.")
 
     def unlock_simulation(self,lock_info=None,force=True):
-        """
-        Unlock a simulation directory, killing the process if necessary.
+        """Remove a simulation lock and optionally kill the owning PID.
 
         Parameters
         ----------
-        lock_info : dict, optional
-            Lock information.
+        lock_info : dict or None
+            Lock metadata as returned by ``fargopy.Sys.is_locked``. If
+            ``None`` the method will attempt to discover the lock for
+            the active setup directory.
         force : bool, optional
-            If True, force unlock.
+            When ``True`` attempt to forcibly terminate the process
+            owning the lock (``kill -9``) before releasing the lock.
         """
         if lock_info is None and force:
             lock_info = fargopy.Sys.is_locked(self.setup_dir)
@@ -640,17 +622,18 @@ class Simulation(fargopy.Fargobj):
             fargopy.Sys.unlock(self.setup_dir)
         
     def status(self,mode='isrunning',verbose=True,**kwargs):
-        """
-        Check the status of the running process.
+        """Report process, logfile and output status for the simulation.
 
         Parameters
         ----------
-        mode : str, optional
-            Status mode ('isrunning', 'logfile', 'outputs', 'progress', 'summary', 'locking', or 'all').
+        mode : {'isrunning','logfile','outputs','progress','summary','locking','all'}, optional
+            Which status block to display. ``'all'`` prints every
+            section.
         verbose : bool, optional
-            If True, print detailed output.
+            When ``True`` print human-readable diagnostics to stdout.
         **kwargs : dict
-            Additional keyword arguments.
+            Backend-specific options used by certain modes (for
+            instance ``numstatus`` for the ``'progress'`` mode).
         """
         # Bar separating output 
         bar = f"\n{''.join(['#']*80)}\n"
@@ -719,15 +702,18 @@ class Simulation(fargopy.Fargobj):
         print(f"\nOther status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'")
 
     def _status_progress(self,minfreq=0.1,numstatus=100):
-        """
-        Show a progress of the execution.
+        """Display a live progress summary by tailing the simulation log.
+
+        The routine periodically reads the simulation logfile and prints
+        snapshot progress information until the process stops or the
+        requested number of updates is reached.
 
         Parameters
         ----------
         minfreq : float, optional
-            Minimum seconds between status checks.
+            Minimum polling interval in seconds.
         numstatus : int, optional
-            Number of status updates before stopping.
+            Maximum number of status frames to emit.
         """
         # Prepare
         if 'status_frequency' not in self.__dict__.keys():
@@ -784,15 +770,15 @@ class Simulation(fargopy.Fargobj):
                     return
                 
     def resume(self,snapshot=-1,mpioptions='-np 1'):
-        """
-        Resume the simulation from a given snapshot.
+        """Resume an interrupted simulation from the specified snapshot.
 
         Parameters
         ----------
         snapshot : int, optional
-            Snapshot number to resume from. If -1, resumes from the latest.
+            Snapshot index to resume from. Use ``-1`` to resume from
+            the most recent resumable snapshot.
         mpioptions : str, optional
-            MPI options for parallel runs.
+            MPI launch options for parallel executions.
         """
         latest_snapshot_resumable = self._is_resumable()
         if latest_snapshot_resumable<0:
@@ -811,14 +797,7 @@ class Simulation(fargopy.Fargobj):
                  options=self.fargo3d_run_options+f' -S {snapshot}',test=False)
 
     def _has_finished(self):
-        """
-        Check if the simulation process has finished.
-
-        Returns
-        -------
-        bool
-            True if finished, False otherwise.
-        """
+        """Return ``True`` if the associated FARGO3D process has exited."""
         if self.fargo3d_process:
             poll = self.fargo3d_process.poll()
             if poll is None:
@@ -828,13 +807,13 @@ class Simulation(fargopy.Fargobj):
                 return True
 
     def _is_resumable(self):
-        """
-        Check if the simulation can be resumed.
+        """Determine the latest snapshot index from which the simulation can resume.
 
         Returns
         -------
         int
-            Latest resumable snapshot number, or -1 if not resumable.
+            Index of the latest resumable snapshot, or ``-1`` when the
+            simulation is not resumable or no outputs are present.
         """
         if self.logfile is None:
             print(f"The simulation has not been ran yet. Run <simulation>.run() before resuming")
@@ -843,9 +822,7 @@ class Simulation(fargopy.Fargobj):
         return latest_snapshot_resumable
         
     def clean_output(self):
-        """
-        Clean the output directory by removing all files.
-        """
+        """Remove all files from the configured output directory."""
         if self.output_dir is None:
             print(f"Output directory has not been set.")
             return
@@ -859,18 +836,18 @@ class Simulation(fargopy.Fargobj):
         error,output = fargopy.Sys.run(cmd)
 
     def _is_running(self,verbose=False):
-        """
-        Check if the simulation process is currently running.
+        """Return ``True`` when a live FARGO3D process is detected.
 
         Parameters
         ----------
         verbose : bool, optional
-            If True, print status messages.
+            When ``True`` print diagnostic messages.
 
         Returns
         -------
         bool
-            True if running, False otherwise.
+            ``True`` if a running process is associated with the
+            simulation, otherwise ``False``.
         """
         lock_info = fargopy.Sys.is_locked(self.setup_dir)
         if lock_info:
@@ -896,14 +873,7 @@ class Simulation(fargopy.Fargobj):
             return False
 
     def _check_process(self):
-        """
-        Check if the FARGO3D process handler is available.
-
-        Returns
-        -------
-        bool
-            True if process handler exists, False otherwise.
-        """
+        """Return ``True`` if a process handler is present for the run."""
         if self.fargo3d_process is None:
             print(f"There is no FARGO3D process handler available.")
             return False
@@ -913,18 +883,17 @@ class Simulation(fargopy.Fargobj):
     # Operations on the FARGO3D directories
     # ##########################################################################  
     def list_fields(self,quiet=False):
-        """
-        List all field files in the output directory.
+        """Return a list of data file names present in the output directory.
 
         Parameters
         ----------
         quiet : bool, optional
-            If True, suppress detailed output.
+            When ``True`` avoid printing the detailed file list.
 
         Returns
         -------
         list
-            List of field filenames.
+            Filenames found in the output directory.
         """
         if self.output_dir is None:
             print(f"You have to set forst the outputs directory with <sim>.set_outputs('<directory>')")
@@ -944,18 +913,19 @@ class Simulation(fargopy.Fargobj):
             
 
     def load_macros(self, summaryfile='summary0.dat'):
-        """
-        Extract global simulation parameters from the PREPROCESSOR MACROS SECTION in summary0.dat.
+        """Parse the PREPROCESSOR MACROS SECTION from a summary file.
 
         Parameters
         ----------
         summaryfile : str, optional
-            Name of the summary file.
+            Summary filename relative to the output directory (default
+            ``'summary0.dat'``).
 
         Returns
         -------
         dict
-            Dictionary with macro parameters.
+            Mapping of macro names to parsed values. Returns an empty
+            dict when the file is missing or parsing fails.
         """
         summary_path = os.path.join(self.output_dir, summaryfile)
         if not os.path.isfile(summary_path):
@@ -1308,87 +1278,90 @@ class Simulation(fargopy.Fargobj):
         return domains        
 
 
-    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=False, cut=None):
+    def load_field(self, fields, slice=None, snapshot=None, type=None, interpolate=None, coords='cartesian', cut=None):
         """
         Load a field or multiple fields from the simulation.
         """
 
-        # Ensure fields is a list
+        # Ensure fields is a list (but keep single-field compatibility)
+        single_input = False
         if isinstance(fields, str):
+            single_input = True
             fields = [fields]
 
-        # ==========================================================
-        # ===  CASE 1: interpolate=True  → unify multiple fields ===
-        # ==========================================================
+        # Default behavior: when interpolate is None, treat it as True
+        # to preserve the FieldInterpolator-based API by default.
+        # Backward compatibility:
+        #  - interpolate=True  -> return FieldInterpolator (explicit)
+        #  - interpolate=None  -> treated as True -> return FieldInterpolator
+        #  - interpolate=False -> return legacy Field or list of Fields
+
+        if interpolate is None:
+            interpolate = True
+
+        # --- INTERPOLATE == True : return FieldInterpolator ---
         if interpolate is True:
-
-            # Crear un *solo* FieldInterpolator
             handler = fargopy.FieldInterpolator(self)
-
-            # Llamar load_data UNA vez pasando todos los fields
             handler.load_data(
                 fields=fields,
                 slice=slice,
                 snapshots=snapshot,
-                cut=cut
+                cut=cut,
+                coords=coords
             )
-
-            # Devolver solo este objeto (no lista)
             return handler
 
-        # ==========================================================
-        # ===  CASE 2: interpolate=False → comportamiento antiguo ===
-        # ==========================================================
-        else:
-            if not self.has('vars'):
-                dims, vars, domains = self.load_properties()
+        # --- INTERPOLATE == False : legacy single-field behavior ---
+        if not self.has('vars'):
+            dims, vars, domains = self.load_properties()
 
-            snapshot = 0 if snapshot is None else snapshot
-            loaded_fields = []
+        snapshot = 0 if snapshot is None else snapshot
+        loaded_fields = []
 
-            for field in fields:
-                # Infer field type unless provided
-                field_type = type
-                if field_type is None:
-                    if field in ['gasdens', 'gasenergy']:
-                        field_type = 'scalar'
-                    elif field == 'gasv':
-                        field_type = 'vector'
-                    else:
-                        raise ValueError(f"Field type for '{field}' could not be inferred.")
+        for field in fields:
+            # Infer field type unless provided
+            field_type = type
+            if field_type is None:
+                if field in ['gasdens', 'gasenergy']:
+                    field_type = 'scalar'
+                elif field == 'gasv':
+                    field_type = 'vector'
+                else:
+                    raise ValueError(f"Field type for '{field}' could not be inferred.")
 
-                # Load scalar
-                if field_type == 'scalar':
-                    file_name = f"{field}{snapshot}.dat"
+            # Load scalar
+            if field_type == 'scalar':
+                file_name = f"{field}{snapshot}.dat"
+                file_field = os.path.join(self.output_dir, file_name)
+                data = self._load_field_scalar(file_field)
+
+            # Load vector
+            elif field_type == 'vector':
+                data = []
+                components = ['x','y'] + (['z'] if self.vars.DIM == 3 else [])
+                for comp in components:
+                    file_name = f"{field}{comp}{snapshot}.dat"
                     file_field = os.path.join(self.output_dir, file_name)
-                    data = self._load_field_scalar(file_field)
+                    data.append(self._load_field_scalar(file_field))
+                data = np.array(data)
 
-                # Load vector
-                elif field_type == 'vector':
-                    data = []
-                    components = ['x','y'] + (['z'] if self.vars.DIM == 3 else [])
-                    for comp in components:
-                        file_name = f"{field}{comp}{snapshot}.dat"
-                        file_field = os.path.join(self.output_dir, file_name)
-                        data.append(self._load_field_scalar(file_field))
-                    data = np.array(data)
+            # Create Field
+            loaded_field = fargopy.Field(
+                data=np.array(data),
+                coordinates=self.vars.COORDINATES,
+                domains=self.domains,
+                type=field_type
+            )
 
-                # Create Field
-                loaded_field = fargopy.Field(
-                    data=np.array(data),
-                    coordinates=self.vars.COORDINATES,
-                    domains=self.domains,
-                    type=field_type
-                )
+            # Apply slicing
+            if slice:
+                sliced_data, mesh = loaded_field.meshslice(slice=slice)
+                loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
 
-                # Apply slicing
-                if slice:
-                    sliced_data, mesh = loaded_field.meshslice(slice=slice)
-                    loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
+            loaded_fields.append(loaded_field)
 
-                loaded_fields.append(loaded_field)
-
-            return loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
+        result = loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
+        return result
 
 
     def _load_field_scalar(self,file):
@@ -1410,6 +1383,41 @@ class Simulation(fargopy.Fargobj):
             return field_data
         else:
             raise AssertionError(f"File with field '{file}' not found")
+
+    def _load_field_raw(self, field, snapshot=0, field_type=None):
+        """
+        Internal helper to load a single field as a `fargopy.Field` without going
+        through `load_field` dispatching. This prevents recursion when higher-level
+        helpers request raw data.
+        """
+        # Infer type if not provided
+        if field_type is None:
+            if field in ['gasdens', 'gasenergy']:
+                field_type = 'scalar'
+            elif field == 'gasv':
+                field_type = 'vector'
+            else:
+                raise ValueError(f"Field type for '{field}' could not be inferred.")
+
+        # Load scalar
+        if field_type == 'scalar':
+            file_name = f"{field}{snapshot}.dat"
+            file_field = os.path.join(self.output_dir, file_name)
+            data = self._load_field_scalar(file_field)
+
+        # Load vector
+        elif field_type == 'vector':
+            data = []
+            components = ['x','y']
+            if self.vars.DIM == 3:
+                components += ['z']
+            for comp in components:
+                file_name = f"{field}{comp}{snapshot}.dat"
+                file_field = os.path.join(self.output_dir, file_name)
+                data.append(self._load_field_scalar(file_field))
+            data = np.array(data)
+
+        return fargopy.Field(data=np.array(data), coordinates=self.vars.COORDINATES, domains=self.domains, type=field_type)
         
     def load_allfields(self,fluid,snapshot=None,type='scalar'):
         """
@@ -2003,32 +2011,49 @@ class Simulation(fargopy.Fargobj):
 
             # --- Carga de datos según selección ---
             if map_type == 'Densidad':
-                gasdens, gasv = self.load_field(
+                loader = self.load_field(
                     fields=['gasdens', 'gasv'],
                     slice=slice_str,
                     snapshot=[n],
-                    interpolate=True
+                    interpolate=interpolate
                 )
+                if interpolate:
+                    gasdens = loader
+                    gasv = loader
+                else:
+                    gasdens, gasv = loader
             elif map_type == 'Energia':
-                gasenergy = self.load_field(
+                gasenergy_loader = self.load_field(
                     fields='gasenergy',
                     slice=slice_str,
                     snapshot=[n],
-                    interpolate=True
+                    interpolate=interpolate
                 )
-                gasv = self.load_field(
+                if interpolate:
+                    gasenergy = gasenergy_loader
+                else:
+                    gasenergy = gasenergy_loader
+                gasv_loader = self.load_field(
                     fields='gasv',
                     slice=slice_str,
                     snapshot=[n],
-                    interpolate=True
+                    interpolate=interpolate
                 )
+                if interpolate:
+                    gasv = gasv_loader
+                else:
+                    gasv = gasv_loader
             elif map_type == 'Velocidad':
-                gasv = self.load_field(
+                gasv_loader = self.load_field(
                     fields='gasv',
                     slice=slice_str,
                     snapshot=[n],
-                    interpolate=True
+                    interpolate=interpolate
                 )
+                if interpolate:
+                    gasv = gasv_loader
+                else:
+                    gasv = gasv_loader
 
             # --- Interpolación y selección de variable a graficar ---
             if not interpolate:
@@ -2055,21 +2080,21 @@ class Simulation(fargopy.Fargobj):
                     ys = np.linspace(ymin, ymax, res)
                     X, Y = np.meshgrid(xs, ys)
                     if map_type == 'Densidad':
-                        data_map = gasdens.evaluate(time=n, var1=X, var2=Y)
+                        data_map = gasdens.evaluate(time=n, var1=X, var2=Y, field='gasdens')
                         data_map = np.log10(data_map * self.URHO)
-                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y, field='gasv')
                         vx = vel[0]
                         vy = vel[1]
                         vmag = np.sqrt(vx**2 + vy**2)
                     elif map_type == 'Energia':
-                        data_map = gasenergy.evaluate(time=n, var1=X, var2=Y)
+                        data_map = gasenergy.evaluate(time=n, var1=X, var2=Y, field='gasenergy')
                         #data_map = np.log10(data_map)
-                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y, field='gasv')
                         vx = vel[0]
                         vy = vel[1]
                         vmag = np.sqrt(vx**2 + vy**2)
                     elif map_type == 'Velocidad':
-                        vel = gasv.evaluate(time=n, var1=X, var2=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var2=Y, field='gasv')
                         idx = {'vx': 0, 'vy': 1, 'vz': 2}[vel_comp]
                         data_map = vel[idx]
                         vx = vel[0]
@@ -2082,21 +2107,21 @@ class Simulation(fargopy.Fargobj):
                     zs = np.linspace(zmin, zmax, res)
                     X, Y = np.meshgrid(xs, zs)
                     if map_type == 'Densidad':
-                        data_map = gasdens.evaluate(time=n, var1=X, var3=Y)
+                        data_map = gasdens.evaluate(time=n, var1=X, var3=Y, field='gasdens')
                         data_map = np.log10(data_map * self.URHO)
-                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y, field='gasv')
                         vx = vel[0]
                         vy = vel[2]
                         vmag = np.sqrt(vx**2 + vy**2)
                     elif map_type == 'Energia':
-                        data_map = gasenergy.evaluate(time=n, var1=X, var3=Y)
+                        data_map = gasenergy.evaluate(time=n, var1=X, var3=Y, field='gasenergy')
                         #data_map = np.log10(data_map)
-                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y, field='gasv')
                         vx = vel[0]
                         vy = vel[2]
                         vmag = np.sqrt(vx**2 + vy**2)
                     elif map_type == 'Velocidad':
-                        vel = gasv.evaluate(time=n, var1=X, var3=Y)
+                        vel = gasv.evaluate(time=n, var1=X, var3=Y, field='gasv')
                        
                         idx = {'vx':  0, 'vy': 1, 'vz': 2}[vel_comp]
                         data_map = vel[idx]

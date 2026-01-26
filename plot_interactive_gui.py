@@ -429,7 +429,7 @@ class PlotOptionsDialog(QDialog):
         self.vel_dropdown.setEnabled(text == 'Velocity')
 
     def on_fixed_cbar_toggle(self, state):
-        # Cambia la llamada al método del padre
+        # Notify parent to update when fixed colorbar setting changes
         if self.parent.fixed_cbar_enabled:
             self.parent.update_fixed_cbar_limits()
         self.parent.plot_density()
@@ -543,7 +543,7 @@ class PlotInteractiveWindow(QWidget):
         super().__init__()
         self.sim = None
 
-        # --- Opciones de gráfico (widgets ocultos, solo para lógica y dialog) ---
+        # --- Plot options (hidden widgets used for logic/dialog) ---
         self.cmap_dropdown = QComboBox()
         self.cmap_dropdown.addItems(COLORMAPS)
         self.stream_cmap_dropdown = QComboBox()
@@ -570,7 +570,7 @@ class PlotInteractiveWindow(QWidget):
         self.manual_vmax = 1.0  # log10 value
 
         # --- Fixed colorbar state ---
-        self.fixed_cbar_enabled = False  # <-- Añade esta línea para inicializar el atributo
+        self.fixed_cbar_enabled = False  # <-- Add this line to initialize the attribute
 
         # --- Reflection overlay state ---
         self.reflect_enabled = False
@@ -825,7 +825,7 @@ class PlotInteractiveWindow(QWidget):
         )
         controls_layout.addWidget(self.reflect_button, 8, 1, alignment=Qt.AlignRight)
 
-        # --- Botón Update plot ---
+        # --- Update plot button ---
         self.update_button = QPushButton("Update plot")
         self.update_button.setIcon(QIcon.fromTheme("view-refresh"))
         self.update_button.setEnabled(False)
@@ -847,7 +847,7 @@ class PlotInteractiveWindow(QWidget):
         controls_layout.addWidget(self.length_scale_combo, 15, 1)
         self.length_scale_combo.currentTextChanged.connect(lambda _: self.plot_density())
 
-        # --- Botón para opciones de gráfico ---
+        # --- Graph options button ---
         self.plot_options_button = QPushButton("Graph Options")
         self.plot_options_button.setStyleSheet("""
             QPushButton {
@@ -869,8 +869,8 @@ class PlotInteractiveWindow(QWidget):
         controls_layout.addWidget(self.video_button, 21, 0, 1, 2)
         self.video_button.clicked.connect(self.open_video_options_dialog)
 
-        # --- Eliminar controles que van al dialog ---
-        # NO crear ni agregar estos widgets al panel principal:
+        # --- Controls reserved for dialog (excluded from main panel) ---
+        # Do not create or add these widgets to the main panel:
         # self.cmap_dropdown
         # self.stream_cmap_dropdown
         # self.map_dropdown
@@ -1055,7 +1055,7 @@ class PlotInteractiveWindow(QWidget):
         self.reflect_button.setEnabled(True)
         self.update_button.setEnabled(True)
         self.info_button.setEnabled(True)
-        # Actualiza los límites del snapshot en el dialog
+        # Update snapshot limits in the dialog
         self.fixed_cbar_snap_spin.setMaximum(self.sim._get_nsnaps()-1)
         self.fixed_cbar_snap_spin.setValue(1)
         self.fixed_cbar_limits = {
@@ -1174,10 +1174,10 @@ class PlotInteractiveWindow(QWidget):
         # DO NOT call self.plot_density() here
 
     def build_slice_str(self):
-        # Si el usuario ha editado algún campo manualmente DESDE el último update, ignora last_slice_str
+        # If the user edited any field manually SINCE the last update, ignore last_slice_str
         if getattr(self, "_fields_edited", False):
             return self._manual_slice_str()
-        # Si no, usa el slice del zoom si existe
+        # Otherwise, use the zoom slice if present
         if self.last_slice_str:
             return self.last_slice_str
         return self._manual_slice_str()
@@ -1196,7 +1196,7 @@ class PlotInteractiveWindow(QWidget):
         r_max_val = self._length_input_to_sim_units(r_max_val)
 
         slice_parts = []
-        # Si ambos r_min y r_max están vacíos, y ambos phi_min y phi_max están vacíos, y theta está definido, es un slice en theta
+        # If both r_min and r_max are empty, and both phi_min and phi_max are empty, and theta is set, treat as a theta slice
         if not r_min_val and not r_max_val and not phi_min_val and not phi_max_val and theta_min_val:
             slice_parts.append(f"theta={theta_min_val}")
         else:
@@ -1230,14 +1230,14 @@ class PlotInteractiveWindow(QWidget):
         return ",".join(slice_parts)
 
     def on_slice_change(self):
-        # Marca que hubo edición manual y limpia el slice del zoom
+        # Mark that a manual edit occurred and clear the zoom slice
         self._fields_edited = True
         self.last_slice_str = ""
 
     def update_plot(self):
-        # Llamar a esto solo desde el botón Update plot
-        self._fields_edited = False  # Reset flag, ahora los campos son la fuente de verdad
-        self.last_slice_str = ""     # Siempre usar los campos manuales al actualizar
+        # Call only from the Update plot button
+        self._fields_edited = False  # Reset flag; manual fields are the source of truth
+        self.last_slice_str = ""     # Always use manual fields after updating
         self.plot_density()
 
     def on_map_change(self, text):
@@ -1247,7 +1247,7 @@ class PlotInteractiveWindow(QWidget):
             self.vel_dropdown.setEnabled(False)
 
     def on_fixed_cbar_toggle(self, state):
-        # Cambia la llamada al método del padre
+        # Notify parent to update fixed colorbar limits if enabled
         if self.parent.fixed_cbar_enabled:
             self.parent.update_fixed_cbar_limits()
         self.parent.plot_density()
@@ -1343,11 +1343,14 @@ class PlotInteractiveWindow(QWidget):
 
     def _plot_reflection_overlay(self, ax, X_plot, Y_plot, data_map, cmap, vmin, vmax,
                                  show_streamlines, stream_density, stream_cmap,
-                                 vx_plot, vy_plot, vmag_kms):
+                                 vx_plot, vy_plot, vmag_kms, skip_coord_reflect=False):
         if data_map is None:
             return
         axis = getattr(self, "reflect_axis", "X-axis")
-        X_ref, Y_ref = self._reflect_coordinates(axis, X_plot, Y_plot)
+        if skip_coord_reflect:
+            X_ref, Y_ref = X_plot, Y_plot
+        else:
+            X_ref, Y_ref = self._reflect_coordinates(axis, X_plot, Y_plot)
         ax.pcolormesh(
             X_ref,
             Y_ref,
@@ -1358,15 +1361,48 @@ class PlotInteractiveWindow(QWidget):
             vmax=vmax
             
         )
-
         if show_streamlines and vx_plot is not None and vy_plot is not None:
-            vx_ref, vy_ref = self._reflect_vectors(axis, vx_plot, vy_plot)
+            if skip_coord_reflect:
+                vx_ref, vy_ref = vx_plot, vy_plot
+            else:
+                vx_ref, vy_ref = self._reflect_vectors(axis, vx_plot, vy_plot)
+            # Ensure X_ref/Y_ref are strictly increasing along axes as required
+            # by matplotlib.streamplot. If not, sort axes and reorder data
+            # accordingly so streamplot receives monotonic grids.
+            def _ensure_monotonic(X, Y, U=None, V=None, vm=None):
+                try:
+                    if X.ndim == 2 and Y.ndim == 2:
+                        x_row = X[0, :]
+                        y_col = Y[:, 0]
+                        ix = None
+                        iy = None
+                        if not np.all(np.diff(x_row) > 0):
+                            ix = np.argsort(x_row)
+                        if not np.all(np.diff(y_col) > 0):
+                            iy = np.argsort(y_col)
+                        if ix is None and iy is None:
+                            return X, Y, U, V, vm
+                        if ix is None:
+                            ix = np.arange(X.shape[1])
+                        if iy is None:
+                            iy = np.arange(X.shape[0])
+                        X2 = X[np.ix_(iy, ix)]
+                        Y2 = Y[np.ix_(iy, ix)]
+                        U2 = U[np.ix_(iy, ix)] if U is not None else None
+                        V2 = V[np.ix_(iy, ix)] if V is not None else None
+                        vm2 = vm[np.ix_(iy, ix)] if vm is not None else None
+                        return X2, Y2, U2, V2, vm2
+                except Exception:
+                    pass
+                return X, Y, U, V, vm
+
+            Xr, Yr, vxr, vyr, vmr = _ensure_monotonic(X_ref, Y_ref, vx_ref, vy_ref, vmag_kms)
             ax.streamplot(
-                X_ref,
-                Y_ref,
-                vx_ref,
-                vy_ref,
-                color=vmag_kms if vmag_kms is not None else None,
+                Xr,
+                Yr,
+                vxr,
+                vyr,
+                color=vmr if vmr is not None else None,
                 linewidth=0.45,
                 density=stream_density,
                 cmap=stream_cmap,
@@ -1659,15 +1695,55 @@ class PlotInteractiveWindow(QWidget):
         # --- Set colorbar limits if fixed colorbar is enabled or manual vmin/vmax is enabled ---
         vmin = vmax = None
         if self.manual_vmin_vmax_enabled:
-            # El usuario ingresa el exponente x, aquí se convierte a 10^x
-            vmin =  self.manual_vmin
-            vmax =  self.manual_vmax
+            # User provides exponent x; values are treated as 10^x (manual vmin/vmax)
+            vmin = self.manual_vmin
+            vmax = self.manual_vmax
         elif self.fixed_cbar_enabled:
             limits = self.fixed_cbar_limits.get(map_type)
             if limits is not None:
                 vmin, vmax = limits
 
-        pcm = ax.pcolormesh(X_plot, Y_plot, data_map, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+        # Defensive: ensure X_plot/Y_plot/data_map have compatible shapes
+        X_plot = np.asarray(X_plot)
+        Y_plot = np.asarray(Y_plot)
+        data_map = np.asarray(data_map)
+        try:
+            pcm = ax.pcolormesh(X_plot, Y_plot, data_map, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+        except ValueError:
+            # Safer fallback: infer grid shape from data_map instead of
+            # calling np.unique on potentially huge X/Y arrays.
+            try:
+                data_map2 = data_map
+                # If data_map is 2D, prefer its shape
+                if getattr(data_map, 'ndim', 1) == 2:
+                    ny, nx = data_map.shape
+                    # Extract coordinate vectors from the first row/col when possible
+                    if getattr(X_plot, 'ndim', 1) == 2 and X_plot.shape[1] == nx:
+                        xs = X_plot[0, :].copy()
+                    else:
+                        xs = np.linspace(np.nanmin(X_plot), np.nanmax(X_plot), nx)
+                    if getattr(Y_plot, 'ndim', 1) == 2 and Y_plot.shape[0] == ny:
+                        ys = Y_plot[:, 0].copy()
+                    else:
+                        ys = np.linspace(np.nanmin(Y_plot), np.nanmax(Y_plot), ny)
+                    Xg, Yg = np.meshgrid(xs, ys)
+                else:
+                    # data_map is 1D/flat: reshape to near-square grid safely
+                    size = data_map.size
+                    nx = int(np.sqrt(size))
+                    ny = int(np.ceil(size / nx))
+                    if nx * ny != size:
+                        data_map2 = np.full((ny, nx), np.nan)
+                        data_map2.flat[:size] = data_map.flat
+                    else:
+                        data_map2 = data_map.reshape((ny, nx))
+                    xs = np.linspace(np.nanmin(X_plot), np.nanmax(X_plot), nx)
+                    ys = np.linspace(np.nanmin(Y_plot), np.nanmax(Y_plot), ny)
+                    Xg, Yg = np.meshgrid(xs, ys)
+                pcm = ax.pcolormesh(Xg, Yg, data_map2, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
+            except Exception:
+                # If fallback fails, raise original ValueError for debugging
+                raise
       # --- Axis label according to scaling ---
         axis_unit_label = axis_unit_label_map.get(length_unit, length_unit)
         xlabel, ylabel = f'X [{axis_unit_label}]', f'Y [{axis_unit_label}]'
@@ -1675,9 +1751,65 @@ class PlotInteractiveWindow(QWidget):
         stream_obj = None
         # Use vx_plot/vy_plot (axis-units per second) for streamplot so arrows scale correctly.
         if show_streamlines and vx_plot is not None and vy_plot is not None:
+            # Ensure X_plot/Y_plot are acceptable for streamplot: rows of X
+            # must be equal and columns of Y must be equal. If not, try to
+            # reorder axes so they become monotonic grids (like meshgrid).
+            def _sanitize_grid(X, Y, U=None, V=None, vm=None):
+                try:
+                    if getattr(X, 'ndim', 1) == 2 and getattr(Y, 'ndim', 1) == 2:
+                        x_row = X[0, :]
+                        y_col = Y[:, 0]
+                        ix = None
+                        iy = None
+                        if not np.all(np.diff(x_row) > 0):
+                            ix = np.argsort(x_row)
+                        if not np.all(np.diff(y_col) > 0):
+                            iy = np.argsort(y_col)
+                        if ix is None and iy is None:
+                            return X, Y, U, V, vm
+                        if ix is None:
+                            ix = np.arange(X.shape[1])
+                        if iy is None:
+                            iy = np.arange(X.shape[0])
+                        X2 = X[np.ix_(iy, ix)]
+                        Y2 = Y[np.ix_(iy, ix)]
+                        U2 = U[np.ix_(iy, ix)] if U is not None else None
+                        V2 = V[np.ix_(iy, ix)] if V is not None else None
+                        vm2 = vm[np.ix_(iy, ix)] if vm is not None else None
+                        return X2, Y2, U2, V2, vm2
+                except Exception:
+                    pass
+                # Fallback: if X/Y are 1D or sanitization failed, try to
+                # build a regular mesh from unique/mean coordinates.
+                try:
+                    if getattr(X, 'ndim', 1) == 2:
+                        xs = np.mean(X, axis=0)
+                    else:
+                        xs = X
+                    if getattr(Y, 'ndim', 1) == 2:
+                        ys = np.mean(Y, axis=1)
+                    else:
+                        ys = Y
+                    xs_sorted = np.sort(xs)
+                    ys_sorted = np.sort(ys)
+                    Xg, Yg = np.meshgrid(xs_sorted, ys_sorted)
+                    # If U/V provided and shapes match, try to reorder using
+                    # argsort indices derived from means; otherwise return mesh.
+                    if U is not None and V is not None:
+                        ix = np.argsort(xs)
+                        iy = np.argsort(ys)
+                        U2 = U[np.ix_(iy, ix)] if U.ndim == 2 else U
+                        V2 = V[np.ix_(iy, ix)] if V.ndim == 2 else V
+                        vm2 = vm[np.ix_(iy, ix)] if (vm is not None and vm.ndim == 2) else vm
+                        return Xg, Yg, U2, V2, vm2
+                    return Xg, Yg, U, V, vm
+                except Exception:
+                    return X, Y, U, V, vm
+
+            Xs, Ys, vxs, vys, vms = _sanitize_grid(X_plot, Y_plot, vx_plot, vy_plot, vmag_kms)
             stream_obj = ax.streamplot(
-                X_plot, Y_plot, vx_plot, vy_plot,
-                color=vmag_kms if vmag_kms is not None else None,
+                Xs, Ys, vxs, vys,
+                color=vms if vms is not None else None,
                 linewidth=0.5,
                 density=stream_density,
                 cmap=stream_cmap,
@@ -1685,21 +1817,135 @@ class PlotInteractiveWindow(QWidget):
             )
 
         if self.reflect_enabled:
-            self._plot_reflection_overlay(
-                ax,
-                X_plot,
-                Y_plot,
-                data_map,
-                cmap,
-                vmin,
-                vmax,
-                show_streamlines,
-                stream_density,
-                stream_cmap,
-                vx_plot,
-                vy_plot,
-                vmag_kms,
-            )
+            # Prefer using the FieldInterpolator's reflect augmentation
+            # via evaluate(..., reflect=True) when available. For XZ
+            # cuts (phi fixed) build a regular mesh using var1 (x)
+            # and var3 (z) from the FieldInterpolator and set
+            # zs = linspace(-zmax, zmin, res) as requested.
+            try:
+                # Use reflect via the FieldInterpolator only when we actually
+                # interpolated the field (i.e. `interpolate` is True). If not
+                # interpolating, keep the previous fallback behaviour.
+                if interpolate and hasattr(mesh_source, 'evaluate') and is_fixed('phi', slice_str):
+                    # Extract native mesh ranges (simulation units)
+                    xvals = getattr(mesh_source, 'var1_mesh')[0]
+                    zvals = getattr(mesh_source, 'var3_mesh')[0]
+                    xmin, xmax = float(np.nanmin(xvals)), float(np.nanmax(xvals))
+                    zmin, zmax = float(np.nanmin(zvals)), float(np.nanmax(zvals))
+
+                    xs = np.linspace(xmin, xmax, res)
+                    zs = np.linspace(-zmax, zmin, res)
+                    V1, V3 = np.meshgrid(xs, zs)
+
+                    # Interpolate reflected fields on that mesh depending on map type
+                    try:
+                        if map_type == 'Density':
+                            data_map_ref = mesh_source.evaluate(field='gasdens', time=n, var1=V1, var3=V3, reflect=True)
+                            # Match main path: convert to log10 density in physical units
+                            data_map_ref = np.log10(data_map_ref * self.sim.URHO)
+                            # Also get velocity for streamlines
+                            vel_ref = mesh_source.evaluate(field='gasv', time=n, var1=V1, var3=V3, reflect=True)
+                        elif map_type == 'Energy':
+                            data_map_ref = mesh_source.evaluate(field='gasenergy', time=n, var1=V1, var3=V3, reflect=True)
+                            vel_ref = mesh_source.evaluate(field='gasv', time=n, var1=V1, var3=V3, reflect=True)
+                        else:  # Velocity
+                            vel_ref = mesh_source.evaluate(field='gasv', time=n, var1=V1, var3=V3, reflect=True)
+                            idx_ref = VEL_INDEX.get(vel_comp, 0)
+                            data_map_ref = vel_ref[idx_ref]
+
+                        # Convert reflected mesh to plot units
+                        Xr_plot = V1 * self.sim.UL / scale_factor
+                        Yr_plot = V3 * self.sim.UL / scale_factor
+
+                        # Convert velocities to plot units and compute vmr_kms as in main path
+                        try:
+                            vxr_plot = (vel_ref[0] * v_factor) / scale_factor
+                            vyr_plot = (vel_ref[2] * v_factor) / scale_factor
+                        except Exception:
+                            vxr_plot = vyr_plot = None
+
+                        try:
+                            vmag_phys_ref = np.sqrt((vel_ref[0] * v_factor)**2 + (vel_ref[2] * v_factor)**2)
+                            denom = 1e5 if sim_unitsys == 'cgs' else 1e3
+                            vmr_kms = vmag_phys_ref / denom
+                        except Exception:
+                            vmr_kms = None
+
+                        # If map_type is Velocity, convert scalar field to km/s for coloring
+                        if map_type == 'Velocity' and data_map_ref is not None:
+                            try:
+                                denom = 1e5 if sim_unitsys == 'cgs' else 1e3
+                                data_map_ref = (data_map_ref * v_factor) / denom
+                            except Exception:
+                                pass
+
+                        self._plot_reflection_overlay(
+                            ax,
+                            Xr_plot,
+                            Yr_plot,
+                            data_map_ref,
+                            cmap,
+                            vmin,
+                            vmax,
+                            show_streamlines,
+                            stream_density,
+                            stream_cmap,
+                            vxr_plot,
+                            vyr_plot,
+                            vmr_kms,
+                            skip_coord_reflect=True,
+                        )
+                    except Exception:
+                        # On any error fall back to default overlay
+                        self._plot_reflection_overlay(
+                            ax,
+                            X_plot,
+                            Y_plot,
+                            data_map,
+                            cmap,
+                            vmin,
+                            vmax,
+                            show_streamlines,
+                            stream_density,
+                            stream_cmap,
+                            vx_plot,
+                            vy_plot,
+                            vmag_kms,
+                        )
+                else:
+                    # Fallback to previous behaviour using already computed data_map
+                    self._plot_reflection_overlay(
+                        ax,
+                        X_plot,
+                        Y_plot,
+                        data_map,
+                        cmap,
+                        vmin,
+                        vmax,
+                        show_streamlines,
+                        stream_density,
+                        stream_cmap,
+                        vx_plot,
+                        vy_plot,
+                        vmag_kms,
+                    )
+            except Exception:
+                # On any error, fallback silently to previous behaviour
+                self._plot_reflection_overlay(
+                    ax,
+                    X_plot,
+                    Y_plot,
+                    data_map,
+                    cmap,
+                    vmin,
+                    vmax,
+                    show_streamlines,
+                    stream_density,
+                    stream_cmap,
+                    vx_plot,
+                    vy_plot,
+                    vmag_kms,
+                )
 
         planets = self.sim.load_planets(snapshot=n)
         if planets:

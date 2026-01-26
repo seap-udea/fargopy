@@ -15,33 +15,43 @@ import fargopy as fp
 
 
 class Surface:
-    """
-    Generate analytic surfaces (sphere, cylinder, plane) suitable for integrating simulation
-    quantities. Provides tessellation, geometric properties, and helpers for mass/flux estimates.
+    """Analytic surface tessellation and helpers.
+
+    Provides tessellations and geometric properties for analytic surfaces
+    (sphere, cylinder, plane) used when integrating simulation fields
+    (for example: mass and flux calculations). The class exposes
+    per-patch centers, outward normals and patch areas, and utilities
+    to export this metadata.
     """
 
     def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1,
                  center=(0.0, 0.0, 0.0), z_cut=None, x_axis=1, y_axis=0, z_axis=0,
                  width=None, length=None):
-        """
+        """Initialize a Surface instance.
+
         Parameters
         ----------
         type : str, optional
-            Surface type: 'sphere', 'cylinder', or 'plane'.
+            Surface type. One of ``'sphere'``, ``'cylinder'`` or ``'plane'``.
         radius : float, optional
-            Radius of the sphere or radial extent of the plane.
+            Radius for spheres or radial extent for planes/cylinders.
         height : float, optional
-            Cylinder height (required when type='cylinder').
+            Cylinder height; required when ``type=='cylinder'``.
         subdivisions : int, optional
-            Number of recursive subdivisions (sphere) or grid divisions (cylinder/plane).
+            For ``'sphere'``: number of recursive icosahedron subdivisions.
+            For ``'cylinder'`` and ``'plane'``: number of divisions along
+            each logical axis used to build patches.
         center : tuple of float, optional
-            Cartesian coordinates of the surface center.
+            Cartesian coordinates ``(x, y, z)`` of the surface center.
         z_cut : float, optional
-            If provided, discard the portion of the tessellation with z < z_cut.
+            Optional z-plane clipping value. When provided, portions with
+            z < ``z_cut`` are removed for spherical tessellations.
         x_axis, y_axis, z_axis : int, optional
-            Axis-alignment flags (only one can be 1) used to orient planar surfaces.
+            Axis flags (0 or 1) that select the plane normal for
+            ``type=='plane'``. Exactly one flag must be 1.
         width, length : float, optional
-            Explicit plane dimensions; default to 2 * radius when omitted.
+            Explicit span of the plane along the two in-plane axes. If
+            omitted, each defaults to ``2 * radius``.
         """
         self.type = type
         self.radius = radius
@@ -81,9 +91,13 @@ class Surface:
             raise ValueError("Unsupported surface type. Use 'sphere', 'cylinder', or 'plane'.")
 
     def _tessellate_sphere(self):
-        """
-        Build a spherical tessellation by recursively subdividing an icosahedron and
-        optionally clipping triangles below the z_cut plane.
+        """Construct a spherical triangle tessellation.
+
+        The method builds an icosahedron and recursively subdivides its
+        faces to produce approximately uniform triangular patches on the
+        sphere of radius ``self.radius``. If ``self.z_cut`` is defined,
+        triangles crossing the plane ``z = z_cut`` are clipped so that
+        only the portion with ``z >= z_cut`` remains.
         """
         phi = (1.0 + np.sqrt(5.0)) / 2.0
         patterns = [
@@ -182,9 +196,14 @@ class Surface:
         
 
     def _tessellate_cylinder(self):
-        """
-        Discretize the cylinder into top, bottom, and lateral panels and populate
-        each panel’s centers, normals, and patch areas.
+        """Discretize a right circular cylinder into top, bottom and lateral patches.
+
+        The cylinder is split into a regular grid on the top and bottom
+        circular faces and into strips along the azimuth and height for
+        the lateral surface. The method sets per-patch centers, normals
+        and areas on attributes named ``top_centers``, ``bottom_centers``,
+        ``lateral_centers`` and their corresponding ``_normals`` and
+        ``_areas`` attributes.
         """
         theta = np.linspace(0, 2 * np.pi, self.subdivisions, endpoint=False)
         r = np.linspace(0, self.radius, self.subdivisions)
@@ -212,9 +231,14 @@ class Surface:
         self.lateral_areas = (2 * np.pi * self.radius / self.subdivisions) * (self.height / self.subdivisions)
 
     def _tessellate_plane(self):
-        """
-        Discretize an axis-aligned plane into rectangular patches spanning the
-        requested width and length.
+        """Discretize an axis-aligned plane into rectangular patches.
+
+        The plane is centered at ``self.center`` and aligned with the axis
+        selected by the triple ``(x_axis, y_axis, z_axis)``. The in-plane
+        spans are ``self.width`` and ``self.length`` which are split into
+        ``self.subdivisions`` cells along each axis. The method sets
+        ``self.centers``, ``self.normals``, ``self.areas`` and related
+        attributes for downstream use.
         """
         axis_flags = np.array([self.x_axis, self.y_axis, self.z_axis], dtype=int)
         if np.any((axis_flags != 0) & (axis_flags != 1)) or axis_flags.sum() != 1:
@@ -262,15 +286,31 @@ class Surface:
 
     @staticmethod
     def _normalize(v):
-        """
-        Return a unit-length copy of the supplied vector.
+        """Return a unit-length copy of the input vector.
+
+        Parameters
+        ----------
+        v : array_like
+            Input vector.
+
+        Returns
+        -------
+        ndarray
+            Unit-normalized copy of ``v``.
         """
         return v / np.linalg.norm(v)
 
     def _subdivide_triangle(self, v1, v2, v3, depth):
-        """
-        Recursively subdivide a base triangle until the requested depth is reached,
-        storing the resulting leaf triangles.
+        """Recursively subdivide a triangle and store leaf triangles.
+
+        Parameters
+        ----------
+        v1, v2, v3 : array_like
+            Triangle vertices in Cartesian coordinates (on the unit sphere
+            before scaling by ``self.radius``).
+        depth : int
+            Number of remaining subdivision levels. When ``depth==0`` the
+            triangle is written into ``self.triangles``.
         """
         if depth == 0:
             self.triangles[self.triangle_index] = [v1 + self.center, v2 + self.center, v3 + self.center]
@@ -285,15 +325,25 @@ class Surface:
         self._subdivide_triangle(v12, v23, v31, depth - 1)
 
     def _calculate_polygon_centers(self):
-        """
-        Compute and cache the centroid for every triangle in the tessellation.
+        """Compute and cache centroids for all stored triangles.
+
+        The computed centroids are assigned to ``self.centers``.
         """
         self.centers = np.mean(self.triangles, axis=1)
 
     @staticmethod
     def _calculate_triangle_area(v1, v2, v3):
-        """
-        Return the area of the triangle defined by vertices v1, v2, and v3.
+        """Compute the area of a triangle using the cross product.
+
+        Parameters
+        ----------
+        v1, v2, v3 : array_like
+            Triangle vertex coordinates.
+
+        Returns
+        -------
+        float
+            Triangle area.
         """
         side1 = v2 - v1
         side2 = v3 - v1
@@ -302,15 +352,19 @@ class Surface:
         return area
 
     def _calculate_all_triangle_areas(self):
-        """
-        Evaluate and cache areas for all triangles currently stored.
+        """Evaluate and cache areas for every triangle in ``self.triangles``.
+
+        This fills ``self.areas`` using :meth:`_calculate_triangle_area`.
         """
         for i, (v1, v2, v3) in enumerate(self.triangles):
             self.areas[i] = self._calculate_triangle_area(v1, v2, v3)
 
     def _calculate_normals(self):
-        """
-        Compute outward-facing normals for each triangle using the right-hand rule.
+        """Compute outward-facing unit normals for each stored triangle.
+
+        The method enforces that each normal points away from ``self.center``;
+        if the computed normal points inward it is flipped.
+        Results are stored in ``self.normals``.
         """
         self.normals = np.zeros((self.num_triangles, 3))
         for i, tri in enumerate(self.triangles):
@@ -325,8 +379,11 @@ class Surface:
             self.normals[i] = normal
 
     def tessellate(self):
-        """
-        Recompute the tessellation using current parameters (type, radius, etc.).
+        """Recompute the tessellation from current instance parameters.
+
+        This method is a convenience wrapper that dispatches to the
+        appropriate internal tessellation implementation depending on
+        ``self.type``.
         """
         if self.type == "sphere":
             self._tessellate_sphere()
@@ -338,8 +395,11 @@ class Surface:
             raise ValueError("Unsupported surface type. Use 'sphere', 'cylinder', or 'plane'.")
 
     def generate_dataframe(self):
-        """
-        Export tessellation metadata (center, normal, area) as a pandas DataFrame.
+        """Return tessellation metadata as a pandas :class:`DataFrame`.
+
+        The returned DataFrame contains one row per surface patch with
+        columns ``'Center'``, ``'Normal'`` and ``'Area'``. Coordinates are
+        represented as Python lists to ensure JSON-serializable cell values.
         """
         data = []
         for i, (center, normal, area) in enumerate(zip(self.centers, self.normals, self.areas)):
@@ -353,13 +413,41 @@ class Surface:
     def total_mass_mtc(self, sim, field='gasdens', n_samples=10000, snapshot=[0,1],
                    interpolator='griddata', method='linear', cut_r=None,
                    follow_planet=True, planet_index=0):
-        """
-        Estimate enclosed mass via Monte Carlo sampling of the provided density field.
+        """Estimate enclosed mass using Monte Carlo sampling.
+
+        The method samples ``n_samples`` points uniformly within the
+        spherical region defined by this surface (accounting for ``z_cut``
+        when present), interpolates the requested density field at the
+        sample points and returns an estimate of the enclosed mass.
+
+        Parameters
+        ----------
+        sim : object
+            Simulation object providing ``load_field`` and ``load_planets``
+            methods (FARGOpy simulation API).
+        field : str, optional
+            Density field name to sample (default ``'gasdens'``).
+        n_samples : int, optional
+            Number of Monte Carlo samples per snapshot.
+        snapshot : int or [start, end], optional
+            Snapshot index or inclusive snapshot range.
+        interpolator : str, optional
+            Interpolator backend passed to the field evaluator.
+        method : str, optional
+            Interpolation method passed to the field evaluator.
+        cut_r : float, optional
+            Radial cut passed to ``sim.load_field`` to limit data transfer.
+        follow_planet : bool, optional
+            If True follow the planet position when sampling (useful for
+            Hill-sphere based regions).
+        planet_index : int, optional
+            Index of the planet to follow when ``follow_planet`` is True.
 
         Returns
         -------
-        float or np.ndarray
-            Single value for one snapshot or an array for a snapshot range.
+        float or numpy.ndarray
+            Estimated enclosed mass. Returns a single float if a single
+            snapshot is requested, otherwise an array of estimates.
         """
         if isinstance(snapshot, int):
             times = [snapshot]
@@ -410,14 +498,12 @@ class Surface:
                     fields=[field],
                     snapshot=[int(t)],
                     cut=(self.center[0], self.center[1], self.center[2], cut_r),
-                    interpolate=True
                 )
             else:
                 field_interp = sim.load_field(
                     fields=[field],
                     snapshot=[int(t)],
                     cut=(self.center[0], self.center[1], self.center[2], self.radius*2),
-                    interpolate=True
                 )
 
             rho = field_interp.evaluate(
@@ -439,15 +525,45 @@ class Surface:
     def mass_flux(self, sim, field_density='gasdens', field_velocity='gasv',
                 snapshot=[0, 1], interpolator='griddata', method='linear',
                 follow_planet=True, planet_index=0,
-                correct_normals=True, relative_velocity=True):
-        """
-        Compute the mass flux across the surface for each snapshot.
-        The flux is computed as:
-            Φ = ∑ ρ * (v_rel ⋅ n_out) * dA
-        where v_rel = v - v_planet and n_out is the outward-pointing normal.
+                correct_normals=True, relative_velocity=False):
+        """Compute mass flux through the surface patches.
 
-        This version is compatible with the unified DataFrame returned
-        by FieldInterpolator when multiple fields are loaded simultaneously.
+        The instantaneous mass flux for each patch is computed as::
+
+            dΦ = ρ * (v_rel · n_out) * dA
+
+        and the returned value is the sum over all patches. Velocities can
+        optionally be converted to the planet rest frame by enabling
+        ``relative_velocity``.
+
+        Parameters
+        ----------
+        sim : object
+            Simulation object exposing ``load_field`` and ``load_planets``.
+        field_density : str, optional
+            Density field name (default ``'gasdens'``).
+        field_velocity : str, optional
+            Velocity field name (default ``'gasv'``).
+        snapshot : [start, end], optional
+            Inclusive snapshot range to evaluate.
+        interpolator, method : str, optional
+            Passed to the field evaluator for interpolation.
+        follow_planet : bool, optional
+            If True follow the planet position and scale the surface
+            (useful for Hill-sphere analysis).
+        planet_index : int, optional
+            Index of the planet to follow.
+        correct_normals : bool, optional
+            If True ensure per-patch normals point outward from the
+            surface center before computing the flux.
+        relative_velocity : bool, optional
+            If True subtract the planet velocity from the interpolated
+            fluid velocity prior to flux computation.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of flux values, one per requested snapshot.
         """
 
         steps = snapshot[1] - snapshot[0] + 1
@@ -514,7 +630,6 @@ class Surface:
             fields = sim.load_field(
                 fields=[field_density, field_velocity],
                 snapshot=[int(t)],
-                interpolate=True,
                 cut=surface_cut
             )
         
@@ -583,28 +698,38 @@ class Surface:
                 follow_planet=True,
                 planet_index=0,
                 return_resolution=False):
-        """
-        Compute enclosed gas mass using exact grid integration (no Monte Carlo),
-        automatically detecting whether the Surface object represents a sphere
-        or a cylinder based on self.type.
+        """Compute enclosed mass by direct grid integration.
 
-        Supported Surface types:
-            - type='sphere'   → spherical region of radius self.radius
-            - type='cylinder' → cylindrical region: radius self.radius, height=self.height
+        The method integrates the requested density field on the simulation
+        spherical-polar grid accounting for the region geometry defined by
+        this Surface instance. ``self.type`` must be either ``'sphere'`` or
+        ``'cylinder'``; the integration mask is constructed accordingly.
 
         Parameters
         ----------
-        sim : Simulation
-        field : str
-            Density field name (typically 'gasdens').
-        snapshot : int or [start, end]
-        follow_planet : bool
-        planet_index : int
-        return_resolution : bool
+        sim : object
+            Simulation object providing access to the raw grid and fields.
+        field : str, optional
+            Density field name (default ``'gasdens'``).
+        snapshot : int or [start, end], optional
+            Snapshot index or inclusive snapshot range to integrate.
+        follow_planet : bool, optional
+            If True update the integration center and radius from the
+            specified planet's position/hill radius.
+        planet_index : int, optional
+            Planet index to follow when ``follow_planet`` is True.
+        return_resolution : bool, optional
+            If True return detailed resolution metadata for each snapshot
+            alongside the integrated mass.
 
         Returns
         -------
-        float or dict or array
+        float or numpy.ndarray or list
+            If ``return_resolution`` is False and a single snapshot is
+            requested, returns a float. If multiple snapshots are
+            requested, returns a numpy array of masses. If
+            ``return_resolution`` is True a list of dictionaries with
+            per-snapshot metadata is returned.
         """
 
         # --------------------
@@ -667,7 +792,7 @@ class Surface:
                 xp, yp, zp = planet.pos.x, planet.pos.y, planet.pos.z
 
                 # Update center and radius according to Hill radius
-                factor = self.radius / sim.load_planets(snapshot=times[0])[planet_index].hill_radius
+                factor = np.round(self.radius / sim.load_planets(snapshot=t)[planet_index].hill_radius,2)
                 self.center = (xp, yp, zp)
                 self.radius = factor * planet.hill_radius
 

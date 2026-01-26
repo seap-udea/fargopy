@@ -490,7 +490,7 @@ class FieldInterpolator:
         with parallel_config(n_jobs=-1, prefer='threads'):
             return Parallel(backend=backend)(tasks)
  
-    def load_data(self, fields=None, slice=None, snapshots=1, cut=None):
+    def load_data(self, fields=None, slice=None, snapshots=1, cut=None, coords='cartesian'):
         """
         Load one or multiple fields ('gasdens', 'gasv', 'gasenergy') into a SINGLE
         unified DataFrame with shared coordinates (var1_mesh, var2_mesh, var3_mesh).
@@ -517,14 +517,15 @@ class FieldInterpolator:
             snapshots = [snapshots]
         self.snapshot = snapshots
 
-        # Detect dimensionality
+        # Detect dimensionality from the sliced data (if a slice is provided)
         if slice is not None:
-            test = self.sim.load_field(
-                fields='gasdens',
-                slice=slice,
-                snapshot=snapshots[0]
-            )
-            self.dim = len(test.data.shape)
+            test_field = self.sim._load_field_raw('gasdens', snapshot=snapshots[0], field_type='scalar')
+            try:
+                data_slice, mesh = test_field.meshslice(slice=slice)
+                self.dim = len(np.array(data_slice).shape)
+            except Exception:
+                # Fallback: assume full 3D
+                self.dim = 3
         else:
             self.dim = 3
 
@@ -562,10 +563,8 @@ class FieldInterpolator:
         # =====================================================================
         if self.dim < 3:
 
-            # Base coordinate + snapshot columns
-            df_snapshots = pd.DataFrame(columns=[
-                'snapshot', 'time', 'var1_mesh', 'var2_mesh', 'var3_mesh'
-            ])
+            # Collect rows and build DataFrame once to avoid repeated concat
+            rows = []
 
             for i, snap in enumerate(snaps):
 
@@ -579,21 +578,35 @@ class FieldInterpolator:
                     # GASDENS 2D
                     # -----------------
                     if field == 'gasdens':
-                        gasd = self.sim.load_field('gasdens', snapshot=snap, type='scalar')
+                        gasd = self.sim._load_field_raw('gasdens', snapshot=snap, field_type='scalar')
                         data_slice, mesh = gasd.meshslice(slice=slice)
 
                         # assign coordinates only once
                         if not coords_assigned:
-                            if np.all(mesh.phi.ravel() == mesh.phi.ravel()[0]):
-                                phi0 = mesh.phi.ravel()[0]
-                                x_rot, y_rot, z_rot = _rotation(mesh.x, mesh.y, mesh.z, phi0)
-                                row['var1_mesh'] = x_rot
-                                row['var2_mesh'] = y_rot
-                                row['var3_mesh'] = z_rot
+                            if coords == 'cartesian':
+                                # rotate if phi is fixed
+                                try:
+                                    if np.all(mesh.phi.ravel() == mesh.phi.ravel()[0]):
+                                        phi0 = mesh.phi.ravel()[0]
+                                        x_rot, y_rot, z_rot = _rotation(mesh.x, mesh.y, mesh.z, phi0)
+                                        row['var1_mesh'] = x_rot
+                                        row['var2_mesh'] = y_rot
+                                        row['var3_mesh'] = z_rot
+                                    else:
+                                        row['var1_mesh'] = mesh.x
+                                        row['var2_mesh'] = mesh.y
+                                        row['var3_mesh'] = mesh.z
+                                except Exception:
+                                    # Fallback if mesh lacks phi
+                                    row['var1_mesh'] = mesh.x
+                                    row['var2_mesh'] = mesh.y
+                                    row['var3_mesh'] = mesh.z
                             else:
-                                row['var1_mesh'] = mesh.x
-                                row['var2_mesh'] = mesh.y
-                                row['var3_mesh'] = mesh.z
+                                # original coordinate names as defined in simulation
+                                vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
+                                row['var1_mesh'] = getattr(mesh, vnames[0])
+                                row['var2_mesh'] = getattr(mesh, vnames[1])
+                                row['var3_mesh'] = getattr(mesh, vnames[2])
                             coords_assigned = True
 
                         row['gasdens_mesh'] = data_slice
@@ -602,39 +615,56 @@ class FieldInterpolator:
                     # GASV 2D
                     # -----------------
                     if field == 'gasv':
-                        gasv = self.sim.load_field('gasv', snapshot=snap, type='vector')
-                        gasvx, gasvy, gasvz = gasv.to_cartesian()
+                        gasv_raw = self.sim._load_field_raw('gasv', snapshot=snap, field_type='vector')
+                        if coords == 'cartesian':
+                            gasvx, gasvy, gasvz = gasv_raw.to_cartesian()
+                            v1, mesh = gasvx.meshslice(slice=slice)
+                            v2, mesh = gasvy.meshslice(slice=slice)
+                            v3, mesh = gasvz.meshslice(slice=slice)
 
-                        v1, mesh = gasvx.meshslice(slice=slice)
-                        v2, mesh = gasvy.meshslice(slice=slice)
-                        v3, mesh = gasvz.meshslice(slice=slice)
+                            if not coords_assigned:
+                                row['var1_mesh'] = mesh.x
+                                row['var2_mesh'] = mesh.y
+                                row['var3_mesh'] = mesh.z
+                                coords_assigned = True
 
-                        if not coords_assigned:
-                            row['var1_mesh'] = mesh.x
-                            row['var2_mesh'] = mesh.y
-                            row['var3_mesh'] = mesh.z
-                            coords_assigned = True
-
-                        row['gasv_mesh'] = np.array([v1, v2, v3])
+                            row['gasv_mesh'] = np.array([v1, v2, v3])
+                        else:
+                            v_slice, mesh = gasv_raw.meshslice(slice=slice)
+                            v1, v2, v3 = v_slice[0], v_slice[1], v_slice[2]
+                            if not coords_assigned:
+                                vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
+                                row['var1_mesh'] = getattr(mesh, vnames[0])
+                                row['var2_mesh'] = getattr(mesh, vnames[1])
+                                row['var3_mesh'] = getattr(mesh, vnames[2])
+                                coords_assigned = True
+                            row['gasv_mesh'] = np.array([v1, v2, v3])
 
                     # -----------------
                     # GASENERGY 2D
                     # -----------------
                     if field == 'gasenergy':
-                        gasen = self.sim.load_field('gasenergy', snapshot=snap, type='scalar')
+                        gasen = self.sim._load_field_raw('gasenergy', snapshot=snap, field_type='scalar')
                         data_slice, mesh = gasen.meshslice(slice=slice)
 
                         if not coords_assigned:
-                            row['var1_mesh'] = mesh.x
-                            row['var2_mesh'] = mesh.y
-                            row['var3_mesh'] = mesh.z
+                            if coords == 'cartesian':
+                                row['var1_mesh'] = mesh.x
+                                row['var2_mesh'] = mesh.y
+                                row['var3_mesh'] = mesh.z
+                            else:
+                                vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
+                                row['var1_mesh'] = getattr(mesh, vnames[0])
+                                row['var2_mesh'] = getattr(mesh, vnames[1])
+                                row['var3_mesh'] = getattr(mesh, vnames[2])
                             coords_assigned = True
 
                         row['gasenergy_mesh'] = data_slice
 
-                # append row
-                df_snapshots = pd.concat([df_snapshots, pd.DataFrame([row])], ignore_index=True)
+                # collect row dicts and build DataFrame once
+                rows.append(row)
 
+            df_snapshots = pd.DataFrame(rows)
             self.df = df_snapshots
             return df_snapshots
 
@@ -670,9 +700,8 @@ class FieldInterpolator:
             else:
                 mask = None
 
-            df_snapshots = pd.DataFrame(columns=[
-                'snapshot','time','var1_mesh','var2_mesh','var3_mesh'
-            ])
+            # Collect rows and build DataFrame once to avoid repeated concat
+            rows = []
 
             for i, snap in enumerate(snaps):
 
@@ -686,17 +715,30 @@ class FieldInterpolator:
                     # GASDENS 3D
                     # -----------------
                     if field == "gasdens":
-                        gasd = self.sim.load_field('gasdens', snapshot=snap, type='scalar')
+                        gasd = self.sim._load_field_raw('gasdens', snapshot=snap, field_type='scalar')
 
                         if not coords_assigned:
-                            if mask is not None:
-                                row["var1_mesh"] = x[mask]
-                                row["var2_mesh"] = y[mask]
-                                row["var3_mesh"] = z[mask]
+                            if coords == 'cartesian':
+                                if mask is not None:
+                                    row["var1_mesh"] = x[mask]
+                                    row["var2_mesh"] = y[mask]
+                                    row["var3_mesh"] = z[mask]
+                                else:
+                                    row["var1_mesh"] = x
+                                    row["var2_mesh"] = y
+                                    row["var3_mesh"] = z
                             else:
-                                row["var1_mesh"] = x
-                                row["var2_mesh"] = y
-                                row["var3_mesh"] = z
+                                # original coordinate variables order
+                                v0, v1, v2 = self.sim.vars.VARIABLES
+                                mapping = dict(r=r,phi=phi,theta=theta,x=x,y=y,z=z)
+                                if mask is not None:
+                                    row["var1_mesh"] = mapping[v0][mask]
+                                    row["var2_mesh"] = mapping[v1][mask]
+                                    row["var3_mesh"] = mapping[v2][mask]
+                                else:
+                                    row["var1_mesh"] = mapping[v0]
+                                    row["var2_mesh"] = mapping[v1]
+                                    row["var3_mesh"] = mapping[v2]
                             coords_assigned = True
 
                         row["gasdens_mesh"] = gasd.data[mask] if mask is not None else gasd.data
@@ -704,54 +746,88 @@ class FieldInterpolator:
                     # GASV 3D
                     # -----------------
                     if field == "gasv":
-                        gasv = self.sim.load_field('gasv', snapshot=snap, type='vector')
-                        gasvx, gasvy, gasvz = gasv.to_cartesian()
+                        gasv_raw = self.sim._load_field_raw('gasv', snapshot=snap, field_type='vector')
+                        if coords == 'cartesian':
+                            gasvx, gasvy, gasvz = gasv_raw.to_cartesian()
 
-                        if not coords_assigned:
+                            if not coords_assigned:
+                                if mask is not None:
+                                    row["var1_mesh"] = x[mask]
+                                    row["var2_mesh"] = y[mask]
+                                    row["var3_mesh"] = z[mask]
+                                else:
+                                    row["var1_mesh"] = x
+                                    row["var2_mesh"] = y
+                                    row["var3_mesh"] = z
+                                coords_assigned = True
+
                             if mask is not None:
-                                row["var1_mesh"] = x[mask]
-                                row["var2_mesh"] = y[mask]
-                                row["var3_mesh"] = z[mask]
+                                row["gasv_mesh"] = np.array([
+                                    gasvx.data[mask],
+                                    gasvy.data[mask],
+                                    gasvz.data[mask]
+                                ])
                             else:
-                                row["var1_mesh"] = x
-                                row["var2_mesh"] = y
-                                row["var3_mesh"] = z
-                            coords_assigned = True
-
-                        if mask is not None:
-                            row["gasv_mesh"] = np.array([
-                                gasvx.data[mask],
-                                gasvy.data[mask],
-                                gasvz.data[mask]
-                            ])
+                                row["gasv_mesh"] = np.array([
+                                    gasvx.data,
+                                    gasvy.data,
+                                    gasvz.data
+                                ])
                         else:
-                            row["gasv_mesh"] = np.array([
-                                gasvx.data,
-                                gasvy.data,
-                                gasvz.data
-                            ])
+                            vdata = gasv_raw.data
+                            if not coords_assigned:
+                                v0, v1, v2 = self.sim.vars.VARIABLES
+                                mapping = dict(r=r,phi=phi,theta=theta,x=x,y=y,z=z)
+                                if mask is not None:
+                                    row["var1_mesh"] = mapping[v0][mask]
+                                    row["var2_mesh"] = mapping[v1][mask]
+                                    row["var3_mesh"] = mapping[v2][mask]
+                                else:
+                                    row["var1_mesh"] = mapping[v0]
+                                    row["var2_mesh"] = mapping[v1]
+                                    row["var3_mesh"] = mapping[v2]
+                                coords_assigned = True
+
+                            if mask is not None:
+                                row["gasv_mesh"] = np.array([vdata[0][mask], vdata[1][mask], vdata[2][mask]])
+                            else:
+                                row["gasv_mesh"] = np.array([vdata[0], vdata[1], vdata[2]])
 
                     # -----------------
                     # GASENERGY 3D
                     # -----------------
                     if field == "gasenergy":
-                        gasen = self.sim.load_field('gasenergy', snapshot=snap, type='scalar')
+                        gasen = self.sim._load_field_raw('gasenergy', snapshot=snap, field_type='scalar')
 
                         if not coords_assigned:
-                            if mask is not None:
-                                row["var1_mesh"] = x[mask]
-                                row["var2_mesh"] = y[mask]
-                                row["var3_mesh"] = z[mask]
+                            if coords == 'cartesian':
+                                if mask is not None:
+                                    row["var1_mesh"] = x[mask]
+                                    row["var2_mesh"] = y[mask]
+                                    row["var3_mesh"] = z[mask]
+                                else:
+                                    row["var1_mesh"] = x
+                                    row["var2_mesh"] = y
+                                    row["var3_mesh"] = z
                             else:
-                                row["var1_mesh"] = x
-                                row["var2_mesh"] = y
-                                row["var3_mesh"] = z
+                                v0, v1, v2 = self.sim.vars.VARIABLES
+                                mapping = dict(r=r,phi=phi,theta=theta,x=x,y=y,z=z)
+                                if mask is not None:
+                                    row["var1_mesh"] = mapping[v0][mask]
+                                    row["var2_mesh"] = mapping[v1][mask]
+                                    row["var3_mesh"] = mapping[v2][mask]
+                                else:
+                                    row["var1_mesh"] = mapping[v0]
+                                    row["var2_mesh"] = mapping[v1]
+                                    row["var3_mesh"] = mapping[v2]
                             coords_assigned = True
 
                         row["gasenergy_mesh"] = gasen.data[mask] if mask is not None else gasen.data
 
-                df_snapshots = pd.concat([df_snapshots, pd.DataFrame([row])], ignore_index=True)
+                # collect row dicts and build DataFrame once
+                rows.append(row)
 
+            df_snapshots = pd.DataFrame(rows)
             self.df = df_snapshots
             return df_snapshots
 
@@ -1123,6 +1199,19 @@ class FieldInterpolator:
         if np.isscalar(var2): var2 = np.array([var2])
         if np.isscalar(var3): var3 = np.array([var3])
 
+        # Convenience: allow calling evaluate(var1=..., var2=...) for
+        # 2D XZ slices where the expected coordinates are (var1,var3).
+        # If the slice type is not 'theta' (i.e. XZ) and the user passed
+        # a value for var2 but left var3=None, treat var2 as var3.
+        try:
+            slice_type_tmp = self._slice_type or self._detect_slice_type(self.slice)
+        except Exception:
+            slice_type_tmp = None
+        if self.dim == 2 and slice_type_tmp is not None and slice_type_tmp != 'theta':
+            if var3 is None and var2 is not None:
+                var3 = var2
+                var2 = None
+
         # ===============================================================
         # Smoothing helper
         # ===============================================================
@@ -1292,38 +1381,36 @@ class FieldInterpolator:
                     raise ValueError(f"Cannot extract vector component from {data.shape}")
 
             # -------------------------------------------------
-            # Reflection augmentation for XZ cuts (phi fixed)
+            # Reflection augmentation
             # If `reflect=True` we augment the interpolation
-            # dataset with the reflection of the field across
-            # the x-axis (for XZ plane: z -> -z). For 3D
-            # coords this means (x,y,z)->(x,-y,-z). For vector
-            # fields the perpendicular components change sign.
+            # dataset reflecting across the equatorial plane z=0
+            # (i.e. z -> -z). For 2D XZ cuts (coords (x,z)) we flip z.
+            # For vector components, the component normal to the
+            # reflection plane (vz) changes sign.
             # -------------------------------------------------
-            if reflect and (slice_type == 'phi' or (self.dim == 2 and slice_type != 'theta')):
+            if reflect:
                 try:
-                    # Work with flattened coords and values
-                    if self.dim == 3:
-                        coords_orig = coords.reshape(-1, 3)
-                        coords_ref = coords_orig.copy()
-                        coords_ref[:, 1] *= -1
+                    # Normalize coords to shape (N, ndim)
+                    coords_arr = np.asarray(coords)
+                    ndim = coords_arr.shape[1] if coords_arr.ndim == 2 else 1
+                    coords_orig = coords_arr.reshape(-1, ndim)
+                    coords_ref = coords_orig.copy()
+
+                    # Flip only the z coordinate (index -1 if 3D, index 1 if 2D XZ)
+                    if coords_orig.shape[1] == 3:
                         coords_ref[:, 2] *= -1
-                    elif self.dim == 2:
-                        # In 2D XZ cut coords are (x,z)
-                        coords_orig = coords.reshape(-1, 2)
-                        coords_ref = coords_orig.copy()
+                    elif coords_orig.shape[1] == 2:
+                        # assume (x,z) layout for XZ cuts
                         coords_ref[:, 1] *= -1
-                    else:
-                        coords_orig = coords
-                        coords_ref = coords_orig
 
                     # Prepare data values (flattened)
                     data_flat = np.asarray(data).ravel()
 
                     # For vector components, reflect sign for the
-                    # components perpendicular to x-axis (vy,vz)
+                    # component perpendicular to the plane (vz -> -vz)
                     if field_name == 'gasv_mesh' and comp is not None:
-                        # comp: 0->vx (no sign change), 1->vy (flip), 2->vz (flip)
-                        if comp in (1, 2):
+                        # comp: 2->vz (flip), others unchanged
+                        if comp == 2:
                             data_ref = -data_flat
                         else:
                             data_ref = data_flat.copy()
@@ -1332,15 +1419,11 @@ class FieldInterpolator:
                         data_ref = data_flat.copy()
 
                     # Augment coords and data for interpolation
-                    if hasattr(coords_orig, 'shape'):
-                        coords = np.vstack([coords_orig, coords_ref])
-                    else:
-                        coords = np.concatenate([coords_orig, coords_ref])
+                    coords = np.vstack([coords_orig, coords_ref])
                     data = np.concatenate([data_flat, data_ref])
                 except Exception:
-                    # If anything goes wrong with reflection augmentation,
-                    # fall back to original coords/data (do not raise here)
-                    coords = coords
+                    # On error, fallback to original coords/data
+                    coords = np.asarray(coords)
                     data = np.asarray(data)
 
             # Dispatch backend
@@ -1406,7 +1489,7 @@ class FieldInterpolator:
         return _smooth(v.item() if is_scalar else v.reshape(result_shape))
 
 
-    def plot(self, title="Field Plot", t=0, contour_levels=10, component='vz'):
+    def plot(self, title="Field Colormap", t=0, contour_levels=10, component='vz', smoothing_sigma=None):
         """
         Automatically determines the plane (XY, XZ, or 3D) and plots the field data.
 
@@ -1434,16 +1517,13 @@ class FieldInterpolator:
 
         df_names =  self.df.columns.tolist()
         # Load the original field (before slicing) to get the original mesh sizes
-        d3 = self.sim.load_field("gasdens", snapshot=int(self.df['snapshot'][t]), interpolate=True)
+        d3 = self.sim._load_field_raw("gasdens", snapshot=int(self.df['snapshot'][t]), field_type='scalar')
 
         # Extract the mesh grids and field data after slicing
         var1 = self.df['var1_mesh'][t]
         var2 = self.df['var2_mesh'][t]
         var3 = self.df['var3_mesh'][t]
         field_data = np.log10(self.df[self.df.columns[-1]][t])  # Last column is the field data (e.g., gasdens_mesh)
-
-        # Get the original shapes of the mesh grids before slicing
-        original_shape = d3.var1_mesh[0].shape  # Assuming all var1, var2, var3 have the same shape originally
 
         # Get the shapes of the resulting mesh grids after applying the slice
         sliced_shape = var1.shape  # Assuming var1, var2, var3 have the same shape after slicing
@@ -1469,7 +1549,7 @@ class FieldInterpolator:
             var3_flat = var3.ravel()
             data = np.log10(field_data.ravel())
 
-            fig = plt.figure(figsize=(10, 8))
+            fig = plt.figure(figsize=(8, 6))
             ax = fig.add_subplot(111, projection='3d')
             scatter = ax.scatter(var1_flat, var2_flat, var3_flat, c=data, cmap='Spectral_r', s=5)
             fig.colorbar(scatter, ax=ax, label=r"$\log_{10}(field)$")
@@ -1482,8 +1562,15 @@ class FieldInterpolator:
         
         
         elif len(sliced_shape) == 2:
+            # Optional smoothing to remove interpolation artefacts (triangular edges)
+            if smoothing_sigma is not None:
+                try:
+                    field_data = gaussian_filter(field_data, sigma=smoothing_sigma)
+                except Exception:
+                    # If smoothing fails, fall back to original data
+                    field_data = field_data
             if plane == 'XY':
-                fig, ax = plt.subplots(figsize=(10, 8))
+                fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var2, field_data, shading='auto', cmap='Spectral_r')
                 fig.colorbar(mesh, label=r"$\log_{10}(field)$")
                 ax.set_xlabel("X")
@@ -1492,7 +1579,7 @@ class FieldInterpolator:
                 fp.Plot.fargopy_mark(ax)
                 plt.show()
             elif plane == 'XZ':
-                fig, ax = plt.subplots(figsize=(10, 6))
+                fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var3, field_data, shading='auto', cmap='Spectral_r')
                 fig.colorbar(mesh, label=rf"$\log_{10}(field)$")
                 ax.set_xlabel("X")
@@ -1501,7 +1588,7 @@ class FieldInterpolator:
                 fp.Plot.fargopy_mark(ax)
                 plt.show()
             else:
-                fig, ax = plt.subplots(figsize=(10, 8))
+                fig, ax = plt.subplots(figsize=(8, 6))
                 mesh = ax.pcolormesh(var1, var2, field_data, shading='auto', cmap='Spectral_r')
                 fig.colorbar(mesh, label=r"$\log_{10}(field)$")
                 ax.set_xlabel("X")
@@ -1533,18 +1620,18 @@ class FieldInterpolator:
         """
         if dataframe is None:
             if self.df is None:
-                raise ValueError("No DataFrame loaded. Run load_data() first or pasa un DataFrame.")
+                raise ValueError("No DataFrame loaded. Run load_data() first or pass a DataFrame.")
             dataframe = self.df
 
         df = dataframe.copy()
-        # Asume que las columnas de malla son 'var1_mesh', 'var2_mesh', 'var3_mesh'
+        # Assume mesh columns are named 'var1_mesh', 'var2_mesh', 'var3_mesh'
         mask_list = []
         for idx, row in df.iterrows():
 
             x = np.array(row['var1_mesh'])
             y = np.array(row['var2_mesh'])
             z = np.array(row['var3_mesh'])
-            # Calcula la máscara booleana para el cilindro
+            # Compute boolean mask selecting points inside the cylinder
             r_xy = np.sqrt((x - xc)**2 + (y - yc)**2)
             z_min = zc - hc/2
             z_max = zc + hc/2
@@ -1556,12 +1643,12 @@ class FieldInterpolator:
             filtered['var1_mesh'] = x[mask]
             filtered['var2_mesh'] = y[mask]
             filtered['var3_mesh'] = z[mask]
-            # Filtra el campo correspondiente
+            # Filter the corresponding field columns
             for col in df.columns:
                 if col.endswith('_mesh') and col not in ['var1_mesh', 'var2_mesh', 'var3_mesh']:
                     data = np.array(row[col])
                     filtered[col] = data[mask]
             mask_list.append(filtered)
-        # Convierte la lista de dicts a DataFrame
+        # Convert the list of dicts to a DataFrame
         filtered_df = pd.DataFrame(mask_list)
         return filtered_df
