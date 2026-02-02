@@ -1,7 +1,7 @@
 # FARGOpy
 ## Wrapping FRAGO3D
 
-<!-- This are visual tags that you may add to your package at the beginning with useful information on your package --> 
+<!-- This are visual tags that you may add to your package at the beginning with useful information on your package -->
 [![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/)
 [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/)
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
@@ -10,12 +10,12 @@
 
 `FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html), the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to facillitate the interaction with FARGO3D, especially for those starting using the code. `FARGOpy` may be also useful for teaching and training purposes. For advanced users, `FARGOpy` provides useful functionalities in the postprocessing of simulation results, derivative calculations and plots.
 
-This is an animation created with a few lines of code using `FARGOpy`. 
+This is an animation created with a few lines of code using `FARGOpy`.
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/fargo-animation.gif?raw=true" alt="Animation""/></p>
 
 For the code used to generate this animation see the tutorial notebook [animations with `FARGOpy`](https://github.com/seap-udea/fargopy/blob/main/examples/fargopy-tutorial-animations.ipynb). For other examples and a full tutorial see the [examples repository](https://github.com/seap-udea/fargopy/blob/main/examples).
 
-## Installing `FARGOpy` 
+## Installing `FARGOpy`
 
 `FARGOpy` is available at the `Python` package index and can be installed using:
 
@@ -43,6 +43,10 @@ if 'google.colab' in sys.modules:
     !sudo pip install -Uq fargopy
 ```
 
+    [2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m47.6/47.6 kB[0m [31m4.3 MB/s[0m eta [36m0:00:00[0m
+    [2K   [90m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m [32m1.6/1.6 MB[0m [31m29.3 MB/s[0m eta [36m0:00:00[0m
+    [?25h
+
 If you are working in `Jupyter` or in `Google Colab`, the configuration directory and its content will be crated the first time you import the package:
 
 
@@ -50,11 +54,12 @@ If you are working in `Jupyter` or in `Google Colab`, the configuration director
 import fargopy as fp
 
 # These lines are intented for developing purposes; drop them in your code
-%load_ext autoreload 
+%load_ext autoreload
 %autoreload 2
 ```
 
-    Running FARGOpy version 0.3.6
+    Configuring FARGOpy for the first time
+    Running FARGOpy version 0.4.0
 
 
 If you are working on a remote Linux server, it is better to run the package using `IPython`. For this purpose, after installation, `FARGOpy` provides a special initialization command:
@@ -69,9 +74,9 @@ The first time you run this script, it will create a configuration directory `~/
 
 It is important to understand that `FARGO3D` works especially well on Linux plaforms (including `MacOS`). The same condition applies for `FARGOpy`. Because of that, most of the internal as well as the public features of the packages are designed to work in a `Linux` environment. For working in other operating systems, especially on MS Windows, please consider using virtual machines ow WSL.
 
-Being an independent project, `FARGOpy` is not provided with a working version of `FARGO3D`. You need to download the C package and their prerequisites (compilers, third-party libraries, etc.) and configure them, by yourself. For a detailed guide please see the [FARGO3D documentation](https://fargo3d.bitbucket.io/index.html) or the [project repo at bitbucket](https://bitbucket.org/fargo3d/public/src/ae0fcdc67bb7c83aed85fc9a4d4a2d5061324597/?at=release%2Fpublic). 
+Being an independent project, `FARGOpy` is not provided with a working version of `FARGO3D`. You need to download the C package and their prerequisites (compilers, third-party libraries, etc.) and configure them, by yourself. For a detailed guide please see the [FARGO3D documentation](https://fargo3d.bitbucket.io/index.html) or the [project repo at bitbucket](https://bitbucket.org/fargo3d/public/src/ae0fcdc67bb7c83aed85fc9a4d4a2d5061324597/?at=release%2Fpublic).
 
-Still `FARGOpy` provides a simple way to get the latest version of the source code of `FARGO3D` from its public GitHub repository. The source code will be downloaded into the home directory and stored as `~/fargo3d/`. 
+Still `FARGOpy` provides a simple way to get the latest version of the source code of `FARGO3D` from its public GitHub repository. The source code will be downloaded into the home directory and stored as `~/fargo3d/`.
 
 > **WARNING**: If you want to change the final location of the source code or the name of the `FARGO3D` directory,  before executing the following command, please change the corresponding configuration variables in `~/.fargopy/fargopyrc`
 
@@ -83,42 +88,43 @@ fp.initialize('download',force=True)
 ```
 
     Downloading FARGOpy...
-    Directory '/home/jzuluaga/fargo3d/' already exists. Removing it...
-
-
-    Cloning into 'fargo3d'...
-
-
-    	FARGO3D downloaded to /home/jzuluaga/fargo3d/
-    Header file for FARGO3D found in the fargo directory /home/jzuluaga/fargo3d/
+    	FARGO3D downloaded to /root/fargo3d/
+    Header file for FARGO3D found in the fargo directory /root/fargo3d/
 
 
 Once download it you may check if the source code is compiling in your machine. For that purpose run:
 
 
 ```python
-fp.initialize('check',regular=1,gpu=0,parallel=0)
+fp.initialize?
+```
+
+
+```python
+fp.initialize('check',regular=1,gpu=1,parallel=0)
 ```
 
     Test compilation of FARGO3D
     	Checking normal compilation.
-    	Running 'make -C /home/jzuluaga/fargo3d/ clean mrproper all PARALLEL=0 GPU=0 2>&1 |tee /tmp/fargo_regular.log':
+    	Running 'make -C /root/fargo3d/ clean mrproper all PARALLEL=0 GPU=0 2>&1 |tee /tmp/fargo_regular.log':
     		Compilation in mode regular successful.
-    	Skipping gpu compilation
+    	Checking normal compilation.
+    	Running 'make -C /root/fargo3d/ clean mrproper all PARALLEL=0 GPU=1 2>&1 |tee /tmp/fargo_gpu.log':
+    		Compilation in mode gpu successful.
     	Skipping parallel compilation
     Summary of compilation modes:
     	Regular: 1
-    	GPU: 0
+    	GPU: 1
     	Parallel: 0
 
 
-If you have some error at compiling `FARGO3D` in some of the possible modes (regular, gpu and/or parallel) please check the corresponding logfile and correct the problems. Compiling problems will normally arise because of a lacking of an important dependency, for instance a compiler, a driver (in the case of GPU) or a third-party library or tool (eg. openmpi). 
+If you have some error at compiling `FARGO3D` in some of the possible modes (regular, gpu and/or parallel) please check the corresponding logfile and correct the problems. Compiling problems will normally arise because of a lacking of an important dependency, for instance a compiler, a driver (in the case of GPU) or a third-party library or tool (eg. openmpi).
 
 ## Quickstart
 
-Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found exploring [the tutorial notebooks](https://github.com/seap-udea/fargopy/blob/main/examples). Other in depth examples are also available in the [examples repository](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository. 
+Here we will illustrate the minimal commands you may run to test the package. A more detailed set of examples can be found exploring [the tutorial notebooks](https://github.com/seap-udea/fargopy/blob/main/examples). Other in depth examples are also available in the [examples repository](https://github.com/seap-udea/fargopy/tree/main/examples) of the `GitHub` repository.
 
-There are two complimentary modes when using `FARGOpy`: 
+There are two complimentary modes when using `FARGOpy`:
 
 - **Control mode**: Using this mode you can run and control `FARGO3D` from your notebook.  This mode requires a working copy of `FARGO3D` ready to be compiled and run. This mode is ideal for training or testing purposes.
 
@@ -133,8 +139,8 @@ Create a simulation:
 sim = fp.Simulation(setup='fargo')
 ```
 
-    Your simulation is now connected with '/home/jzuluaga/fargo3d/'
-    Now your simulation setup is at '/home/jzuluaga/fargo3d/setups/fargo'
+    Your simulation is now connected with '/root/fargo3d/'
+    Now your simulation setup is at '/root/fargo3d/setups/fargo'
 
 
 Compile the `FARGO3D` binary to run the simulation:
@@ -144,8 +150,8 @@ Compile the `FARGO3D` binary to run the simulation:
 sim.compile(parallel=0,gpu=0)
 ```
 
-    Compiling fargo3d_SETUP-fargo_PARALLEL-0_GPU-0...
-    Succesful compilation of FARGO3D binary fargo3d_SETUP-fargo_PARALLEL-0_GPU-0
+    Compiling fargo3d-SETUP_fargo-PARALLEL_0-GPU_0...
+    Succesful compilation of FARGO3D binary fargo3d-SETUP_fargo-PARALLEL_0-GPU_0
 
 
 Run the simulation:
@@ -155,18 +161,20 @@ Run the simulation:
 sim.run(cleanrun=True)
 ```
 
-    Cleaning output directory /home/jzuluaga/fargo3d/outputs/fargo
-    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t setups/fargo/fargo.par
-    Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
-    Found a variables.par file in '/home/jzuluaga/fargo3d/outputs/fargo', loading properties
+    Cleaning output directory /root/fargo3d/outputs/fargo
+    Running asynchronously (test = False):  ./fargo3d-SETUP_fargo-PARALLEL_0-GPU_0 -m -t setups/fargo/fargo.par
+    Now you are connected with output directory '/root/fargo3d/outputs/fargo'
+    Found a variables.par file in '/root/fargo3d/outputs/fargo', loading properties
     Loading variables
     84 variables loaded
     Simulation in 2 dimensions
     Loading domain in cylindrical coordinates:
-    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
-    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
-    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
+    	Variable phi: 384 [[0, np.float64(-3.1334114227210694)], [-1, np.float64(3.1334114227210694)]]
+    	Variable r: 128 [[0, np.float64(0.408203125)], [-1, np.float64(2.491796875)]]
+    	Variable z: 1 [[0, np.float64(0.0)], [-1, np.float64(0.0)]]
     Number of snapshots in output directory: 1
+    Planets found in summary.dat:
+      Name: Jupiter, Distance: 1.0, Mass: 0.001
     Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
@@ -181,6 +189,8 @@ sim.status()
     ################################################################################
     Running status of the process:
     	The process is running.
+    
+    Other status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'
 
 
 Or check the progress of the simulation:
@@ -190,12 +200,17 @@ Or check the progress of the simulation:
 sim.status('progress')
 ```
 
-    Progress of the simulation (numstatus = 5, interrupting may stop the process):
-    1:OUTPUTS 3 at date t = 18.849556 OK [output pace = 0.1 secs]
-    2:OUTPUTS 4 at date t = 25.132741 OK [output pace = 0.1 secs]
-    3:OUTPUTS 5 at date t = 31.415927 OK [output pace = 0.9 secs]
-    4:OUTPUTS 6 at date t = 37.699112 OK [output pace = 1.8 secs]
-    5:OUTPUTS 7 at date t = 43.982297 OK [output pace = 1.9 secs]
+    
+    ################################################################################
+    
+    Progress of the simulation (interrupt by pressing 'enter' or the stop button):
+    1:OUTPUTS 6 at date t = 37.699112 OK [output pace = 0.1 secs] <Press 'enter' to interrupt>
+    2:OUTPUTS 7 at date t = 43.982297 OK [output pace = 0.1 secs] <Press 'enter' to interrupt>
+    3:OUTPUTS 8 at date t = 50.265482 OK [output pace = 1.0 secs] <Press 'enter' to interrupt>
+    4:OUTPUTS 9 at date t = 56.548668 OK [output pace = 3.7 secs] <Press 'enter' to interrupt>
+    Interrupted by user. In some environment (IPython, Colab) stopping the progress status will stop the simulation. In that case just resume.
+    
+    Other status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'
 
 
 You may stop the simulation at any time using:
@@ -205,7 +220,8 @@ You may stop the simulation at any time using:
 sim.stop()
 ```
 
-    Stopping FARGO3D process (pid = 26257)
+    The process is locked by PID 12265
+    The process has finished. Check logfile /root/fargo3d/setups/fargo/fargo.log.
 
 
 Check the status of the simulation using:
@@ -215,7 +231,12 @@ Check the status of the simulation using:
 sim.status('summary')
 ```
 
-    The simulation has been ran for 9 time-steps (including the initial one).
+    
+    ################################################################################
+    Summary:
+    The simulation has been ran for 10 time-steps (including the initial one).
+    
+    Other status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'
 
 
 Once stopped you may resume the simulation at any snapshot or at the latest resumable snapshot:
@@ -225,19 +246,37 @@ Once stopped you may resume the simulation at any snapshot or at the latest resu
 sim.resume()
 ```
 
-    Resuming from snapshot 7...
-    Running asynchronously (test = False):  ./fargo3d_SETUP-fargo_PARALLEL-0_GPU-0 -m -t -S 7 -t setups/fargo/fargo.par
-    Now you are connected with output directory '/home/jzuluaga/fargo3d/outputs/fargo'
-    Found a variables.par file in '/home/jzuluaga/fargo3d/outputs/fargo', loading properties
+    Resuming from snapshot 8...
+    Running asynchronously (test = False):  ./fargo3d-SETUP_fargo-PARALLEL_0-GPU_0 -m -t -S 8 -t setups/fargo/fargo.par
+    Now you are connected with output directory '/root/fargo3d/outputs/fargo'
+    Found a variables.par file in '/root/fargo3d/outputs/fargo', loading properties
     Loading variables
     84 variables loaded
     Simulation in 2 dimensions
     Loading domain in cylindrical coordinates:
-    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
-    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
-    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
-    Number of snapshots in output directory: 9
+    	Variable phi: 384 [[0, np.float64(-3.1334114227210694)], [-1, np.float64(3.1334114227210694)]]
+    	Variable r: 128 [[0, np.float64(0.408203125)], [-1, np.float64(2.491796875)]]
+    	Variable z: 1 [[0, np.float64(0.0)], [-1, np.float64(0.0)]]
+    Number of snapshots in output directory: 10
+    Planets found in summary.dat:
+      Name: Jupiter, Distance: 1.0, Mass: 0.001
     Configuration variables and domains load into the object. See e.g. <sim>.vars
+
+
+
+```python
+sim.status('progress')
+```
+
+    
+    ################################################################################
+    
+    Progress of the simulation (interrupt by pressing 'enter' or the stop button):
+    1:OUTPUTS 11 at date t = 69.115038 OK [output pace = 0.1 secs] <Press 'enter' to interrupt>
+    2:OUTPUTS 12 at date t = 75.398224 OK [output pace = 0.1 secs] <Press 'enter' to interrupt>
+    Interrupted by user. In some environment (IPython, Colab) stopping the progress status will stop the simulation. In that case just resume.
+    
+    Other status modes: 'isrunning', 'logfile', 'outputs', 'progress', 'summary'
 
 
 Once the simulation has been completed you will notice by ran:
@@ -247,7 +286,8 @@ Once the simulation has been completed you will notice by ran:
 sim.stop()
 ```
 
-    The process has finished. Check logfile /home/jzuluaga/fargo3d/setups/fargo/fargo.log.
+    The process is locked by PID 12917
+    The process has finished. Check logfile /root/fargo3d/setups/fargo/fargo.log.
 
 
 ### Postprocessing mode
@@ -261,17 +301,19 @@ Create the simulation and connect it to the output directory:
 sim = fp.Simulation(output_dir = fp.Conf.FP_FARGO3D_DIR + '/outputs/fargo')
 ```
 
-    Your simulation is now connected with '/home/jzuluaga/fargo3d/'
-    Now you are connected with output directory '/home/jzuluaga/fargo3d//outputs/fargo'
-    Found a variables.par file in '/home/jzuluaga/fargo3d//outputs/fargo', loading properties
+    Your simulation is now connected with '/root/fargo3d/'
+    Now you are connected with output directory '/root/fargo3d//outputs/fargo'
+    Found a variables.par file in '/root/fargo3d//outputs/fargo', loading properties
     Loading variables
     84 variables loaded
     Simulation in 2 dimensions
     Loading domain in cylindrical coordinates:
-    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
-    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
-    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
-    Number of snapshots in output directory: 21
+    	Variable phi: 384 [[0, np.float64(-3.1334114227210694)], [-1, np.float64(3.1334114227210694)]]
+    	Variable r: 128 [[0, np.float64(0.408203125)], [-1, np.float64(2.491796875)]]
+    	Variable z: 1 [[0, np.float64(0.0)], [-1, np.float64(0.0)]]
+    Number of snapshots in output directory: 14
+    Planets found in summary.dat:
+      Name: Jupiter, Distance: 1.0, Mass: 0.001
     Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
@@ -284,10 +326,12 @@ sim.load_properties()
     84 variables loaded
     Simulation in 2 dimensions
     Loading domain in cylindrical coordinates:
-    	Variable phi: 384 [[0, -3.1334114227210694], [-1, 3.1334114227210694]]
-    	Variable r: 128 [[0, 0.408203125], [-1, 2.491796875]]
-    	Variable z: 1 [[0, 0.0], [-1, 0.0]]
-    Number of snapshots in output directory: 22
+    	Variable phi: 384 [[0, np.float64(-3.1334114227210694)], [-1, np.float64(3.1334114227210694)]]
+    	Variable r: 128 [[0, np.float64(0.408203125)], [-1, np.float64(2.491796875)]]
+    	Variable z: 1 [[0, np.float64(0.0)], [-1, np.float64(0.0)]]
+    Number of snapshots in output directory: 14
+    Planets found in summary.dat:
+      Name: Jupiter, Distance: 1.0, Mass: 0.001
     Configuration variables and domains load into the object. See e.g. <sim>.vars
 
 
@@ -295,7 +339,7 @@ Load gas density field from a given snapshot:
 
 
 ```python
-gasdens = sim.load_field('gasdens',snapshot=20)
+gasdens = sim.load_field('gasdens',snapshot=5)
 ```
 
 Create a `meshslice` of the field:
@@ -355,6 +399,12 @@ fp.Plot.fargopy_mark(ax)
 ax.axis('equal')
 if not fp.IN_COLAB:fig.savefig('gallery/example-dens_disk.png') # Drop this out of this tutorial
 ```
+
+
+    
+![png](README_files/README_59_0.png)
+    
+
 
 <p align="center"><img src="https://github.com/seap-udea/fargopy/blob/main/gallery/example-dens_disk.png?raw=true" alt="Animation""/></p>
 
@@ -421,10 +471,6 @@ You may find in the [examples directory](https://github.com/seap-udea/fargopy/tr
 
 ## What's new
 
-Version 0.5.*:
-- Windows compatibility (Does not apply to control methods, only interpolation, visualization, and flus computations)
-- Interactive plotting tools for simulation data.
-
 Version 0.4.*:
 - Field interpolation in 1D, 2D, and 3D with evaluation at arbitrary points and times.
 - Analytical surface definition and tessellation for integration.
@@ -453,6 +499,8 @@ Version 0.0.*:
 
 - First classes created.
 - The project is started!
+
+
 
 ------------
 

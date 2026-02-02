@@ -1,0 +1,11 @@
+sphinx
+pydata-sphinx-theme
+sphinx-rtd-theme
+sphinx-mdinclude
+nbsphinx
+ipykernel
+pypandoc-binary
+numpy
+scipy
+matplotlib
+pandas

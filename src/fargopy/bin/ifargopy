@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+import sys
+import os
+import subprocess
+import argparse
+
+
+def get_version():
+    try:
+        try:
+            from importlib.metadata import version
+            return version("fargopy")
+        except ImportError:
+            # Fallback for Python < 3.8
+            import pkg_resources
+            return pkg_resources.get_distribution("fargopy").version
+    except Exception:
+        # Fallback if package not installed or in development
+        try:
+            import fargopy.version
+            return fargopy.version.version
+        except ImportError:
+            return "unknown"
+
+def run_verify():
+    try:
+        import fargopy
+        v = get_version()
+        print(f"fargopy {v} is successfully installed.")
+        print(f"Location: {os.path.dirname(fargopy.__file__)}")
+    except ImportError:
+        print("Error: fargopy is not installed or cannot be imported.")
+        sys.exit(1)
+
+def run_tests():
+    try:
+        import fargopy
+        package_dir = os.path.dirname(fargopy.__file__)
+        test_dir = os.path.join(package_dir, 'tests')
+        if not os.path.exists(test_dir):
+             print(f"Error: tests directory not found at {test_dir}")
+             sys.exit(1)
+        
+        print(f"Running tests in {test_dir}...")
+        subprocess.check_call([sys.executable, "-m", "pytest", test_dir])
+    except ImportError:
+        print("Error: fargopy is not installed.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        sys.exit(e.returncode)
+
+def main():
+    parser = argparse.ArgumentParser(description="fargopy interactive shell and utilities")
+    parser.add_argument("--verify", action="store_true", help="Verify installation and show version")
+    parser.add_argument("--test", action="store_true", help="Run the distributed tests")
+    
+    # If no arguments are provided, or just unknown args (which arguably should be passed to ipython? 
+    # but for now let's stick to the requested logic: optional args for cmd, else launch ipython)
+    # The issue is that argparse will parse all args. If the user wants to pass args to ipython, this might conflict.
+    # However, standard pattern is usually wrapper handles its flags, pass others. 
+    # But ifargopy historically just wraps ipython.
+    
+    # Let's check if we have specific flags.
+    if "--verify" in sys.argv:
+        run_verify()
+        return
+    if "--test" in sys.argv:
+        run_tests()
+        return
+
+    # Original behavior: launch IPython
+    user_home = os.path.expanduser("~")
+    fp_dotdir = os.path.join(user_home, ".fargopy")
+    
+    if not os.path.isdir(fp_dotdir):
+        # First time initialization logic
+        init_script = "/tmp/ifargopy_initialize.py"
+        with open(init_script, "w") as f:
+            f.write("import fargopy as fp\n")
+            f.write("fp.initialize('configure')\n")
+            f.write("print('We have configured fargopy for the first time. Run it again.')\n")
+        
+        subprocess.call(["ipython", "-i", init_script])
+    else:
+        startup_script = os.path.join(fp_dotdir, "ifargopy.py")
+        # Pass all arguments to ipython except the script name itself
+        cmd = ["ipython", "-i", startup_script] + sys.argv[1:]
+        subprocess.call(cmd)
+
+if __name__ == "__main__":
+    main()
