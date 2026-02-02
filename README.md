@@ -1,9 +1,14 @@
-# FARGOpy
-## Wrapping FRAGO3D
+<p></p>
+<div align="center">
+  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/docs/fargopy_logo.webp" alt="FARGOpy Logo" width="600"/>
+</div>
+<p></p>
+
+## A FARGO3D wrapper and more
 
 <!-- This are visual tags that you may add to your package at the beginning with useful information on your package -->
-[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/)
-[![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/)
+[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/) [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/) [![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/seap-udea/fargopy/blob/master/LICENSE) [![python](https://img.shields.io/badge/python-3-grey)](https://pypi.org/project/fargopy/) [![Powered by FARGO3D](https://img.shields.io/badge/Powered%20by-FARGO3D-blue)](https://fargo3d.bitbucket.io/)
+<!--[![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)-->
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
@@ -402,7 +407,7 @@ if not fp.IN_COLAB:fig.savefig('gallery/example-dens_disk.png') # Drop this out 
 
 
     
-![png](README_files/README_59_0.png)
+![png](gallery/README_59_0.png)
     
 
 
