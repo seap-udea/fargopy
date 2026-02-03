@@ -21,6 +21,12 @@ from select import select
 # UTIL CLASS
 #/////////////////////////////////////
 class Sys(object):
+    """System utilities for command execution, directory locking, and resource monitoring.
+
+    The ``Sys`` class provides a collection of static methods to interact with
+    the operating system. It handles shell command execution with output capturing,
+    directory locking mechanisms for concurrent safety, and system pause functionalities.
+    """
 
     QERROR = True
     STDERR = ''
@@ -29,22 +35,30 @@ class Sys(object):
 
     @staticmethod
     def run(cmd,quiet=True):
-        """Run a system command
-        
-        Parameters:
-            cmd: string:
-                Command to run
-            quiet: boolean, default = True:
-                When False the output of the command is shown.
-            
-        Output:
-            error: integer:
-                Error code (0,-1,>0)
+        """Run a system shell command.
 
-            output: list:
-                List with output. 
-                If error == 0, output[:-1] will contain 
-                the output line by line.
+        Executes a command string in the shell and captures its stdout and stderr.
+        Useful for running FARGO3D executables or other system tools.
+
+        Parameters
+        ----------
+        cmd : str
+            The command string to execute.
+        quiet : bool, optional
+            If True, suppress printing output to stdout (default: True).
+
+        Returns
+        -------
+        tuple
+            (error_code, output_list)
+            - error_code (int): 0 for success, non-zero for error.
+            - output_list (list): List of output lines (strings).
+
+        Examples
+        --------
+        Run a simple shell command:
+        
+        >>> err, out = fp.Sys.run("ls -l")
         """
         fargopy.Debug.trace(f"sysrun::cmd = {cmd}")
 
@@ -106,7 +120,17 @@ class Sys(object):
 
     @staticmethod
     def lock(dir,content=dict()):
-        """Lock a directory using content information
+        """Create a lock file in a directory.
+
+        Creates a ``fargopy.lock`` file containing the provided content to
+        signal that the directory is in use or processing.
+
+        Parameters
+        ----------
+        dir : str
+            Path to the directory to lock.
+        content : dict, optional
+            Dictionary of metadata to store in the lock file.
         """
         if not os.path.isdir(dir):
             print(f"Locking directory '{dir}' not found.")
@@ -119,7 +143,12 @@ class Sys(object):
 
     @staticmethod
     def unlock(dir):
-        """UnLock a directory
+        """Remove the lock file from a directory.
+
+        Parameters
+        ----------
+        dir : str
+            Path to the directory to unlock.
         """
         if not os.path.isdir(dir):
             print(f"Locking directory '{dir}' not found.")
@@ -144,16 +173,29 @@ class Sys(object):
             
     @staticmethod
     def sleep_timeout(timeout=5,msg=None):
-        """This routine sleeps for a 'time'. In the meanwhile checks if there is a keyboard interrupt 
-        (Enter or Ctrl+C) and interrupt sleeping
+        """Sleep for a specified duration, interruptible by user input.
 
-        Examples:
-            >>> Sys.sleep_timeout()
-            >>> Sys.sleep_timeout(10) 
+        Sleeps for ``timeout`` seconds. Checks for keyboard interrupt (Enter or Ctrl+C)
+        during the sleep period.
 
-            >>> for i in range(10):
-                   print(f"i = {i}")
-                   if Sys.sleep_timeout():break
+        Parameters
+        ----------
+        timeout : int, optional
+            Sleep duration in seconds (default: 5).
+        msg : str, optional
+            Message to display before sleeping.
+
+        Returns
+        -------
+        bool
+            True if interrupted, False if timeout completed.
+
+        Examples
+        --------
+        Sleep for 10 seconds or until user interrupt:
+        
+        >>> if fp.Sys.sleep_timeout(10, "Press Enter to skip"):
+        ...     print("Skipped")
         """
         try: 
             if msg:

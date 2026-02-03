@@ -7,6 +7,9 @@ Tutorials and Examples
    :caption: Examples
 
    examples/fargopy-tutorial-basics
-   examples/fargopy-tutorial-interpolation
-   examples/fargopy-tutorial-flux
    examples/fargopy-tutorial-control
+   examples/fargopy-tutorial-flux
+   examples/fargopy-tutorial-interpolation
+   examples/fargopy-tutorial-vector_fields
+   examples/fargopy-tutorial-plotly
+   examples/fargopy-tutorial-zoom_in

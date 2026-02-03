@@ -82,10 +82,10 @@ build: clean
 docs:
 	$(PYTHON) -m pip install -r docs/requirements.txt
 	rm -rf docs/_build
-	@echo "Copying example notebooks to docs..."
-	rm -rf docs/examples
-	mkdir -p docs/examples
-	cp examples/*.ipynb docs/examples/
+	@echo "Updating documentation examples..."
+	@chmod +x bin/examples_doc.py
+	@./bin/examples_doc.py
+
 	cd docs && $(PYTHON) -m sphinx.cmd.build -M html "." "_build"
 
 push:

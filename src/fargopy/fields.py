@@ -54,30 +54,35 @@ COORDS_MAP = dict(
 # Classes
 ###############################################################
 class Field(fargopy.Fargobj):
-    """
-    Represents a simulation field (scalar or vector) with coordinate system and domain information.
+    """Represents a simulation field (scalar or vector) with coordinate system and domain information.
+
+    The ``Field`` object encapsulates the data arrays and associated
+    coordinate meshes for a specific simulation variable. It supports
+    slicing, coordinate transformation and simple visualization
+    helpers.
 
     Attributes
     ----------
     data : np.ndarray
-        Numpy array with the field data.
+        Numpy array containing the physical data.
     coordinates : str
-        Type of coordinates ('cartesian', 'cylindrical', 'spherical').
+        Coordinate system type ('cartesian', 'cylindrical', 'spherical').
     domains : object
-        Domain information for each coordinate.
+        Object containing domain-specific geometry (e.g., mesh arrays).
     type : str
         Field type ('scalar' or 'vector').
 
-    Methods
-    -------
-    slice :
-        Get a slice of the field along a given spatial direction.
-    meshslice :
-        Perform a slice and return the field slice and associated coordinate matrices for plotting.
-    to_cartesian :
-        Convert the field to cartesian coordinates (for vector fields).
-    get_size :
-        Return the size of the field data in MB.
+    Examples
+    --------
+    Load a field from a simulation object (returns a Field instance
+    if interpolation is disabled or a FieldInterpolator otherwise):
+    
+    >>> fp.Simulation.load_field(fields='gasdens', snapshot=0, interpolate=False)
+    
+    Access data and mesh:
+    
+    >>> rho = field.data
+    >>> xmesh = field.mesh.x
     """
 
     def __init__(self,data=None,coordinates='cartesian',domains=None,type='scalar',**kwargs):
@@ -104,14 +109,13 @@ class Field(fargopy.Fargobj):
         self.type = type
 
     def meshslice(self,slice=None,component=0,verbose=False):
-        """
-        Perform a slice on a field and produce the corresponding field slice and
+        """Perform a slice on a field and produce the corresponding field slice and
         associated coordinate matrices for plotting.
 
         Parameters
         ----------
         slice : str
-            Slice definition string.
+            Slice definition string (e.g., 'z=0').
         component : int, optional
             Component index for vector fields (default: 0).
         verbose : bool, optional
@@ -120,7 +124,19 @@ class Field(fargopy.Fargobj):
         Returns
         -------
         tuple
-            (sliced field, mesh dictionary with coordinates)
+            (sliced field, mesh dictionary with coordinates). The mesh dictionary
+            contains coordinate arrays (x, y, z, r, phi, theta) corresponding
+            to the slice.
+
+        Examples
+        --------
+        Slice a field at z=0:
+        
+        >>> field_slice, mesh = field.meshslice(slice='z=0')
+        
+        Plot the slice:
+        
+        >>> plt.pcolormesh(mesh.x, mesh.y, field_slice)
         """
         # Analysis of the slice 
         if slice is None:
@@ -271,7 +287,13 @@ class Field(fargopy.Fargobj):
         Returns
         -------
         Field or tuple of Field
-            The field in cartesian coordinates (for vector fields, returns (vx, vy, vz)).
+            The field in cartesian coordinates. For scalar fields, returns the field itself.
+            For vector fields, returns a tuple (vx, vy, vz).
+
+        Examples
+        --------
+        >>> v = sim.load_field('gasv', snapshot=0)
+        >>> vx, vy, vz = v.to_cartesian()
         """
         if self.type == 'scalar':
             # Scalar fields are invariant under coordinate transformations
@@ -353,24 +375,36 @@ class Field(fargopy.Fargobj):
 
 
 class FieldInterpolator:
-    """
-    Loads and interpolates fields from a FARGO3D simulation. Provides methods to load data,
-    create meshes, and perform interpolation in 1D, 2D, or 3D, supporting various interpolation methods.
+    """Loads and interpolates fields from a FARGO3D simulation.
+    
+    The ``FieldInterpolator`` facilitates loading, slicing, and interpolating
+    simulation data across multiple snapshots and fields. It handles coordinate
+    transformations and dimensionality reduction based on slice definitions.
 
     Attributes
     ----------
     sim : Simulation
         The simulation object.
     df : pd.DataFrame or None
-        DataFrame containing loaded field data.
+        DataFrame containing loaded field data organized by snapshot and time.
     snapshot_time_table : pd.DataFrame or None
         Table mapping snapshots to normalized time.
     snapshot : list or None
         List of loaded snapshots.
     slice : str or None
-        Slice definition string.
+        Slice definition string used to load the data.
     dim : int or None
-        Dimensionality of the loaded data.
+        Dimensionality of the loaded data (e.g., 2 for a 2D slice).
+
+    Examples
+    --------
+    Load multiple fields from a snapshot with interpolation enabled:
+    
+    >>> data = sim.load_field(fields=['gasdens', 'gasv'], snapshot=4)
+    
+    Load a specific slice:
+    
+    >>> dens = sim.load_field(fields='gasdens', slice='r=[0.8,1.2],phi=[-25 deg,25 deg],theta=1.56', snapshot=4)
     """
 
     def __init__(self, sim, df=None):
@@ -491,12 +525,40 @@ class FieldInterpolator:
             return Parallel(backend=backend)(tasks)
  
     def load_data(self, fields=None, slice=None, snapshots=1, cut=None, coords='cartesian'):
-        """
-        Load one or multiple fields ('gasdens', 'gasv', 'gasenergy') into a SINGLE
-        unified DataFrame with shared coordinates (var1_mesh, var2_mesh, var3_mesh).
-        
-        This fixes the performance issue when interpolating multiple fields
-        independently. Everything else in your code continues to work exactly the same.
+        """Load one or multiple fields into a unified DataFrame.
+
+        This method loads simulation data for the specified fields and snapshots,
+        potentially applying a spatial slice or cut. The data is stored in
+        an internal DataFrame (`self.df`) for further processing or interpolation.
+
+        Parameters
+        ----------
+        fields : str or list of str
+            Name(s) of the fields to load (e.g., 'gasdens', 'gasv').
+        slice : str, optional
+            Slice definition (e.g., 'z=0', 'theta=1.57').
+        snapshots : int or list of int, optional
+            Snapshot number(s) to load. Can be a single integer or a range [start, end].
+        cut : list, optional
+            Geometric cut parameters (sphere or cylinder mask).
+        coords : str, optional
+            Coordinate system for vector transformation ('cartesian' by default).
+
+        Returns
+        -------
+        pd.DataFrame
+            The DataFrame containing the loaded data.
+
+        Examples
+        --------
+        Load density and velocity for snapshot 10:
+
+        >>> loader = fp.FieldInterpolator(sim)
+        >>> df = loader.load_data(fields=['gasdens', 'gasv'], snapshot=10)
+
+        Load a 2D slice at z=0 (midplane):
+
+        >>> df_slice = loader.load_data(fields='gasdens', slice='z=0', snapshot=10)
         """
 
         # -------------------------

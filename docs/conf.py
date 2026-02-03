@@ -8,7 +8,7 @@ import fargopy
 project = 'fargopy'
 copyright = '2025, Jorge I. Zuluaga, Alejandro Murillo-González, Matias Montesinos'
 author = 'Jorge I. Zuluaga, Alejandro Murillo-González, Matias Montesinos'
-release = fargopy.version
+release = fargopy.__version__
 
 extensions = [
     'sphinx.ext.autodoc',

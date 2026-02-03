@@ -17,6 +17,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 SETUP_PY="$ROOT_DIR/setup.py"
+INIT_PY="$ROOT_DIR/src/fargopy/__init__.py"
 
 BACKUP_DIR=""
 ROLLED_BACK=0
@@ -51,6 +52,7 @@ rollback() {
   if [[ -n "${BACKUP_DIR}" && -d "${BACKUP_DIR}" ]]; then
     # Restore modified files
     if [[ -f "${BACKUP_DIR}/setup.py" ]]; then cp -f "${BACKUP_DIR}/setup.py" "$SETUP_PY" || true; fi
+    if [[ -f "${BACKUP_DIR}/__init__.py" ]]; then cp -f "${BACKUP_DIR}/__init__.py" "$INIT_PY" || true; fi
   fi
 
   # Clean build artifacts (do not touch anything else).
@@ -142,6 +144,7 @@ log "Releasing fargopy $VERSION_NEW (current: $CURRENT_VERSION) in '$TYPE' mode.
 
 BACKUP_DIR="$(mktemp -d -t fargopy-release.XXXXXX)"
 cp -f "$SETUP_PY" "${BACKUP_DIR}/setup.py"
+cp -f "$INIT_PY" "${BACKUP_DIR}/__init__.py"
 
 update_file() {
   local path="$1"
@@ -168,6 +171,9 @@ PY
 log "Updating version in setup.py..."
 # Only updating setup.py, not source files
 update_file "$SETUP_PY" '^(\s*version\s*=\s*)["'\'']([^"'\'']+)["'\''](\s*,?\s*)$' "\\1'${VERSION_NEW}'\\3"
+
+log "Updating version in __init__.py..."
+update_file "$INIT_PY" '^(__version__\s*=\s*)["'\'']([^"'\'']+)["'\'']' "\\1'${VERSION_NEW}'"
 
 log "Cleaning previous build artifacts..."
 rm -rf "$ROOT_DIR/dist" "$ROOT_DIR/build" "$ROOT_DIR"/*.egg-info "$ROOT_DIR/src"/*.egg-info 2>/dev/null || true

@@ -1,7 +1,33 @@
 ###############################################################
-# Version
+# Package documentation
 ###############################################################
-from fargopy.version import *
+"""
+FARGOpy
+=======
+
+A Python wrapper for FARGO3D.
+
+FARGOpy is a Python package designed to interface with FARGO3D, a hydrodynamic and 
+magnetohydrodynamic code tailored for protoplanetary disks and planet-disk interactions. 
+It typically simplifies the setup, execution, and analysis of FARGO3D simulations.
+
+Attributes
+----------
+Conf : Dictobj
+    Configuration variables for the package.
+Debug : Debug
+    Debugging control.
+    
+Examples
+--------
+Basic initialization and downloading a precomputed simulation:
+
+>>> import fargopy as fp
+>>> fp.initialize()
+>>> fp.Simulation.list_precomputed()
+>>> fp.Simulation.download_precomputed('fargo')
+>>> sim = fp.Simulation(output_dir='/tmp/fargo')
+"""
 
 ###############################################################
 # External modules
@@ -17,6 +43,11 @@ import numpy as np
 ###############################################################
 
 ###############################################################
+# Version
+###############################################################
+__version__ = '0.4.0'
+
+###############################################################
 # Constants
 ###############################################################
 DEG = np.pi/180
@@ -29,19 +60,23 @@ IN_COLAB = 'google.colab' in sys.modules
 # Base classes
 ###############################################################
 class Debug(object):
-    """The Debug class control the Debugging messages of the package.
+    """The Debug class controls the debugging messages of the package.
 
-    Attribute:
-        VERBOSE: bool, default = False:
-            If True all the trace messages are shown.
+    Attributes
+    ----------
+    VERBOSE : bool
+        If True all the trace messages are shown. Default is False.
 
-    Static methods:
-        trace(msg):
-            Show a debugging message if VERBOSE=True
-            Example:
-            >>> import fargopy as fp
-            >>> fp.Debug.VERBOSE = True
-            >>> fp.initialize('configure') 
+    Methods
+    -------
+    trace(msg)
+        Show a debugging message if VERBOSE=True.
+    
+    Examples
+    --------
+    >>> import fargopy as fp
+    >>> fp.Debug.VERBOSE = True
+    >>> fp.initialize('configure')
     """
     VERBOSE = False
     @staticmethod
@@ -207,7 +242,7 @@ Conf.FP_RCFILE = os.path.join(Conf.FP_DOTDIR, 'fargopyrc')
 # Default configuration file content
 Conf.FP_CONFIGURATION = f"""# This is the configuration variables for FARGOpy
 # Package
-FP_VERSION = '{version}'
+FP_VERSION = '{__version__}'
 # System
 FP_HOME = '{Conf.FP_HOME}/'
 # Directories
@@ -339,8 +374,8 @@ Conf.FP_FARGO3D_DIR = (Conf.FP_FARGO3D_BASEDIR + '/' + Conf.FP_FARGO3D_PACKDIR).
 Conf.FP_FARGO3D_LOCKFILE = f"{Conf.FP_DOTDIR}/fargopy.lock"
 
 # Check if version in RCFILE is different from installed FARGOpy version
-if Conf.FP_VERSION != version:
-    print(f"Your configuration file version '{Conf.FP_VERSION}' it is different than the installed version of FARGOpy '{version}'")
+if Conf.FP_VERSION != __version__:
+    print(f"Your configuration file version '{Conf.FP_VERSION}' it is different than the installed version of FARGOpy '{__version__}'")
     ans = input(f"Do you want to update configuration file '{Conf.FP_RCFILE}'? [Y/n]: ")
     if ans and ('Y' not in ans.upper()):
         if 'N' in ans.upper():
@@ -352,7 +387,7 @@ if Conf.FP_VERSION != version:
 ###############################################################
 # Import package modules
 ###############################################################
-from fargopy.util import *
+
 from fargopy.sys import *
 from fargopy.fields import *
 from fargopy.simulation import *
@@ -364,7 +399,7 @@ from fargopy.flux import *
 def welcome():
     """Welcome message
     """
-    print(f"Running FARGOpy version {version}")
+    print(f"Running FARGOpy version {__version__}")
 
 # Welcome message
 welcome()

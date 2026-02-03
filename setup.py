@@ -64,15 +64,10 @@ setuptools.setup(
         'ipympl',
         'joblib',
         'celluloid',
-        'vtk',
         'psutil',
         'gdown',
         'pandas',
         'plotly',
-        'ipywidgets',
-        'nbformat',
-        'cartopy',
-        'virtualenv',
         'pytest'
     ],
     

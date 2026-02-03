@@ -44,21 +44,7 @@ fargopy.sys module
    :show-inheritance:
    :undoc-members:
 
-fargopy.util module
--------------------
 
-.. automodule:: fargopy.util
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-fargopy.version module
-----------------------
-
-.. automodule:: fargopy.version
-   :members:
-   :show-inheritance:
-   :undoc-members:
 
 Module contents
 ---------------

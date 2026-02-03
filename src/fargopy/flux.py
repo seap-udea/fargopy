@@ -15,13 +15,35 @@ import fargopy as fp
 
 
 class Surface:
-    """Analytic surface tessellation and helpers.
+    """Analytic surface tessellation and helpers for flux and mass analysis.
 
-    Provides tessellations and geometric properties for analytic surfaces
-    (sphere, cylinder, plane) used when integrating simulation fields
-    (for example: mass and flux calculations). The class exposes
-    per-patch centers, outward normals and patch areas, and utilities
-    to export this metadata.
+    The ``Surface`` class provides tools to define analytic control surfaces
+    (sphere, cylinder, plane) and tessellate them into small patches.
+    These surfaces are used to calculate physical quantities like mass flux
+    (accretion rates) and enclosed mass by integrating simulation fields.
+
+    Attributes
+    ----------
+    type : str
+        Surface type ('sphere', 'cylinder', 'plane').
+    radius : float
+        Radius or characteristic dimension (e.g., hill radius factor).
+    centers : np.ndarray
+        (N, 3) array of patch centroids.
+    normals : np.ndarray
+        (N, 3) array of outward-facing unit normals for each patch.
+    areas : np.ndarray
+        (N,) array of patch areas.
+
+    Examples
+    --------
+    Define a spherical surface around a planet:
+    
+    >>> surface = fp.Flux.Surface(type='sphere', radius=0.5, subdivisions=2)
+    
+    Calculate mass flux through the surface:
+    
+    >>> flux = surface.mass_flux(sim, field_density='gasdens', field_velocity='gasv')
     """
 
     def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1,
@@ -564,6 +586,14 @@ class Surface:
         -------
         numpy.ndarray
             Array of flux values, one per requested snapshot.
+
+        Examples
+        --------
+        Compute accretion rate (mass flux) onto a planet:
+        
+        >>> surface = fp.Flux.Surface(type='sphere', radius=0.5, subdivisions=3)
+        >>> mdot = surface.mass_flux(sim, field_density='gasdens', field_velocity='gasv', follow_planet=True)
+        >>> plt.plot(mdot)
         """
 
         steps = snapshot[1] - snapshot[0] + 1
@@ -730,6 +760,13 @@ class Surface:
             requested, returns a numpy array of masses. If
             ``return_resolution`` is True a list of dictionaries with
             per-snapshot metadata is returned.
+
+        Examples
+        --------
+        Compute total mass inside a Hill sphere:
+        
+        >>> surface = fp.Flux.Surface(type='sphere', radius=1.0) # radius is factor of Hill radius
+        >>> mass = surface.total_mass(sim, field='gasdens', follow_planet=True)
         """
 
         # --------------------
