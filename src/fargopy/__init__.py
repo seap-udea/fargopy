@@ -361,4 +361,10 @@ from fargopy.plot import *
 from fargopy.flux import *
 
 # Showing version 
-#print(f"Running FARGOpy version {version}")
+def welcome():
+    """Welcome message
+    """
+    print(f"Running FARGOpy version {version}")
+
+# Welcome message
+welcome()

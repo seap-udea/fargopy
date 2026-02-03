@@ -4,14 +4,20 @@
 </div>
 <p></p>
 
-## A FARGO3D wrapper and more
+<h2 align="center">FARGO3D wrapping and beyond</h2>
 
 <!-- This are visual tags that you may add to your package at the beginning with useful information on your package -->
-[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/) [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/) [![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/seap-udea/fargopy/blob/master/LICENSE) [![python](https://img.shields.io/badge/python-3-grey)](https://pypi.org/project/fargopy/) [![Powered by FARGO3D](https://img.shields.io/badge/Powered%20by-FARGO3D-blue)](https://fargo3d.bitbucket.io/)
+[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/) 
+[![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/) 
+[![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/seap-udea/fargopy/blob/master/LICENSE) 
+[![python](https://img.shields.io/badge/python-3-grey)](https://pypi.org/project/fargopy/) 
+[![Powered by FARGO3D](https://img.shields.io/badge/Powered%20by-FARGO3D-blue)](https://fargo3d.bitbucket.io/)
 <!--[![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)-->
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
+
+## Introducing FARGOpy
 
 `FARGOpy` is a python wrapping for [`FARGO3D`](https://fargo3d.bitbucket.io/intro.html), the well-knwon hydrodynamics and magnetohydrodynamics parallel code. This wrapping is intended to facillitate the interaction with FARGO3D, especially for those starting using the code. `FARGOpy` may be also useful for teaching and training purposes. For advanced users, `FARGOpy` provides useful functionalities in the postprocessing of simulation results, derivative calculations and plots.
 
@@ -407,7 +413,7 @@ if not fp.IN_COLAB:fig.savefig('gallery/example-dens_disk.png') # Drop this out 
 
 
     
-![png](gallery/README_59_0.png)
+![png](gallery/README_60_0.png)
     
 
 
@@ -510,4 +516,10 @@ Version 0.0.*:
 ------------
 
 This package has been designed and written mostly by Jorge I. Zuluaga and Alejandro Murillo-González with advising and contributions by Matías Montesinos (C) 2023, 2024, 2025
+
+
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
+
+Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 

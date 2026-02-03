@@ -83,6 +83,7 @@ docs:
 	$(PYTHON) -m pip install -r docs/requirements.txt
 	rm -rf docs/_build
 	@echo "Copying example notebooks to docs..."
+	rm -rf docs/examples
 	mkdir -p docs/examples
 	cp examples/*.ipynb docs/examples/
 	cd docs && $(PYTHON) -m sphinx.cmd.build -M html "." "_build"

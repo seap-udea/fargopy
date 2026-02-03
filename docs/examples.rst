@@ -1,8 +1,12 @@
-Examples
-========
+
+Tutorials and Examples
+======================
 
 .. toctree::
-   :maxdepth: 1
-   :glob:
+   :maxdepth: 2
+   :caption: Examples
 
-   examples/*
+   examples/fargopy-tutorial-basics
+   examples/fargopy-tutorial-interpolation
+   examples/fargopy-tutorial-flux
+   examples/fargopy-tutorial-control

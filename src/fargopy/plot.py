@@ -28,7 +28,7 @@ class Plot(object):
         """
         #Get the height of axe
         axh=ax.get_window_extent().transformed(ax.get_figure().dpi_scale_trans.inverted()).height
-        fig_factor=axh/4
+        fig_factor=axh/8
         
         #Options of the water mark
         args=dict(

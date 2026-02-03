@@ -1452,11 +1452,12 @@ class Simulation(fargopy.Fargobj):
         
         # Search for field files
         pattern = os.path.join(self.output_dir, f"{fluid}*.dat")
-        error,output = fargopy.Sys.run(f"ls {pattern}")
+        import glob
+        files_found = sorted(glob.glob(pattern))
 
-        if not error:
+        if files_found:
             size = 0
-            for file_field in output[:-1]:
+            for file_field in files_found:
                 comps = Simulation._parse_file_field(file_field)
                 if comps:
                     if qall:
@@ -1586,15 +1587,17 @@ class Simulation(fargopy.Fargobj):
         None
             The setups are printed to stdout; nothing is returned.
         """
-        error,output = fargopy.Sys.run(f"ls -d {fargopy.Conf.FP_FARGO3D_DIR}/setups/*")
-        list = ''
-        for setup_dir in output[:-1]:
+        import glob
+        pattern = os.path.join(fargopy.Conf.FP_FARGO3D_DIR, "setups", "*")
+        output = sorted(glob.glob(pattern))
+        list_str = ''
+        for setup_dir in output:
             setup_dir = setup_dir.replace('//','/')
             setup_name = setup_dir.split('/')[-1]
             setup_par = os.path.join(setup_dir, f"{setup_name}.par")
             if os.path.isfile(setup_par):
-                list += f"Setup '{setup_name}' in '{setup_dir}'\n"
-        print(list)
+                list_str += f"Setup '{setup_name}' in '{setup_dir}'\n"
+        print(list_str)
                  
     @staticmethod
     def list_precomputed():

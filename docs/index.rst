@@ -12,10 +12,8 @@
    :hidden:
    :caption: Contents:
 
-   modules
-
 .. toctree::
    :maxdepth: 2
    :caption: API Reference:
 
-   fargopy
+   modules
