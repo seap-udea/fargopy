@@ -1,6 +1,6 @@
 <p></p>
 <div align="center">
-  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/docs/fargopy_logo.webp" alt="FARGOpy Logo" width="600"/>
+  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/docs/fargopy_logo.webp" alt="FARGOpy Logo" width="600"/>
 </div>
 <p></p>
 
@@ -18,8 +18,8 @@
 </a>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/pds-70c-disk_densiy-200_orbits_high_resolution.gif" alt="PDS 70c disk density" width="60%"/>
-  <!--<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/pds-70c-disk_densiy_vertical-200_orbits_high_resolution.gif" alt="PDS 70c disk density (vertical)" width="45%"/>-->
+  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/pds-70c-disk_densiy-200_orbits_high_resolution.gif" alt="PDS 70c disk density" width="60%"/>
+  <!--<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/pds-70c-disk_densiy_vertical-200_orbits_high_resolution.gif" alt="PDS 70c disk density (vertical)" width="45%"/>-->
 </div>
 
 ## Introducing FARGOpy
