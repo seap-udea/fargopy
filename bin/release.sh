@@ -17,7 +17,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 SETUP_PY="$ROOT_DIR/setup.py"
-INIT_PY="$ROOT_DIR/src/fargopy/__init__.py"
+INIT_PY="$ROOT_DIR/src/fargopy/base.py"
 
 BACKUP_DIR=""
 ROLLED_BACK=0
@@ -144,7 +144,7 @@ log "Releasing fargopy $VERSION_NEW (current: $CURRENT_VERSION) in '$TYPE' mode.
 
 BACKUP_DIR="$(mktemp -d -t fargopy-release.XXXXXX)"
 cp -f "$SETUP_PY" "${BACKUP_DIR}/setup.py"
-cp -f "$INIT_PY" "${BACKUP_DIR}/__init__.py"
+cp -f "$INIT_PY" "${BACKUP_DIR}/base.py"
 
 update_file() {
   local path="$1"
