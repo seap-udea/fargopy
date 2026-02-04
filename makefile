@@ -79,12 +79,12 @@ clean:
 build: clean
 	$(PYTHON) -m build
 
-docs:
+docs:readme
 	$(PYTHON) -m pip install -r docs/requirements.txt
 	rm -rf docs/_build
-	@echo "Updating documentation examples..."
-	@chmod +x bin/examples_doc.py
-	@./bin/examples_doc.py
+	@echo "Preparing documentation..."
+	@chmod +x bin/prepare_docs.sh
+	@./bin/prepare_docs.sh
 
 	cd docs && $(PYTHON) -m sphinx.cmd.build -M html "." "_build"
 

@@ -17,9 +17,10 @@ from select import select
 # Classes
 ###############################################################
 
-#/////////////////////////////////////
+
+# /////////////////////////////////////
 # UTIL CLASS
-#/////////////////////////////////////
+# /////////////////////////////////////
 class Sys(object):
     """System utilities for command execution, directory locking, and resource monitoring.
 
@@ -29,12 +30,12 @@ class Sys(object):
     """
 
     QERROR = True
-    STDERR = ''
-    STDOUT = ''
-    OUT = ''
+    STDERR = ""
+    STDOUT = ""
+    OUT = ""
 
     @staticmethod
-    def run(cmd,quiet=True):
+    def run(cmd, quiet=True):
         """Run a system shell command.
 
         Executes a command string in the shell and captures its stdout and stderr.
@@ -57,26 +58,26 @@ class Sys(object):
         Examples
         --------
         Run a simple shell command:
-        
+
         >>> err, out = fp.Sys.run("ls -l")
         """
         fargopy.Debug.trace(f"sysrun::cmd = {cmd}")
 
-        out=[]
+        out = []
         for path in Sys._run(cmd):
             try:
                 if not quiet:
-                    print(path.decode('utf-8'))
-                out += [path.decode('utf-8')]
+                    print(path.decode("utf-8"))
+                out += [path.decode("utf-8")]
             except:
-                out += [(path[0],path[1].decode('utf-8'))]
-        
-        Sys.STDOUT = ''
-        if len(out)>1:
-            Sys.STDOUT = '\n'.join(out[:-1])
-        
+                out += [(path[0], path[1].decode("utf-8"))]
+
+        Sys.STDOUT = ""
+        if len(out) > 1:
+            Sys.STDOUT = "\n".join(out[:-1])
+
         Sys.STDERR = out[-1][1]
-        if len(Sys.STDERR)>0:
+        if len(Sys.STDERR) > 0:
             Sys.QERROR = out[-1][0]
             if Sys.QERROR == 0:
                 Sys.QERROR = -1
@@ -88,30 +89,36 @@ class Sys(object):
 
         if fargopy.Debug.VERBOSE:
             error = out[-1][0]
-            if Sys.QERROR>0:
+            if Sys.QERROR > 0:
                 fargopy.Debug.trace(f"sysrun::Error check Sys.STDERR.")
-            elif Sys.QERROR<0:
-                fargopy.Debug.trace(f"sysrun::Done. Still some issues must be check. Check Sys.STDOUT and Sys.STDERR for details.")
-            elif Sys.QERROR==0:
-                fargopy.Debug.trace(f"sysrun::Done. You're great. Check Sys.STDOUT for details.")
-        
+            elif Sys.QERROR < 0:
+                fargopy.Debug.trace(
+                    f"sysrun::Done. Still some issues must be check. Check Sys.STDOUT and Sys.STDERR for details."
+                )
+            elif Sys.QERROR == 0:
+                fargopy.Debug.trace(
+                    f"sysrun::Done. You're great. Check Sys.STDOUT for details."
+                )
+
         Sys.OUT = out
-        return Sys.QERROR,out
+        return Sys.QERROR, out
 
     @staticmethod
     def _run(cmd):
-        p=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,shell=True)
+        p = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
+        )
         while True:
             line = p.stdout.readline().rstrip()
             if not line:
                 break
             yield line
-        (output,error)=p.communicate()
-        yield p.returncode,error
+        (output, error) = p.communicate()
+        yield p.returncode, error
 
     @staticmethod
     def simple(cmd):
-        return os.system(cmd)
+        return subprocess.call(cmd, shell=True)
 
     @staticmethod
     def get_memory():
@@ -119,7 +126,7 @@ class Sys(object):
         return svmem
 
     @staticmethod
-    def lock(dir,content=dict()):
+    def lock(dir, content=dict()):
         """Create a lock file in a directory.
 
         Creates a ``fargopy.lock`` file containing the provided content to
@@ -135,10 +142,12 @@ class Sys(object):
         if not os.path.isdir(dir):
             print(f"Locking directory '{dir}' not found.")
             return
-        
+
         filename = f"{dir}/fargopy.lock"
-        with open(filename,'w') as file_object:
-            file_object.write(json.dumps(content,default=lambda obj:'<not serializable>'))
+        with open(filename, "w") as file_object:
+            file_object.write(
+                json.dumps(content, default=lambda obj: "<not serializable>")
+            )
             file_object.close()
 
     @staticmethod
@@ -156,9 +165,9 @@ class Sys(object):
         filename = f"{dir}/fargopy.lock"
         if os.path.isfile(filename):
             fargopy.Sys.simple(f"rm -rf {filename}")
-    
+
     @staticmethod
-    def is_locked(dir,verbose=False):
+    def is_locked(dir, verbose=False):
         if not os.path.isdir(dir):
             if verbose:
                 print(f"Locking directory '{dir}' not found.")
@@ -170,9 +179,9 @@ class Sys(object):
             with open(filename) as file_handler:
                 info = json.load(file_handler)
                 return info
-            
+
     @staticmethod
-    def sleep_timeout(timeout=5,msg=None):
+    def sleep_timeout(timeout=5, msg=None):
         """Sleep for a specified duration, interruptible by user input.
 
         Sleeps for ``timeout`` seconds. Checks for keyboard interrupt (Enter or Ctrl+C)
@@ -193,11 +202,11 @@ class Sys(object):
         Examples
         --------
         Sleep for 10 seconds or until user interrupt:
-        
+
         >>> if fp.Sys.sleep_timeout(10, "Press Enter to skip"):
         ...     print("Skipped")
         """
-        try: 
+        try:
             if msg:
                 print(msg)
             rlist, wlist, xlist = select([sys.stdin], [], [], timeout)

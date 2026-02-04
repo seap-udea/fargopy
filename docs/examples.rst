@@ -11,5 +11,3 @@ Tutorials and Examples
    examples/fargopy-tutorial-flux
    examples/fargopy-tutorial-interpolation
    examples/fargopy-tutorial-vector_fields
-   examples/fargopy-tutorial-plotly
-   examples/fargopy-tutorial-zoom_in
