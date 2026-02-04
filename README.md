@@ -351,6 +351,31 @@ plt.savefig('gallery/readme-accretion.png')
 
 For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
 
+## Citation
+
+If you use `MultiNEAs` in your research, please cite:
+
+```bibtex
+@software{FARGOpy2026,
+  author = {Zuluaga, Jorge I., Murillo-González, Alejandro and Montesinos, Matías},
+  title = {FARGOpy: A python wrapper for FARGO3D and more},
+  year = {2026},
+  url = {https://github.com/seap-udea/fargopy}
+}
+```
+
+You may also cite our first science paper using the package:
+
+```bibtex
+@article{Zuluaga2026,
+  author = {Murillo-González, Alejandro, Zuluaga, Jorge I. and Montesinos, Matías},
+  title = {Characterizing the PDS 70c Circumplanetary Disk: High-Resolution 3D Simulations and Analysis with FARGO3D and FARGOpy},
+  year = {2026},
+  journal = {In preparation},
+  url = {https://github.com/seap-udea/fargopy}
+}
+```
+
 ## Authors and Licensing
 
 This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valdivia, Chile. The main developers are:

@@ -2,6 +2,13 @@
 
 ## What's new
 
+- **Version 1.0.***:
+  - Refactoring of the code to make it more user-friendly.
+  - Graphical interface for FARGOpy (using PyQt5).
+  - Flux calculation.
+  - Full documentation.
+  - Tests of main modules.
+
 - **Version 0.4.***:
   - Field interpolation in 1D, 2D, and 3D with evaluation at arbitrary points and times.
   - Analytical surface definition and tessellation for integration.
