@@ -72,8 +72,7 @@ clean:
 	find . -type f -name '*.pyc' -delete
 	find . -type f -name '*.pyo' -delete
 	find . -type d -name "fargopy_data" -exec rm -rf {} +
-	rm -rf .vscode
-
+	
 build: clean
 	$(PYTHON) -m build
 
