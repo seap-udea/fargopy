@@ -1328,9 +1328,7 @@ class Simulation(fargopy.Fargobj):
 
         return vars
 
-    def _load_domains(
-        self, vars, domain_prefix, borders=[[], [3, -3], [3, -3]], middle=True
-    ):
+    def _load_domains(self, vars, domain_prefix, borders=None, middle=True):
         """
         Load domain coordinate arrays from files.
 
@@ -1350,6 +1348,8 @@ class Simulation(fargopy.Fargobj):
         fargopy.Dictobj
             Object containing domain arrays.
         """
+        if borders is None:
+            borders = [[], [3, -3], [3, -3]]
         # Coordinates
         variable_suffixes = ["x", "y", "z"]
         print(f"Loading domain in {vars.COORDINATES} coordinates:")

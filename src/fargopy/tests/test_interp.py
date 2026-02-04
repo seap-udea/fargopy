@@ -91,22 +91,22 @@ def test_interpolacion_2d_array(sim):
 
 
 # FAILING
-# def test_interpolacion_3d_point(sim):
-#     data = sim.load_field(
-#         fields="gasdens",
-#         snapshot=(1, 2),
-#         interpolate=True,
-#     )
-#     x, y, z = 1.2, 1.3, 1.4
-#     valor = data.evaluate(
-#         1.2, var1=x, var2=y, var3=z, interpolator="griddata", method="linear"
-#     )
-#     assert np.isscalar(valor) or np.asarray(valor).shape == (), (
-#         "3D point interpolation must return a scalar/0-d value"
-#     )
-#     assert np.isfinite(valor), (
-#         "3D point interpolation must return a finite value (nearest)"
-#     )
+def test_interpolacion_3d_point(sim):
+    data = sim.load_field(
+        fields="gasdens",
+        snapshot=(1, 2),
+        interpolate=True,
+    )
+    x, y, z = 1.2, 1.3, 1.4
+    valor = data.evaluate(
+        1.2, var1=x, var2=y, var3=z, interpolator="griddata", method="nearest"
+    )
+    assert np.isscalar(valor) or np.asarray(valor).shape == (), (
+        "3D point interpolation must return a scalar/0-d value"
+    )
+    assert np.isfinite(valor), (
+        "3D point interpolation must return a finite value (nearest)"
+    )
 
 
 def test_interpolacion_3d_array(sim):

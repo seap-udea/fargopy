@@ -54,15 +54,15 @@ def test_cylinder_tessellation_basic():
 
 
 # FAILED
-# def test_total_mass_grid_integration(sim):
-#     # Use the test simulation to run total_mass on a small sphere
-#     s = fp.flux.Surface(
-#         type="sphere", radius=0.1, subdivisions=0, center=(0.0, 0.0, 0.0)
-#     )
-#     # compute mass for a single snapshot (should be finite and non-negative)
-#     mass = s.total_mass(sim, field="gasdens", snapshot=1, follow_planet=False)
-#     assert np.isfinite(mass)
-#     assert mass >= 0.0
+def test_total_mass_grid_integration(sim):
+    # Use the test simulation to run total_mass on a small sphere
+    s = fp.flux.Surface(
+        type="sphere", radius=0.1, subdivisions=0, center=(0.0, 0.0, 0.0)
+    )
+    # compute mass for a single snapshot (should be finite and non-negative)
+    mass = s.total_mass(sim, field="gasdens", snapshot=1, follow_planet=False)
+    assert np.isfinite(mass)
+    assert mass >= 0.0
 
 
 def test_total_mass_multiple_snapshots_returns_array(sim):

@@ -125,7 +125,7 @@ You may also use the commando `ifargopy` to run several interesting commands:
 
 ## Quickstart
 
-Here is a quick example of how to use FARGOpy. For more examples, see the [examples](file:///Users/jzuluaga/dev/fargopy/docs/_build/html/examples.html) directory in the documentation.
+Here is a quick example of how to use FARGOpy. For more examples, see the [examples](https://fargopy.readthedocs.io/en/latest/examples.html) directory in the documentation.
 
 Import the package:
 
@@ -133,7 +133,7 @@ Import the package:
 import fargopy as fp
 ```
 
-    Running FARGOpy version X.Y.Z
+### Density map
 
 Download a precomputed simulation to test the package:
 
@@ -146,7 +146,7 @@ fp.Simulation.download_precomputed('fargo')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
-    100%|██████████| 54.7M/54.7M [00:01<00:00, 35.2MB/s]
+    100%|██████████| 54.7M/54.7M [00:01<00:00, 46.5MB/s]
 
     Uncompressing fargo.tgz into /tmp/fargo
     Done.
@@ -202,17 +202,162 @@ plt.show()
 
 <img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-gasdens.png" alt="png">
 
+### Streamlines
+
+We can visualize the streamlines of the fluid to observe the flow direction at a specific snapshot by interpolating the velocity field. This visualization provides a detailed representation of the velocity field, enabling us to analyze the fluid dynamics and identify key patterns such as vortices, flow separations, or other phenomena of interest. By combining this with contour plots of other fields, such as density or energy, we can gain deeper insights into the interactions and behavior of the simulated system.
+
+We will use the 3D simulation of a disk with a Jovian planet:
+
+```python
+fp.Simulation.download_precomputed('p3disoj')
+sim = fp.Simulation(output_dir='/tmp/p3disoj')
+```
+
+    Precomputed output directory '/tmp/p3disoj' already exist
+    Your simulation is now connected with '/local_directory/fargo3d/'
+    Now you are connected with output directory '/tmp/p3disoj'
+    Found a variables.par file in '/tmp/p3disoj', loading properties
+    Loading variables
+    85 variables loaded
+    Simulation in 3 dimensions
+    Loading domain in spherical coordinates:
+    	Variable phi: 128 [[0, np.float64(-3.117048960983623)], [-1, np.float64(3.117048960983623)]]
+    	Variable r: 64 [[0, np.float64(0.5078125)], [-1, np.float64(1.4921875)]]
+    	Variable theta: 32 [[0, np.float64(1.4231400767948967)], [-1, np.float64(1.5684525767948965)]]
+    Number of snapshots in output directory: 11
+    Planets found in summary.dat:
+      Name: Jupiter, Initial pos: [1.0, 0.001, 0.0], Mass: 0.001
+
+First load the density and velocity fields at snapshot 6:
+
+```python
+data = sim.load_field(
+    fields=['gasv'],
+    slice="phi=0",
+    snapshot=(0,10)
+    )
+```
+
+Now is necesary create a regular mesh where the value of the field is interpolated:
+
+```python
+import numpy as np
+
+# This is the snapshot number where the streamplot will be computed
+time = 6
+
+# Get the minimum and maximum values of var1 and var3 (x and z coordinates)
+xmin=data.var1_mesh[time].min()
+xmax=data.var1_mesh[time].max()
+zmin=data.var3_mesh[time].min()
+zmax=data.var3_mesh[time].max()
+
+# Create a grid of points
+resolution = 120
+xs = np.linspace(xmin, xmax, resolution)
+zs = np.linspace(zmin, zmax, resolution)
+X, Z = np.meshgrid(xs, zs, indexing='ij')
+```
+
+Using the mesh we can evaluate the field at any point in space:
+
+```python
+vxs, vys, vzs = data.evaluate(field='gasv', time=6, var1=X, var3=Z)
+
+# Velocity magnitude at each mesh point
+v_mag = np.sqrt(vxs**2 + vzs**2).T *sim.UV / 1e5 
+```
+
+Now we can plot the streamlines of the gas velocity:
+
+```python
+fig,axs = plt.subplots(1,1,figsize=(6,6))
+
+cmap = 'Spectral_r'
+
+strm = axs.streamplot(X.T, Z.T, vxs.T, vzs.T,
+                       color=v_mag, linewidth=0.7, density=3.0, cmap='viridis')
+
+fig.colorbar(strm.lines, ax=axs, label="|v| [km/s]")
+
+axs.set_xlim(xmin, xmax)
+axs.set_ylim(zmin, zmax)
+axs.set_xlabel('$x$ [au]')
+axs.set_ylabel('$z$ [au]')
+
+fp.Plot.fargopy_mark(axs)
+plt.savefig('gallery/readme-streamlines.png') # Save figure
+```
+
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-streamlines.png" alt="png">
+
+### Accretion rate (mass flux)
+
+We compute the mass flux through a closed surface S around the planet. The mass flux (accretion rate) is:\n
+$$\dot{M}=\int_S\rho(\mathbf{v}\cdot\hat{n})\,dS$$
+where $\rho$ is the density, $\mathbf{v}$ the velocity vector and $\hat{n}$ the outward normal to the surface. We evaluate this integral by interpolating fields at triangle centers and summing $\rho (\mathbf{v}dotat{n}) A_{i}$ over tessellation triangles.
+
+### Define Planet and Surface for Accretion Calculation
+
+Set up the planet and surface objects for the accretion rate calculation.
+
+For this example we will calculate the total flux going through a sphere with a radius equal to the planet's hill radius. For this purpose we need the location and the value of Hill radius of the planet at the snapchot we are interested in:
+
+```python
+snap = 10
+planet = sim.load_planets(snapshot=snap)[0]
+r_hill = planet.hill_radius
+print(f"Jupiter Hill Radius: {r_hill * sim.UL / fp.AU:.3f} AU")
+```
+
+    Jupiter Hill Radius: 0.068 AU
+
+Now we define the surface over which you want to compute the fluxes:
+
+```python
+sphere = fp.Surface(
+    type='sphere',
+    radius=r_hill,
+    subdivisions=6,
+)
+```
+
+The computation is performed with `follow_planet=True`, ensuring that the integration surface co-moves with the planet. This choice is required because the Hill radius evolves in time as a consequence of planetary migration, and therefore the associated control volume must be updated consistently to remain centered on the planet.
+
+```python
+acc_rate = sphere.mass_flux(sim=sim, snapshot=[0,snap], follow_planet=True) 
+```
+
+    Calculating mass flux: 100%|██████████| 11/11 [00:37<00:00,  3.44s/it]
+
+And we can plot it:
+
+```python
+snaps = np.linspace(0, snap, len(acc_rate))
+
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(snaps, acc_rate * sim.UM / sim.UT, color='dodgerblue')
+ax.set_xlabel('Planet Orbits', size=15)
+ax.set_ylabel(r'$\dot{M}$ [kg/s]', size=15)
+ax.legend(fontsize=12)
+fp.Plot.fargopy_mark(ax)
+plt.savefig('gallery/readme-accretion.png')
+
+```
+
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-accretion.png" alt="png">
+
 ## What's New
 
 For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
 
 ## Authors and Licensing
 
-This project is developed by the Solar, Earth and Planetary Physics Group (SEAP) at Universidad de Antioquia, Medellín, Colombia. The main developers are:
+This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valdivia, Chile. The main developers are:
 
-- **Jorge I. Zuluaga** - jorge.zuluaga@udea.edu.co
-- **Alejandro Murillo-González** - alejandro.murillo1@udea.edu.co
-- **Matías Montesinos** - matias.montesinosa@usm.cl
+- **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
+- **Alejandro Murillo-González** (SEAP/FACom/UdeA) - alejandro.murillo1@udea.edu.co
+- **Matías Montesinos** (Physics/USM) - matias.montesinosa@usm.cl
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
 
