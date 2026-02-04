@@ -353,7 +353,7 @@ For a detailed list of changes and new features in each version, please see the 
 
 ## Citation
 
-If you use `MultiNEAs` in your research, please cite:
+If you use `FARGOpy` in your research, please cite:
 
 ```bibtex
 @software{FARGOpy2026,
