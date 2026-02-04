@@ -22,14 +22,19 @@
   <!--<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/pds-70c-disk_densiy_vertical-200_orbits_high_resolution.gif" alt="PDS 70c disk density (vertical)" width="45%"/>-->
 </div>
 
+## Introducing FARGOpy
+
 `FARGOpy` is a Python wrapper and post-processing tool designed for `FARGO3D`, a widely used hydrodynamical code for simulating planet-disk interactions.
 
 With `FARGOpy`, you can easily:
+
 - Analyze and visualize simulation outputs.
 - Control and run `FARGO3D` simulations directly from Python (optional).
 - Generate complex initial conditions and diverse setups with minimal effort.
 
-It streamlines the workflow for researchers, allowing them to focus on the physics rather than the technicalities of setting up and processing simulations. For instance, the animations above show the gas density of the circumstellar disk around the planet **PDS-70c** coming from a `FARGO3D` high resolution simulation. The reading of the simulation output and the generation of the animations, the interpolation of the fields, and the creation of the animations   with just a few lines of code. 
+It streamlines the workflow for researchers, allowing them to focus on the physics rather than the technicalities of setting up and processing simulations. 
+
+For instance, the animations above show the gas density of the circumstellar disk around the planet **PDS-70c** coming from a `FARGO3D` high resolution simulation. The reading of the simulation output and the generation of the animations, the interpolation of the fields, and the creation of the animations   with just a few lines of code. 
 
 For the code used to generate these animations, see the tutorial notebook [basics with FARGOpy](https://github.com/seap-udea/fargopy/blob/main/examples/fargopy-tutorial-basics.ipynb).
 
@@ -51,8 +56,6 @@ A complete list of resources and further information about the package and the s
 $ pip install fargopy
 ```
 as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants.
-
-
 
 ### From sources
 
@@ -81,7 +84,6 @@ Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work wit
 
 This code only works in Colab and it is intended to install the latest version of `FARGOpy`
 
-
 ```python
 try:
     from google.colab import drive
@@ -91,7 +93,6 @@ except ImportError:
 ```
 
     Not running in Colab, skipping installation
-
 
 ### Running in `IPython`
 
@@ -104,7 +105,6 @@ $ ifargopy
 The first time you run this script, it will create a configuration directory `~/.fargopy` (with `~` the abbreviation for the home directory). This directory contains a set of basic configuration variables which are stored in the file `~/.fargopy/fargopyrc`. You may change this file if you want to customize the installation. The configuration directory also contains the `IPython` initialization script `~/.fargopy/ifargopy.py`.
 
 You may also use the commando `ifargopy` to run several interesting commands:
-
 
 - Verify the installation:
 
@@ -129,16 +129,13 @@ Here is a quick example of how to use FARGOpy. For more examples, see the [examp
 
 Import the package:
 
-
 ```python
 import fargopy as fp
 ```
 
-    Running FARGOpy version X.Y.Z
-
+    Running FARGOpy version 0.4.0
 
 Download a precomputed simulation to test the package:
-
 
 ```python
 fp.Simulation.download_precomputed('fargo')
@@ -146,32 +143,23 @@ fp.Simulation.download_precomputed('fargo')
 
     Downloading fargo.tgz from cloud (compressed size around 55 MB) into /tmp
 
-
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
     100%|██████████| 54.7M/54.7M [00:01<00:00, 35.2MB/s]
 
-
     Uncompressing fargo.tgz into /tmp/fargo
     Done.
 
-
-
-
-
     '/tmp/fargo'
 
-
-
 Connect to the simulation output directory:
-
 
 ```python
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -185,9 +173,7 @@ sim = fp.Simulation(output_dir='/tmp/fargo')
     Planets found in summary.dat:
       Name: Jupiter, Initial pos: [1.0, 0.001, 0.0], Mass: 0.001
 
-
 Load a field (e.g., gas density) from a specific snapshot:
-
 
 ```python
 gasdens = sim.load_field('gasdens', snapshot=20, interpolate=False)
@@ -195,13 +181,11 @@ gasdens = sim.load_field('gasdens', snapshot=20, interpolate=False)
 
 Crate a 2D slice of a 3D field at $z=0$, 
 
-
 ```python
 gasdens_plane, mesh = gasdens.meshslice(slice='z=0')
 ```
 
 Plot the fields of the FARGO simulation using a `colormesh` plot:
-
 
 ```python
 import matplotlib.pyplot as plt
@@ -212,19 +196,15 @@ ax.set_xlabel('x [au]')
 ax.set_ylabel('y [au]')
 
 fp.Plot.fargopy_mark(ax)
+plt.savefig('gallery/readme-gasdens.png')
 plt.show()
 ```
 
-
-    
-![png](/Users/jzuluaga/dev/fargopy/gallery/README_29_0.png)
-    
-
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-gasdens.png" alt="png">
 
 ## What's New
 
 For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
-
 
 ## Authors and Licensing
 
@@ -246,4 +226,9 @@ We welcome contributions! If you're interested in contributing to MultiNEAs, ple
 4. Submit a pull request
 
 Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
+
+Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 

@@ -11,9 +11,7 @@ echo "Running examples_doc.py..."
 python3 "$DIR/examples_doc.py"
 
 echo "Generating README.md from README.ipynb..."
-mkdir -p "$ROOT_DIR/gallery"
-python3 -m nbconvert "$ROOT_DIR/README.ipynb" --to markdown --NbConvertApp.output_files_dir="$ROOT_DIR/gallery"
-rm -rf "$ROOT_DIR/README_files"
+make readme 
 
 echo "Sanitizing README.md..."
 # 1. Replace version number "X.X.X" with "X.Y.Z" in "Running FARGOpy version ..." context

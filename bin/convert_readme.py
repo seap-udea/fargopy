@@ -64,64 +64,100 @@ def move_images_to_gallery():
 
 
 def fix_image_links():
-    """Replaces local image links with GitHub URLs."""
+    """Replaces local image links with GitHub URLs using HTML tags and savefig filenames."""
     print(f"Fixing image links in {MARKDOWN_FILE}...")
 
     with open(MARKDOWN_FILE, "r") as f:
-        content = f.read()
+        lines = f.readlines()
 
-    def replacer(match):
-        alt_text = match.group(1)
-        path = match.group(2)
+    last_savefig = None
+    new_lines = []
 
-        # Skip absolute URLs
-        if path.startswith("http") or path.startswith("https"):
-            return match.group(0)
+    # Regex to capture savefig.
+    # Matches: plt.savefig('path') or fig.savefig("path")
+    # Group 2 is the path/filename.
+    savefig_pattern = re.compile(r"(plt|fig)\.savefig\(['\"](.*?)['\"]\)")
 
-        # If path is in README_files, point to gallery
-        if path.startswith(f"{NB_OUTPUT_DIR}/"):
-            filename = os.path.basename(path)
+    # Pattern to match Markdown images: ![alt](path)
+    md_img_pattern = re.compile(r"!\[(.*?)\]\((.*?)\)")
+
+    # Pattern to match HTML images: <img ... src="path" ...>
+    # We want to capture the whole tag to replace it, and extract src.
+    html_img_pattern = re.compile(r'<img\s+.*?src=["\'](.*?)["\'].*?>')
+
+    for line in lines:
+        # 1. Search for savefig calls in valid code/text lines
+        # We assume they appear in code blocks or text before the image
+        sf_match = savefig_pattern.search(line)
+        if sf_match:
+            raw_path = sf_match.group(2)
+            last_savefig = os.path.basename(raw_path)
+            # print(f"Found savefig: {last_savefig}") # Debug
+
+        # 2. Check for Markdown image
+        md_match = md_img_pattern.search(line)
+        if md_match:
+            alt_text = md_match.group(1)
+            path = md_match.group(2)
+
+            # Skip absolute URLs
+            if path.startswith("http") or path.startswith("https"):
+                new_lines.append(line)
+                continue
+
+            # Determine filename to use
+            if last_savefig:
+                filename = last_savefig
+                # Reset after using? Usually yes, to avoid applying to unrelated images.
+                last_savefig = None
+            else:
+                filename = os.path.basename(path)
+
+            # Determine new path logic
+            if "README" in filename and filename.endswith(".png"):  # Generated
+                new_path = f"{GALLERY_DIR}/{filename}"
+            elif path.startswith(f"{NB_OUTPUT_DIR}/"):
+                new_path = f"{GALLERY_DIR}/{filename}"
+            elif path.startswith(f"{GALLERY_DIR}/"):
+                new_path = f"{GALLERY_DIR}/{filename}"
+            else:
+                new_path = f"{GALLERY_DIR}/{filename}"
+
+            full_url = f"{GITHUB_REPO_URL}/{new_path}"
+            print(f"  Replacing '{path}' -> '{full_url}'")
+            new_line = f'<img src="{full_url}" alt="{alt_text}">'
+
+            new_lines.append(new_line + "\n")
+            continue
+
+        # 3. Check for HTML image
+        # Note: Previous steps might have already converted md to html or simple html tags exists.
+        html_match = html_img_pattern.search(line)
+        if html_match:
+            src = html_match.group(1)
+            if src.startswith("http") or src.startswith("https"):
+                new_lines.append(line)
+                continue
+
+            if last_savefig:
+                filename = last_savefig
+                last_savefig = None
+            else:
+                filename = os.path.basename(src)
+
             new_path = f"{GALLERY_DIR}/{filename}"
-        elif path.startswith(f"{GALLERY_DIR}/"):
-            new_path = path
-        else:
-            # Assume other relative paths are also in gallery if they look like generated images
-            # or keep them as is if they are not standard outputs.
-            # For this task, we assume the user wants typical outputs in gallery.
-            # But let's be safe: only touch recognized directories or explicit requests.
-            new_path = path
+            full_url = f"{GITHUB_REPO_URL}/{new_path}"
+            print(f"  Replacing HTML src '{src}' -> '{full_url}'")
 
-        full_url = f"{GITHUB_REPO_URL}/{new_path}"
-        print(f"  Replacing '{path}' -> '{full_url}'")
-        return f"![{alt_text}]({full_url})"
+            # Simple replace of the match in the line:
+            new_line = line.replace(src, full_url)
+            new_lines.append(new_line)
+            continue
 
-    new_content = re.sub(r"!\[(.*?)\]\((.*?)\)", replacer, content)
-
-    def img_tag_replacer(match):
-        full_tag = match.group(0)
-        src = match.group(2)
-        if src.startswith("http") or src.startswith("https"):
-            return full_tag
-
-        # Same logic for HTML tags
-        if src.startswith(f"{NB_OUTPUT_DIR}/"):
-            filename = os.path.basename(src)
-            new_path = f"{GALLERY_DIR}/{filename}"
-        elif src.startswith(f"{GALLERY_DIR}/"):
-            new_path = src
-        else:
-            new_path = src
-
-        full_url = f"{GITHUB_REPO_URL}/{new_path}"
-        print(f"  Replacing HTML src '{src}' -> '{full_url}'")
-        return full_tag.replace(f'src="{src}"', f'src="{full_url}"')
-
-    new_content = re.sub(
-        r'<img\s+(.*?)src=["\'](.*?)["\']', img_tag_replacer, new_content
-    )
+        new_lines.append(line)
 
     with open(MARKDOWN_FILE, "w") as f:
-        f.write(new_content)
+        f.writelines(new_lines)
 
 
 def remove_extra_spaces():
@@ -130,9 +166,37 @@ def remove_extra_spaces():
     with open(MARKDOWN_FILE, "r") as f:
         content = f.read()
 
-    # Replace 3 or more consecutive newlines (possibly containing horizontal whitespace) with 2 newlines
-    # We use [ \t]* to match horizontal whitespace but NOT newlines, to avoid eating indentation of the next line.
-    new_content = re.sub(r"\n([ \t]*\n){2,}", "\n\n", content)
+    # 1. Compact indented blank lines (likely in code/output blocks).
+    prev_content = None
+    while content != prev_content:
+        prev_content = content
+        # Remove lines that are just indentation (4+ spaces) inside the text
+        content = re.sub(r"\n[ \t]{4,}\n", "\n", content)
+
+    # 2. Reduce multiple blank lines (3+ newlines) to a single blank line (2 newlines) in normal text
+    content = re.sub(r"\n([ \t]*\n){2,}", "\n\n", content)
+
+    with open(MARKDOWN_FILE, "w") as f:
+        f.write(content)
+
+
+def ensure_list_spacing():
+    """Ensures there is a blank line before a list if it follows a paragraph ending in colon."""
+    print(f"Fixing list spacing in {MARKDOWN_FILE}...")
+    with open(MARKDOWN_FILE, "r") as f:
+        content = f.read()
+
+    # Regex to find a line ending in ':' followed immediately by a list item.
+    # We want to insert a newline in between.
+    # Group 1: The line ending in : (and possibly trailing whitespace)
+    # Group 2: The newline and the list item start (\n - ...)
+    # We replace with \1\n\2 to add an extra newline.
+
+    # Matches: "Text:  \n- Item" -> "Text:  \n\n- Item"
+    # Matches: "Text:\n- Item" -> "Text:\n\n- Item"
+    # Note: we use non-greedy matching on the first part if needed, but here structure is simple.
+    # We match strictly a colon, optional spaces, newline, optional spaces, hyphen/star.
+    new_content = re.sub(r"(:[ \t]*\n)([ \t]*[-*])", r"\1\n\2", content)
 
     with open(MARKDOWN_FILE, "w") as f:
         f.write(new_content)
@@ -147,6 +211,7 @@ def main():
     move_images_to_gallery()
     fix_image_links()
     remove_extra_spaces()
+    ensure_list_spacing()
     print("Done.")
 
 
