@@ -4,6 +4,14 @@ fargopy package
 Submodules
 ----------
 
+Module contents
+---------------
+
+.. automodule:: fargopy
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
 fargopy.fields module
 ---------------------
 
@@ -40,16 +48,6 @@ fargopy.sys module
 ------------------
 
 .. automodule:: fargopy.sys
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-
-
-Module contents
----------------
-
-.. automodule:: fargopy
    :members:
    :show-inheritance:
    :undoc-members:

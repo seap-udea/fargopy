@@ -7,7 +7,9 @@ sys.path.insert(0, os.path.abspath("../src"))
 import fargopy
 
 project = "fargopy"
-copyright = "2025, Jorge I. Zuluaga, Alejandro Murillo-González, Matias Montesinos"
+copyright = (
+    "2023-present, Jorge I. Zuluaga, Alejandro Murillo-González, Matias Montesinos"
+)
 author = "Jorge I. Zuluaga, Alejandro Murillo-González, Matias Montesinos"
 release = fargopy.__version__
 

@@ -15,21 +15,40 @@ def main():
         shutil.rmtree(docs_examples_dir)
     os.makedirs(docs_examples_dir)
 
-    # Collect notebooks
+    # Read index.rst to get priority order
+    index_file = os.path.join(examples_dir, "index.rst")
+    priority_order = []
+    if os.path.exists(index_file):
+        with open(index_file, "r") as f:
+            priority_order = [line.strip() for line in f if line.strip()]
+
+    # Collect all notebooks
+    all_notebooks = glob.glob(os.path.join(examples_dir, "*.ipynb"))
+    notebook_map = {os.path.basename(f): f for f in all_notebooks}
+
+    # Determine final order
+    ordered_files = []
+
+    # 1. Add files from index.rst if they exist
+    for name in priority_order:
+        if name in notebook_map:
+            ordered_files.append(notebook_map[name])
+            del notebook_map[name]
+        else:
+            print(f"Warning: {name} listed in index.rst but not found in examples/")
+
+    # 2. Add remaining files alphabetically
+    for name in sorted(notebook_map.keys()):
+        ordered_files.append(notebook_map[name])
+
+    # Copy files and build list for RST
     notebooks = []
-
-    # helper to process directory
-    def process_dir(directory):
-        files = sorted(glob.glob(os.path.join(directory, "*.ipynb")))
-        for f in files:
-            basename = os.path.basename(f)
-            dest = os.path.join(docs_examples_dir, basename)
-            shutil.copy2(f, dest)
-            notebooks.append(basename)
-            print(f"Copied {basename} to docs/examples/")
-
-    print(f"Scanning {examples_dir}...")
-    process_dir(examples_dir)
+    for f in ordered_files:
+        basename = os.path.basename(f)
+        dest = os.path.join(docs_examples_dir, basename)
+        shutil.copy2(f, dest)
+        notebooks.append(basename)
+        print(f"Copied {basename} to docs/examples/")
 
     # Generate examples.rst
     print(f"Updating {rst_file}...")
