@@ -133,7 +133,7 @@ Import the package:
 import fargopy as fp
 ```
 
-    Running FARGOpy version 0.4.0
+    Running FARGOpy version X.Y.Z
 
 Download a precomputed simulation to test the package:
 
@@ -159,7 +159,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -226,9 +226,4 @@ We welcome contributions! If you're interested in contributing to MultiNEAs, ple
 4. Submit a pull request
 
 Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
-
----
-*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
-
-Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 

@@ -77,7 +77,7 @@ clean:
 build: clean
 	$(PYTHON) -m build
 
-docs:readme
+docs:
 	$(PYTHON) -m pip install -r docs/requirements.txt
 	rm -rf docs/_build
 	@echo "Preparing documentation..."
