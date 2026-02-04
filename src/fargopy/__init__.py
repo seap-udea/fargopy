@@ -14,7 +14,7 @@ from fargopy.plot import *
 from fargopy.flux import *
 
 # Show version
-welcome()
+_welcome()
 
 # Clean up namespace if needed (optional)
-del welcome
+del _welcome

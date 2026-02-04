@@ -134,7 +134,7 @@ Import the package:
 import fargopy as fp
 ```
 
-    Running FARGOpy version X.Y.Z
+    Running FARGOpy version 0.4.0
 
 
 Download a precomputed simulation to test the package:
@@ -150,7 +150,7 @@ fp.Simulation.download_precomputed('fargo')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
-    100%|██████████| 54.7M/54.7M [00:01<00:00, 43.6MB/s]
+    100%|██████████| 54.7M/54.7M [00:01<00:00, 35.2MB/s]
 
 
     Uncompressing fargo.tgz into /tmp/fargo
@@ -171,7 +171,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    FARGO3D directory '/local_directory/fargo3d/' does not exist.
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -210,34 +210,16 @@ ax.pcolormesh(mesh.x, mesh.y, gasdens_plane, cmap='prism')
 ax.axis('equal')
 ax.set_xlabel('x [au]')
 ax.set_ylabel('y [au]')
+
 fp.Plot.fargopy_mark(ax)
 plt.show()
 ```
 
 
     
-![png](/Users/jzuluaga/dev/fargopy/gallery/README_29_0.png)
+![png](https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/README_29_0.png)
     
 
-
-## Advanced: Control Mode (FARGO3D)
-
-While `FARGOpy` is primarily a post-processing tool, it also offers a "Control Mode" to compile and run `FARGO3D` simulations directly from Python.
-
-You do **not** need to install `FARGO3D` to use the post-processing features. However, if you wish to use the Control Mode, you can download the source code using the following command:
-
-
-```python
-fp.initialize('download', force=True)
-```
-
-    Downloading FARGOpy...
-
-
-    Cloning into 'fargo3d'...
-
-
-This will download `FARGO3D` to your home directory (`/local_directory/fargo3d/`). You can then compile it using `fp.initialize('check', ...)` as shown in the [Control Mode tutorial](https://github.com/seap-udea/fargopy/blob/main/examples/fargopy-tutorial-control.ipynb), provided you have the necessary system dependencies (C/CUDA compilers, MPI).
 
 ## What's New
 
@@ -264,4 +246,9 @@ We welcome contributions! If you're interested in contributing to MultiNEAs, ple
 4. Submit a pull request
 
 Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
+
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
+
+Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 

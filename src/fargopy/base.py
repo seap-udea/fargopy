@@ -25,10 +25,10 @@ __all__ = [
     "Fargobj",
     "Conf",
     "initialize",
-    "welcome",
     "DEG",
     "RAD",
     "IN_COLAB",
+    "_welcome",
 ]
 
 ###############################################################
@@ -322,7 +322,7 @@ def initialize(options="", force=False, **kwargs):
 
 
 # Showing version
-def welcome():
+def _welcome():
     """Welcome message"""
     print(f"Running FARGOpy version {__version__}")
 
