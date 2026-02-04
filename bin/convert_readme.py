@@ -124,6 +124,20 @@ def fix_image_links():
         f.write(new_content)
 
 
+def remove_extra_spaces():
+    """Removes extra spaces (newlines) from the markdown file."""
+    print(f"Cleaning extra spaces in {MARKDOWN_FILE}...")
+    with open(MARKDOWN_FILE, "r") as f:
+        content = f.read()
+
+    # Replace 3 or more consecutive newlines (possibly containing horizontal whitespace) with 2 newlines
+    # We use [ \t]* to match horizontal whitespace but NOT newlines, to avoid eating indentation of the next line.
+    new_content = re.sub(r"\n([ \t]*\n){2,}", "\n\n", content)
+
+    with open(MARKDOWN_FILE, "w") as f:
+        f.write(new_content)
+
+
 def main():
     if not os.path.exists(NOTEBOOK_FILE):
         print(f"Error: {NOTEBOOK_FILE} not found.")
@@ -132,6 +146,7 @@ def main():
     convert_notebook()
     move_images_to_gallery()
     fix_image_links()
+    remove_extra_spaces()
     print("Done.")
 
 

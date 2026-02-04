@@ -52,8 +52,6 @@ $ pip install fargopy
 ```
 as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants.
 
-
-
 ### From sources
 
 You can also install from the [GitHub repository](https://github.com/seap-udea/fargopy):
@@ -81,7 +79,6 @@ Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work wit
 
 This code only works in Colab and it is intended to install the latest version of `FARGOpy`
 
-
 ```python
 try:
     from google.colab import drive
@@ -91,7 +88,6 @@ except ImportError:
 ```
 
     Not running in Colab, skipping installation
-
 
 ### Running in `IPython`
 
@@ -104,7 +100,6 @@ $ ifargopy
 The first time you run this script, it will create a configuration directory `~/.fargopy` (with `~` the abbreviation for the home directory). This directory contains a set of basic configuration variables which are stored in the file `~/.fargopy/fargopyrc`. You may change this file if you want to customize the installation. The configuration directory also contains the `IPython` initialization script `~/.fargopy/ifargopy.py`.
 
 You may also use the commando `ifargopy` to run several interesting commands:
-
 
 - Verify the installation:
 
@@ -129,16 +124,13 @@ Here is a quick example of how to use FARGOpy. For more examples, see the [examp
 
 Import the package:
 
-
 ```python
 import fargopy as fp
 ```
 
     Running FARGOpy version 0.4.0
 
-
 Download a precomputed simulation to test the package:
-
 
 ```python
 fp.Simulation.download_precomputed('fargo')
@@ -146,26 +138,17 @@ fp.Simulation.download_precomputed('fargo')
 
     Downloading fargo.tgz from cloud (compressed size around 55 MB) into /tmp
 
-
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
     To: /tmp/fargo.tgz
     100%|██████████| 54.7M/54.7M [00:01<00:00, 35.2MB/s]
 
-
     Uncompressing fargo.tgz into /tmp/fargo
     Done.
 
-
-
-
-
     '/tmp/fargo'
 
-
-
 Connect to the simulation output directory:
-
 
 ```python
 sim = fp.Simulation(output_dir='/tmp/fargo')
@@ -185,9 +168,7 @@ sim = fp.Simulation(output_dir='/tmp/fargo')
     Planets found in summary.dat:
       Name: Jupiter, Initial pos: [1.0, 0.001, 0.0], Mass: 0.001
 
-
 Load a field (e.g., gas density) from a specific snapshot:
-
 
 ```python
 gasdens = sim.load_field('gasdens', snapshot=20, interpolate=False)
@@ -195,13 +176,11 @@ gasdens = sim.load_field('gasdens', snapshot=20, interpolate=False)
 
 Crate a 2D slice of a 3D field at $z=0$, 
 
-
 ```python
 gasdens_plane, mesh = gasdens.meshslice(slice='z=0')
 ```
 
 Plot the fields of the FARGO simulation using a `colormesh` plot:
-
 
 ```python
 import matplotlib.pyplot as plt
@@ -215,16 +194,11 @@ fp.Plot.fargopy_mark(ax)
 plt.show()
 ```
 
-
-    
 ![png](https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/README_29_0.png)
-    
-
 
 ## What's New
 
 For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
-
 
 ## Authors and Licensing
 
