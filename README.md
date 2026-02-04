@@ -90,6 +90,7 @@ try:
     %pip install -Uq git+https://github.com/seap-udea/fargopy
 except ImportError:
     print("Not running in Colab, skipping installation")
+%mkdir -p ./gallery/
 ```
 
     Not running in Colab, skipping installation
