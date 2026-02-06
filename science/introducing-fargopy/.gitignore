@@ -1,0 +1,13 @@
+# Ignore everything
+*
+
+# But descend into directories
+!*/
+
+# Unignore specific files and directories
+!.gitignore
+!*.pdf
+!notebooks/
+!notebooks/**
+!figures/
+!figures/**
