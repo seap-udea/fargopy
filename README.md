@@ -42,9 +42,26 @@ For the code used to generate these animations, see the tutorial notebook [basic
 
 A complete list of resources and further information about the package and the science relate to it can be found in the following links:
 
+- **Technical report**: [FARGOpy: A Python Package for Post-processing and Analyzing FARGO3D Hydrodynamical Simulations](https://github.com/seap-udea/fargopy/blob/main/science/introducing-fargopy/MurilloZuluagaMontesinos2026-IntroducingFARGOpy.pdf)
 - **GitHub Repository**: [https://github.com/seap-udea/fargopy](https://github.com/seap-udea/fargopy)
 - **Documentation**: [https://fargopy.readthedocs.io](https://fargopy.readthedocs.io)
 - **PyPI Page**: [https://pypi.org/project/fargopy/](https://pypi.org/project/fargopy/)
+
+## Authors and Licensing
+
+This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valdivia, Chile. The main developers are:
+
+- **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
+- **Alejandro Murillo-González** (SEAP/FACom/UdeA) - alejandro.murillo1@udea.edu.co
+- **Matías Montesinos** (Physics/USM) - matias.montesinosa@usm.cl
+
+This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
+
+## What's New
+
+For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
+
+----
 
 ## Installation
 
@@ -124,6 +141,12 @@ You may also use the commando `ifargopy` to run several interesting commands:
     $ ifargopy --test
     ```
 
+-----
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/pds-70c-disk_densiy_vertical-200_orbits_high_resolution.gif" alt="PDS 70c disk density (vertical)" width="45%"/>
+</div>
+
 ## Quickstart
 
 Here is a quick example of how to use FARGOpy. For more examples, see the [examples](https://fargopy.readthedocs.io/en/latest/examples.html) directory in the documentation.
@@ -160,7 +183,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -215,7 +238,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 ```
 
     Precomputed output directory '/tmp/p3disoj' already exist
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -362,9 +385,18 @@ In order to run the graphical interface use:
 $ vfargopy
 ```
 
-## What's New
+-----
 
-For a detailed list of changes and new features in each version, please see the [WHATSNEW.md](https://github.com/seap-udea/fargopy/blob/main/WHATSNEW.md) file.
+## Contributing
+
+We welcome contributions! If you're interested in contributing to MultiNEAs, please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
 
 ## Citation
 
@@ -376,6 +408,14 @@ If you use `FARGOpy` in your research, please cite:
   title = {FARGOpy: A python wrapper for FARGO3D and more},
   year = {2026},
   url = {https://github.com/seap-udea/fargopy}
+}
+
+@misc{MurilloGonzalez2026,
+    author       = {Murillo-Gonzalez, Alejandro and Zuluaga, Jorge I. and Montesinos, Matias},
+    title        = {{FARGOpy}: A {Python} Package for Post-processing and Analyzing {FARGO3D} Hydrodynamical Simulations},
+    year         = {2026},
+    howpublished = {\url{https://github.com/seap-udea/fargopy/blob/main/science/introducing-fargopy/MurilloZuluagaMontesinos2026-IntroducingFARGOpy.pdf}},
+    note         = {Manuscript hosted on GitHub},
 }
 ```
 
@@ -390,30 +430,4 @@ If you use `FARGOpy` in your research, please cite:
   url = {https://github.com/seap-udea/fargopy}
 }
 ``` -->
-
-## Authors and Licensing
-
-This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valdivia, Chile. The main developers are:
-
-- **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
-- **Alejandro Murillo-González** (SEAP/FACom/UdeA) - alejandro.murillo1@udea.edu.co
-- **Matías Montesinos** (Physics/USM) - matias.montesinosa@usm.cl
-
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-We welcome contributions! If you're interested in contributing to MultiNEAs, please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
-
----
-*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
-
-Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 

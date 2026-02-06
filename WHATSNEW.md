@@ -8,6 +8,8 @@
   - Flux calculation.
   - Full documentation.
   - Tests of main modules.
+  - Technical report available: [FARGOpy: A Python Package for Post-processing and Analyzing FARGO3D Hydrodynamical Simulations](https://github.com/seap-udea/fargopy/blob/main/science/introducing-fargopy/MurilloZuluagaMontesinos2026-IntroducingFARGOpy.pdf)
+  - Other science papers using FARGOpy are available in the [science](https://github.com/seap-udea/fargopy/tree/main/science) directory.
 
 - **Version 0.4.***:
   - Field interpolation in 1D, 2D, and 3D with evaluation at arbitrary points and times.
