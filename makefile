@@ -41,6 +41,7 @@ env:
 # Generate markdown files from notebooks
 readme:
 	python3 bin/convert_readme.py
+	rm -f gallery/README_*
 
 %.md:%.ipynb
 	python3 -m nbconvert $^ --to markdown
