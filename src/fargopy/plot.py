@@ -26,7 +26,7 @@ class Plot(object):
     """
 
     @staticmethod
-    def fargopy_mark(ax, frac=1 / 6):
+    def fargopy_mark(ax, frac=1/6, alpha=0.5):
         """Add a watermark to a 2D or 3D plot.
 
         Places a rotated "FARGOpy {version}" watermark in the top-right corner
@@ -65,6 +65,7 @@ class Plot(object):
             va="top",
             transform=ax.transAxes,
             color="pink",
+            alpha=alpha,
             fontsize=10 * fig_factor,
             zorder=100,
         )

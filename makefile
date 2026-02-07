@@ -58,9 +58,7 @@ test:
 	pytest src/fargopy/tests
 
 verify:
-	@chmod +x bin/verify_installation.py
-	@$(PYTHON) bin/verify_installation.py
-
+	@. .fargopy/bin/activate && ifargopy --verify
 clean:
 	rm -rf build/
 	rm -rf dist/
