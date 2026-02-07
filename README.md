@@ -72,7 +72,13 @@ For a detailed list of changes and new features in each version, please see the 
 ```bash
 $ pip install fargopy
 ```
-as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants.
+or if you want the latest (and possibly unstable) version use:
+
+```bash
+$ pip install git+https://github.com/seap-udea/fargopy
+```
+
+as usual this command will install all dependencies (excluding `FARGO3D` which must be installed indepently as explained before) and download some useful data, scripts and constants. Installation includes two system-level commands, `ifargopy` used mainly for running the package in the `IPython` environmente (see below) and `vfargopy` which is the command to open the graphical interface (see below).
 
 ### From sources
 
@@ -183,7 +189,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -238,7 +244,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 ```
 
     Precomputed output directory '/tmp/p3disoj' already exist
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -430,4 +436,9 @@ If you use `FARGOpy` in your research, please cite:
   url = {https://github.com/seap-udea/fargopy}
 }
 ``` -->
+
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
+
+Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 
