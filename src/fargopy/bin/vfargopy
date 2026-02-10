@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (
     QDialog, QTextEdit, QFormLayout, QDialogButtonBox
 )
 from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QFont, QIcon, QPixmap
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -20,7 +20,64 @@ import os
 import re
 import subprocess
 
-COLORMAPS = ['Spectral_r', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 'YlGnBu', 'cubehelix', 'twilight', 'turbo']
+CMAP_GROUPS = [
+    ('Perc Unif Sequ', [
+        'viridis', 'viridis_r',
+        'plasma', 'plasma_r',
+        'inferno', 'inferno_r',
+        'magma', 'magma_r',
+        'cividis', 'cividis_r',
+    ]),
+    ('Diverging', [
+        'RdYlBu', 'RdYlBu_r',
+        'RdYlGn', 'RdYlGn_r',
+        'Spectral', 'Spectral_r',
+        'coolwarm'
+    ])
+]
+
+# Flat list of all cmaps for programmatic use when needed (reflects groups above)
+COLORMAPS = [c for grp in CMAP_GROUPS for c in grp[1]]
+
+def populate_cmap_combo(combo: QComboBox, default: str = None):
+    """Populate a QComboBox with grouped colormap entries.
+
+    Group headers are added as disabled, bold items. The first actual
+    colormap (or `default` if provided and found) is selected as the
+    active item to avoid breaking plotting code that expects a real cmap.
+    """
+    combo.clear()
+    model = combo.model()
+    first_cmap_index = None
+    for group_label, cmap_list in CMAP_GROUPS:
+        # add header
+        combo.addItem(group_label)
+        header_index = combo.count() - 1
+        try:
+            item = model.item(header_index)
+            if item is not None:
+                font = item.font() if item.font() is not None else QFont()
+                font.setBold(True)
+                item.setFont(font)
+                # set family title color to black and disable selection
+                try:
+                    item.setForeground(QColor('black'))
+                except Exception:
+                    pass
+                item.setEnabled(False)
+        except Exception:
+            # If model.item isn't available, ignore styling
+            pass
+        # add cmaps for this group
+        for cmap in cmap_list:
+            combo.addItem(cmap)
+            if first_cmap_index is None:
+                first_cmap_index = combo.count() - 1
+    # Select requested default if available, otherwise first cmap
+    if default and default in COLORMAPS:
+        combo.setCurrentText(default)
+    elif first_cmap_index is not None:
+        combo.setCurrentIndex(first_cmap_index)
 MAP_TYPES = ['Density', 'Energy', 'Velocity']
 VELOCITY_COMPONENTS = ['vx', 'vy', 'vz']
 VEL_INDEX = {'vx': 0, 'vy': 1, 'vz': 2}
@@ -312,12 +369,12 @@ class PlotOptionsDialog(QDialog):
 
         # Main colormap
         self.cmap_dropdown = QComboBox()
-        self.cmap_dropdown.addItems(COLORMAPS)
+        populate_cmap_combo(self.cmap_dropdown)
         layout.addRow("Colormap:", self.cmap_dropdown)
 
         # Streamlines colormap
         self.stream_cmap_dropdown = QComboBox()
-        self.stream_cmap_dropdown.addItems(COLORMAPS)
+        populate_cmap_combo(self.stream_cmap_dropdown)
         layout.addRow("Streamlines colormap:", self.stream_cmap_dropdown)
 
         # Map type
@@ -389,6 +446,7 @@ class PlotOptionsDialog(QDialog):
         self.map_dropdown.currentTextChanged.connect(self.on_map_change)
         self.fixed_cbar_checkbox.stateChanged.connect(self.on_fixed_cbar_toggle)
         self.manual_vmin_vmax_checkbox.stateChanged.connect(self.on_manual_vmin_vmax_toggle)
+        self.fixed_cbar_snap_spin.valueChanged.connect(self.on_fixed_cbar_snap_change)
 
     def sync_from_parent(self):
         p = self.parent
@@ -410,6 +468,12 @@ class PlotOptionsDialog(QDialog):
 
     def apply_changes(self):
         p = self.parent
+        # Store old state to detect changes
+        old_fixed_enabled = p.fixed_cbar_enabled
+        old_fixed_snap = p.fixed_cbar_snap_spin.value()
+        old_map_type = p.map_dropdown.currentText()
+        old_vel_comp = p.vel_dropdown.currentText()
+        
         p.cmap_dropdown.setCurrentText(self.cmap_dropdown.currentText())
         p.stream_cmap_dropdown.setCurrentText(self.stream_cmap_dropdown.currentText())
         p.map_dropdown.setCurrentText(self.map_dropdown.currentText())
@@ -421,8 +485,26 @@ class PlotOptionsDialog(QDialog):
         p.manual_vmax = self.vmax_spin.value()
         p.stream_arrow_size = self.stream_arrow_size_spin.value()
         p.hill_color = self.hill_color_combo.currentText()
+        
+        # Recalculate limits if: enabling fixed cbar, or if already enabled and snap/map/vel changed
+        need_recalc = False
         if p.fixed_cbar_enabled:
+            if not old_fixed_enabled:
+                # Just enabled
+                need_recalc = True
+            elif old_fixed_snap != p.fixed_cbar_snap_spin.value():
+                # Snapshot changed
+                need_recalc = True
+            elif old_map_type != p.map_dropdown.currentText():
+                # Map type changed
+                need_recalc = True
+            elif old_map_type == 'Velocity' and old_vel_comp != p.vel_dropdown.currentText():
+                # Velocity component changed for Velocity map
+                need_recalc = True
+        
+        if need_recalc:
             p.update_fixed_cbar_limits()
+        
         p.plot_density()
         self.sync_from_parent()
 
@@ -431,14 +513,19 @@ class PlotOptionsDialog(QDialog):
 
     def on_fixed_cbar_toggle(self, state):
         # Notify parent to update when fixed colorbar setting changes
-        if self.parent.fixed_cbar_enabled:
+        enabled = bool(state)
+        if enabled and not self.parent.fixed_cbar_enabled:
+            # Just enabled, recalculate
+            self.parent.fixed_cbar_enabled = True
             self.parent.update_fixed_cbar_limits()
-        self.parent.plot_density()
+        elif not enabled:
+            self.parent.fixed_cbar_enabled = False
+        # Don't plot here, let apply_changes handle it
 
     def on_fixed_cbar_snap_change(self, value):
-        if self.fixed_cbar_enabled:
-            self.update_fixed_cbar_limits()
-            self.plot_density()
+        # When snapshot changes, update parent's spin value
+        # Recalculation will happen in apply_changes
+        self.parent.fixed_cbar_snap_spin.setValue(value)
 
     def on_manual_vmin_vmax_toggle(self, state):
         enabled = bool(state)
@@ -515,6 +602,11 @@ class VideoOptionsDialog(QDialog):
         self.end_snap_spin.setValue(nmax)
         layout.addRow("End snapshot:", self.end_snap_spin)
 
+        # Option to save frames as PNG when creating video
+        self.save_frames_checkbox = QCheckBox("Save frames (PNG)")
+        self.save_frames_checkbox.setChecked(False)
+        layout.addRow("Save frames:", self.save_frames_checkbox)
+
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         layout.addRow(buttons)
         buttons.accepted.connect(self.accept)
@@ -547,6 +639,11 @@ class PlotInteractiveWindow(QWidget):
         # --- Plot options (hidden widgets used for logic/dialog) ---
         self.cmap_dropdown = QComboBox()
         self.cmap_dropdown.addItems(COLORMAPS)
+        # Default colormap when loading data
+        try:
+            self.cmap_dropdown.setCurrentText('inferno')
+        except Exception:
+            pass
         self.stream_cmap_dropdown = QComboBox()
         self.stream_cmap_dropdown.addItems(COLORMAPS)
         self.map_dropdown = QComboBox()
@@ -651,18 +748,53 @@ class PlotInteractiveWindow(QWidget):
 
         logo_label = QLabel()
         # Reduce logo size to occupy less vertical space
+        # Resolve logo path from several candidate locations so running the
+        # script from arbitrary CWD still finds the image when present in the
+        # repository or installed package data.
+        logo_path = None
+        # 1) packaged resource (installed package)
         try:
             import pkg_resources
-            logo_path = pkg_resources.resource_filename('fargopy', 'data/fargopy_logo.png')
-            if not os.path.exists(logo_path):
-                 # Fallback to local file if not installed as package or running from source w/o install
-                 logo_path = "fargopy_logo.png"
-            logo_pixmap = QPixmap(logo_path)
+            candidate = pkg_resources.resource_filename('fargopy', 'data/fargopy_logo_white.png')
+            if os.path.exists(candidate):
+                logo_path = candidate
         except Exception:
-            logo_pixmap = QPixmap("fargopy_logo.png")
+            pass
 
-        logo_pixmap = logo_pixmap.scaledToWidth(300, Qt.SmoothTransformation)  # <-- previously 340
-        logo_label.setPixmap(logo_pixmap)
+        # 2) gallery folder relative to the installed package location
+        if logo_path is None:
+            try:
+                pkg_dir = os.path.dirname(fp.__file__)
+                candidate = os.path.abspath(os.path.join(pkg_dir, '..', '..', 'gallery', 'fargopy_logo_white.png'))
+                if os.path.exists(candidate):
+                    logo_path = candidate
+            except Exception:
+                pass
+
+        # 3) gallery folder relative to this script (covers running from repo)
+        if logo_path is None:
+            try:
+                script_dir = os.path.dirname(__file__)
+                candidate = os.path.abspath(os.path.join(script_dir, '..', '..', '..', '..', 'gallery', 'fargopy_logo_white.png'))
+                if os.path.exists(candidate):
+                    logo_path = candidate
+            except Exception:
+                pass
+
+        # Load pixmap only if file exists; otherwise use text fallback
+        logo_pixmap = QPixmap()
+        try:
+            if logo_path and os.path.exists(logo_path):
+                logo_pixmap = QPixmap(logo_path)
+        except Exception:
+            logo_pixmap = QPixmap()
+
+        if not logo_pixmap.isNull():
+            logo_pixmap = logo_pixmap.scaledToWidth(300, Qt.SmoothTransformation)
+            logo_label.setPixmap(logo_pixmap)
+        else:
+            logo_label.setText("FARGOpy")
+            logo_label.setStyleSheet('color: white; font-weight: bold; font-size: 24px;')
         logo_label.setAlignment(Qt.AlignCenter)
         logo_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
 
@@ -1026,11 +1158,50 @@ class PlotInteractiveWindow(QWidget):
         ax.axis('off')
         ax.set_facecolor('#23272b')
         self.figure.set_facecolor('#23272b')
+        import matplotlib.image as mpimg
+        # Reuse the same multi-path resolution logic as in init_ui
+        logo_path = None
         try:
-            import matplotlib.image as mpimg
-            img = mpimg.imread("fargopy_logo.png")
-            ax.imshow(img, aspect='auto')
+            import pkg_resources
+            candidate = pkg_resources.resource_filename('fargopy', 'data/fargopy_logo_white.png')
+            if os.path.exists(candidate):
+                logo_path = candidate
         except Exception:
+            pass
+
+        if logo_path is None:
+            try:
+                pkg_dir = os.path.dirname(fp.__file__)
+                candidate = os.path.abspath(os.path.join(pkg_dir, '..', '..', 'gallery', 'fargopy_logo_white.png'))
+                if os.path.exists(candidate):
+                    logo_path = candidate
+            except Exception:
+                pass
+
+        if logo_path is None:
+            try:
+                script_dir = os.path.dirname(__file__)
+                candidate = os.path.abspath(os.path.join(script_dir, '..', '..', '..', '..', 'gallery', 'fargopy_logo_white.png'))
+                if os.path.exists(candidate):
+                    logo_path = candidate
+            except Exception:
+                pass
+
+        try:
+            if logo_path and os.path.exists(logo_path):
+                try:
+                    img = mpimg.imread(logo_path)
+                    if img is None:
+                        raise RuntimeError("mpimg.imread returned None")
+                    ax.imshow(img, aspect='auto')
+                except Exception as e:
+                    print(f"Warning: could not read logo image '{logo_path}': {e}")
+                    ax.text(0.5, 0.5, "FARGOpy", fontsize=40, ha='center', va='center', color='white')
+            else:
+                print(f"Warning: logo file not found at any candidate locations")
+                ax.text(0.5, 0.5, "FARGOpy", fontsize=40, ha='center', va='center', color='white')
+        except Exception as e:
+            print(f"Warning: unexpected error showing logo: {e}")
             ax.text(0.5, 0.5, "FARGOpy", fontsize=40, ha='center', va='center', color='white')
         self.canvas.draw()
 
@@ -1073,6 +1244,11 @@ class PlotInteractiveWindow(QWidget):
             'Velocity': None,
             'Energy': None
         }
+        # Ensure default colormap is applied when a simulation is loaded
+        try:
+            self.cmap_dropdown.setCurrentText('inferno')
+        except Exception:
+            pass
         self.plot_density()
 
     def show_sim_info(self):
@@ -1098,6 +1274,15 @@ class PlotInteractiveWindow(QWidget):
         self.r_min.setText("")
         self.r_max.setText("")
         self.last_slice_str = ""  # <-- Ensure previous slice is cleared
+        # Reset fixed colorbar limits when changing slice type
+        self.fixed_cbar_limits = {
+            'Density': None,
+            'Velocity': None,
+            'Energy': None
+        }
+        # Recalculate limits if fixed colorbar is enabled
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
         self.plot_density()
 
     def on_zoom_release(self, event):
@@ -1195,6 +1380,16 @@ class PlotInteractiveWindow(QWidget):
     def _manual_slice_str(self):
         def norm(txt):
             return txt.replace(',', '.').strip()
+        
+        def values_equal(val1, val2):
+            """Compare two numeric string values with tolerance"""
+            if not val1 or not val2:
+                return False
+            try:
+                return abs(float(val1) - float(val2)) < 1e-10
+            except ValueError:
+                return val1 == val2
+        
         r_min_val = norm(self.r_min.text())
         r_max_val = norm(self.r_max.text())
         theta_min_val = norm(self.theta_min.text())
@@ -1211,7 +1406,7 @@ class PlotInteractiveWindow(QWidget):
             slice_parts.append(f"theta={theta_min_val}")
         else:
             if r_min_val and r_max_val:
-                if r_min_val == r_max_val:
+                if values_equal(r_min_val, r_max_val):
                     slice_parts.append(f"r={r_min_val}")
                 else:
                     slice_parts.append(f"r=[{r_min_val},{r_max_val}]")
@@ -1220,7 +1415,7 @@ class PlotInteractiveWindow(QWidget):
             elif r_max_val:
                 slice_parts.append(f"r={r_max_val}")
             if theta_min_val and theta_max_val:
-                if theta_min_val == theta_max_val:
+                if values_equal(theta_min_val, theta_max_val):
                     slice_parts.append(f"theta={theta_min_val}")
                 else:
                     slice_parts.append(f"theta=[{theta_min_val},{theta_max_val}]")
@@ -1229,7 +1424,7 @@ class PlotInteractiveWindow(QWidget):
             elif theta_max_val:
                 slice_parts.append(f"theta={theta_max_val}")
             if phi_min_val and phi_max_val:
-                if phi_min_val == phi_max_val:
+                if values_equal(phi_min_val, phi_max_val):
                     slice_parts.append(f"phi={phi_min_val}")
                 else:
                     slice_parts.append(f"phi=[{phi_min_val},{phi_max_val}]")
@@ -1275,6 +1470,37 @@ class PlotInteractiveWindow(QWidget):
         vel_comp = self.vel_dropdown.currentText() if hasattr(self, 'vel_dropdown') else 'vx'
         snap = self.fixed_cbar_snap_spin.value()
 
+        # Determine axes and mesh names based on fixed coordinates (same logic as plot_density)
+        def is_fixed(var, slice_str):
+            # Match both single values (var=X) and ranges with equal values (var=[X,X])
+            slice_clean = slice_str.replace(' ', '')
+            single_match = re.search(rf'{var}=([^\[\],]+)', slice_clean)
+            if single_match:
+                return True
+            # Also check for ranges where min==max
+            range_match = re.search(rf'{var}=\[([^,]+),([^\]]+)\]', slice_clean)
+            if range_match:
+                try:
+                    val1, val2 = float(range_match.group(1)), float(range_match.group(2))
+                    if abs(val1 - val2) < 1e-10:
+                        return True
+                except ValueError:
+                    pass
+            return False
+
+        if is_fixed('theta', slice_str):
+            mesh_x_name = 'var1_mesh'
+            mesh_y_name = 'var2_mesh'
+            use_var3 = False
+        elif is_fixed('phi', slice_str):
+            mesh_x_name = 'var1_mesh'
+            mesh_y_name = 'var3_mesh'
+            use_var3 = True
+        else:
+            mesh_x_name = 'var1_mesh'
+            mesh_y_name = 'var2_mesh'
+            use_var3 = False
+
         for map_type in map_types:
             try:
                 if map_type == 'Density':
@@ -1285,14 +1511,15 @@ class PlotInteractiveWindow(QWidget):
                         interpolate=True
                     )
                     if hasattr(data, 'evaluate'):
-                        mesh_x_name = 'var1_mesh'
-                        mesh_y_name = 'var2_mesh'
                         xmin, xmax = getattr(data, mesh_x_name)[0].min(), getattr(data, mesh_x_name)[0].max()
                         ymin, ymax = getattr(data, mesh_y_name)[0].min(), getattr(data, mesh_y_name)[0].max()
                         xs = np.linspace(xmin, xmax, res)
                         ys = np.linspace(ymin, ymax, res)
                         X, Y = np.meshgrid(xs, ys)
-                        data_map = data.evaluate(field='gasdens',time=snap, var1=X, var2=Y)
+                        if use_var3:
+                            data_map = data.evaluate(field='gasdens', time=snap, var1=X, var3=Y)
+                        else:
+                            data_map = data.evaluate(field='gasdens', time=snap, var1=X, var2=Y)
                         dens_raw = data_map * self.sim.URHO
                         data_map = np.where(dens_raw > 0, np.log10(dens_raw), np.nan)
                     else:
@@ -1308,20 +1535,29 @@ class PlotInteractiveWindow(QWidget):
                     )
                     
                     if hasattr(gasv, 'evaluate'):
-                        mesh_x_name = 'var1_mesh'
-                        mesh_y_name = 'var2_mesh'
                         xmin, xmax = getattr(gasv, mesh_x_name)[0].min(), getattr(gasv, mesh_x_name)[0].max()
                         ymin, ymax = getattr(gasv, mesh_y_name)[0].min(), getattr(gasv, mesh_y_name)[0].max()
                         xs = np.linspace(xmin, xmax, res)
                         ys = np.linspace(ymin, ymax, res)
                         X, Y = np.meshgrid(xs, ys)
-                        vel = gasv.evaluate(time=snap, var1=X, var2=Y)
+                        if use_var3:
+                            vel = gasv.evaluate(time=snap, var1=X, var3=Y)
+                        else:
+                            vel = gasv.evaluate(time=snap, var1=X, var2=Y)
                         idx = VEL_INDEX.get(vel_comp, 0)
-                        data_map = vel[idx]
+                        # Convert to km/s (consistent with plot_density)
+                        v_factor = self.sim.UL / self.sim.UT
+                        sim_unitsys = getattr(self.sim, "unitsystem", "cgs").lower()
+                        denom = 1e5 if sim_unitsys == "cgs" else 1e3
+                        data_map = (vel[idx] * v_factor) / denom
                     else:
                         vel = gasv.gasv_mesh[0]
                         idx = VEL_INDEX.get(vel_comp, 0)
-                        data_map = vel[idx]
+                        # Convert to km/s (consistent with plot_density)
+                        v_factor = self.sim.UL / self.sim.UT
+                        sim_unitsys = getattr(self.sim, "unitsystem", "cgs").lower()
+                        denom = 1e5 if sim_unitsys == "cgs" else 1e3
+                        data_map = (vel[idx] * v_factor) / denom
                 elif map_type == 'Energy':
                     gasenergy = self.sim.load_field(
                         fields='gasenergy',
@@ -1330,14 +1566,15 @@ class PlotInteractiveWindow(QWidget):
                         interpolate=True
                     )
                     if hasattr(gasenergy, 'evaluate'):
-                        mesh_x_name = 'var1_mesh'
-                        mesh_y_name = 'var2_mesh'
                         xmin, xmax = getattr(gasenergy, mesh_x_name)[0].min(), getattr(gasenergy, mesh_x_name)[0].max()
                         ymin, ymax = getattr(gasenergy, mesh_y_name)[0].min(), getattr(gasenergy, mesh_y_name)[0].max()
                         xs = np.linspace(xmin, xmax, res)
                         ys = np.linspace(ymin, ymax, res)
                         X, Y = np.meshgrid(xs, ys)
-                        data_map = gasenergy.evaluate(time=snap, var1=X, var2=Y)
+                        if use_var3:
+                            data_map = gasenergy.evaluate(time=snap, var1=X, var3=Y)
+                        else:
+                            data_map = gasenergy.evaluate(time=snap, var1=X, var2=Y)
                     else:
                         data_map = gasenergy.gasenergy_mesh[0]
                 # Ignore NaNs for min/max
@@ -1355,13 +1592,13 @@ class PlotInteractiveWindow(QWidget):
                                  show_streamlines, stream_density, stream_cmap,
                                  vx_plot, vy_plot, vmag_kms, skip_coord_reflect=False):
         if data_map is None:
-            return
+            return None
         axis = getattr(self, "reflect_axis", "X-axis")
         if skip_coord_reflect:
             X_ref, Y_ref = X_plot, Y_plot
         else:
             X_ref, Y_ref = self._reflect_coordinates(axis, X_plot, Y_plot)
-        ax.pcolormesh(
+        pcm_overlay = ax.pcolormesh(
             X_ref,
             Y_ref,
             data_map,
@@ -1371,6 +1608,7 @@ class PlotInteractiveWindow(QWidget):
             vmax=vmax
             
         )
+        return pcm_overlay
         if show_streamlines and vx_plot is not None and vy_plot is not None:
             if skip_coord_reflect:
                 vx_ref, vy_ref = vx_plot, vy_plot
@@ -1463,8 +1701,21 @@ class PlotInteractiveWindow(QWidget):
             v_factor = self.sim.UL / self.sim.UT  # cm/s
         # Determine axes and mesh names based on fixed coordinates
         def is_fixed(var, slice_str):
-            match = re.search(rf'{var}=([^\[\],]+)', slice_str.replace(' ', ''))
-            return match is not None
+            # Match both single values (var=X) and ranges with equal values (var=[X,X])
+            slice_clean = slice_str.replace(' ', '')
+            single_match = re.search(rf'{var}=([^\[\],]+)', slice_clean)
+            if single_match:
+                return True
+            # Also check for ranges where min==max
+            range_match = re.search(rf'{var}=\[([^,]+),([^\]]+)\]', slice_clean)
+            if range_match:
+                try:
+                    val1, val2 = float(range_match.group(1)), float(range_match.group(2))
+                    if abs(val1 - val2) < 1e-10:
+                        return True
+                except ValueError:
+                    pass
+            return False
 
         if is_fixed('theta', slice_str):
             mesh_x_name = 'var1_mesh'
@@ -1717,6 +1968,7 @@ class PlotInteractiveWindow(QWidget):
         X_plot = np.asarray(X_plot)
         Y_plot = np.asarray(Y_plot)
         data_map = np.asarray(data_map)
+        pcm = None  # Initialize to None to ensure it's always defined
         try:
             pcm = ax.pcolormesh(X_plot, Y_plot, data_map, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
         except ValueError:
@@ -1751,10 +2003,12 @@ class PlotInteractiveWindow(QWidget):
                     ys = np.linspace(np.nanmin(Y_plot), np.nanmax(Y_plot), ny)
                     Xg, Yg = np.meshgrid(xs, ys)
                 pcm = ax.pcolormesh(Xg, Yg, data_map2, shading='auto', cmap=cmap, vmin=vmin, vmax=vmax)
-            except Exception:
-                # If fallback fails, raise original ValueError for debugging
-                raise
-      # --- Axis label according to scaling ---
+            except Exception as e:
+                # If fallback fails, log error and continue without pcolormesh
+                print(f"Warning: Could not create pcolormesh: {e}")
+                pcm = None
+        
+        # --- Axis label according to scaling ---
         axis_unit_label = axis_unit_label_map.get(length_unit, length_unit)
         xlabel, ylabel = f'X [{axis_unit_label}]', f'Y [{axis_unit_label}]'
 
@@ -1889,7 +2143,7 @@ class PlotInteractiveWindow(QWidget):
                             except Exception:
                                 pass
 
-                        self._plot_reflection_overlay(
+                        pcm_overlay = self._plot_reflection_overlay(
                             ax,
                             Xr_plot,
                             Yr_plot,
@@ -1905,9 +2159,11 @@ class PlotInteractiveWindow(QWidget):
                             vmr_kms,
                             skip_coord_reflect=True,
                         )
+                        if pcm_overlay is not None:
+                            pcm = pcm_overlay
                     except Exception:
                         # On any error fall back to default overlay
-                        self._plot_reflection_overlay(
+                        pcm_overlay = self._plot_reflection_overlay(
                             ax,
                             X_plot,
                             Y_plot,
@@ -1922,9 +2178,11 @@ class PlotInteractiveWindow(QWidget):
                             vy_plot,
                             vmag_kms,
                         )
+                        if pcm_overlay is not None:
+                            pcm = pcm_overlay
                 else:
                     # Fallback to previous behaviour using already computed data_map
-                    self._plot_reflection_overlay(
+                    pcm_overlay = self._plot_reflection_overlay(
                         ax,
                         X_plot,
                         Y_plot,
@@ -1939,9 +2197,11 @@ class PlotInteractiveWindow(QWidget):
                         vy_plot,
                         vmag_kms,
                     )
+                    if pcm_overlay is not None:
+                        pcm = pcm_overlay
             except Exception:
                 # On any error, fallback silently to previous behaviour
-                self._plot_reflection_overlay(
+                pcm_overlay = self._plot_reflection_overlay(
                     ax,
                     X_plot,
                     Y_plot,
@@ -1956,6 +2216,8 @@ class PlotInteractiveWindow(QWidget):
                     vy_plot,
                     vmag_kms,
                 )
+                if pcm_overlay is not None:
+                    pcm = pcm_overlay
 
         planets = self.sim.load_planets(snapshot=n)
         if planets:
@@ -1974,10 +2236,14 @@ class PlotInteractiveWindow(QWidget):
                 circle = Circle((center_x, center_y), radius, color=hill_color, fill=False, linestyle='--', linewidth=3,label=fr'${hill_frac:.1f}\,R_H$')
                 ax.add_patch(circle)
             elif is_fixed('phi', slice_str):
-                theta = np.linspace(0, np.pi, 100)
+                # If reflection overlay is enabled, draw full circle
+                if getattr(self, 'reflect_enabled', False):
+                    theta = np.linspace(0, 2 * np.pi, 200)
+                else:
+                    theta = np.linspace(0, np.pi, 100)
                 x = center_x + radius * np.cos(theta)
                 y = center_y + radius * np.sin(theta)
-                ax.plot(x, y, color=hill_color, linewidth=3,label=f'{hill_frac:.1f}'+r'$R_H$', linestyle='--')
+                ax.plot(x, y, color=hill_color, linewidth=3, label=f'{hill_frac:.1f}'+r'$R_H$', linestyle='--')
 
         # Change font and size of axis labels
         font_properties = {'fontsize': 15, 'fontname': 'Serif'}
@@ -1995,12 +2261,49 @@ class PlotInteractiveWindow(QWidget):
             if map_type == 'Density':
                 cbar_label = r'$\log_{10}(\rho)$' + f' [{dens_unit}]'
             elif map_type == 'Energy':
-                cbar_label = r'$\log_{10}(\mathrm{{energy}})$'
+                cbar_label = r'$\log_{10}(\mathrm{energy})$'
             else:
-                # Always show velocity colorbar in km/s
+                # Velocity maps use km/s for colorbar
                 cbar_label = f'{vel_comp} [km/s]'
-                cbar = self.figure.colorbar(pcm, ax=ax)
-                cbar.set_label(cbar_label, fontsize=18, fontname='Serif')
+
+            # Create colorbar for the main pcolormesh when available
+            if pcm is not None:
+                try:
+                    cbar = self.figure.colorbar(pcm, ax=ax)
+                    # Slightly larger label for velocity
+                    label_fontsize = 18 if map_type == 'Velocity' else 15
+                    cbar.set_label(cbar_label, fontsize=label_fontsize, fontname='Serif')
+                except Exception as e:
+                    # If colorbar creation fails, log and continue
+                    print(f"Warning: Could not create colorbar: {e}")
+            else:
+                # If pcm is None, create a ScalarMappable fallback so a
+                # colorbar is still shown (useful when pcolormesh failed
+                # due to irregular grids). Use the current cmap and vmin/vmax
+                # when available.
+                try:
+                    cmap_obj = plt.cm.get_cmap(cmap) if cmap is not None else plt.cm.viridis
+                    if vmin is None or vmax is None:
+                        # Try infer vmin/vmax from data_map if possible
+                        try:
+                            valid = np.isfinite(data_map)
+                            if np.any(valid):
+                                vmin = float(np.nanmin(data_map[valid]))
+                                vmax = float(np.nanmax(data_map[valid]))
+                        except Exception:
+                            pass
+                    from matplotlib.cm import ScalarMappable
+                    from matplotlib.colors import Normalize
+                    norm = None
+                    if vmin is not None and vmax is not None and vmin != vmax:
+                        norm = Normalize(vmin=vmin, vmax=vmax)
+                    mappable = ScalarMappable(norm=norm, cmap=cmap_obj)
+                    mappable.set_array([])
+                    cbar = self.figure.colorbar(mappable, ax=ax)
+                    label_fontsize = 18 if map_type == 'Velocity' else 15
+                    cbar.set_label(cbar_label, fontsize=label_fontsize, fontname='Serif')
+                except Exception as e:
+                    print(f"Warning: Could not create fallback colorbar: {e}")
 
         self.canvas.draw()
         QTimer.singleShot(800, lambda: self.status_label.setText(""))
@@ -2029,9 +2332,10 @@ class PlotInteractiveWindow(QWidget):
             bitrate = dlg.bitrate_spin.value()
             start_snap = dlg.start_snap_spin.value()
             end_snap = dlg.end_snap_spin.value()
-            self.create_video_with_options(fps, bitrate, start_snap, end_snap)
+            save_frames = getattr(dlg, 'save_frames_checkbox', None) and dlg.save_frames_checkbox.isChecked()
+            self.create_video_with_options(fps, bitrate, start_snap, end_snap, save_frames=save_frames)
 
-    def create_video_with_options(self, fps, bitrate, start_snap, end_snap):
+    def create_video_with_options(self, fps, bitrate, start_snap, end_snap, save_frames=False):
         from PyQt5.QtWidgets import QFileDialog, QMessageBox
         video_path, _ = QFileDialog.getSaveFileName(self, "Save video", "fargopy_video.mp4", "MP4 Files (*.mp4)")
         if not video_path:
@@ -2061,6 +2365,16 @@ class PlotInteractiveWindow(QWidget):
                     self.time_slider.setValue(snap)
                     self.time_slider.blockSignals(False)
                     self.plot_density()
+                    # Optionally save the current frame as PNG
+                    if save_frames:
+                        try:
+                            frames_dir = os.path.splitext(video_path)[0] + "_frames"
+                            os.makedirs(frames_dir, exist_ok=True)
+                            png_path = os.path.join(frames_dir, f"frame_{snap:05d}.png")
+                            fig.savefig(png_path, dpi=fig.dpi or 100)
+                        except Exception:
+                            # If saving a frame fails, continue without stopping
+                            pass
                     writer.grab_frame()
                     frames_written += 1
         except Exception as e:
