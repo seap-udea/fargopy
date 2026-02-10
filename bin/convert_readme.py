@@ -13,7 +13,7 @@ import shutil
 # Configuration
 NOTEBOOK_FILE = "README.ipynb"
 MARKDOWN_FILE = "README.md"
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/seap-udea/fargopy/refactor"
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/seap-udea/fargopy/main"
 GALLERY_DIR = "gallery"
 NB_OUTPUT_DIR = "README_files"
 

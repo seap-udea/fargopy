@@ -1403,12 +1403,53 @@ class Simulation(fargopy.Fargobj):
         slice=None,
         snapshot=None,
         type=None,
-        #interpolate=None,
         coords="cartesian",
         cut=None,
     ):
         """
         Load a field or multiple fields from the simulation.
+
+        This method initializes a ``FieldInterpolator`` to handle the loading
+        and interpolation of simulation fields. It supports loading single
+        or multiple fields, taking slices, and specifying the coordinate
+        system for vector fields.
+
+        Parameters
+        ----------
+        fields : str or list of str
+            Name or list of names of the fields to load (e.g., 'gasdens', 'gasv').
+        slice : str, optional
+            Slice definition string (e.g., 'phi=0', 'theta=1.57'). Used to
+            load a specific subset of the data.
+        snapshot : int or list of int, optional
+            Snapshot number(s) to load. Can be a single integer or a
+            range [start, end]. Default is None (which usually implies
+            snapshot 0 or all, depending on context, but here it is passed
+            to FieldInterpolator).
+        type : str, optional
+            Field type ('scalar' or 'vector'). If None, it is inferred
+            from the field name.
+        coords : str, optional
+            Coordinate system for vector transformation ('cartesian',
+            'cylindrical', 'spherical'). Default is 'cartesian'.
+        cut : list, optional
+            Geometric cut parameters (sphere or cylinder mask) to apply
+            to the data.
+
+        Returns
+        -------
+        fargopy.FieldInterpolator
+            An object capable of interpolating and managing the loaded field data.
+
+        Examples
+        --------
+        Load density and velocity for snapshot 10:
+
+        >>> loader = sim.load_field(fields=['gasdens', 'gasv'], snapshot=10)
+
+        Load a 2D slice at phi=0:
+
+        >>> df_slice = sim.load_field(fields='gasdens', slice='phi=0', snapshot=10)
         """
 
         # Ensure fields is a list (but keep single-field compatibility)
@@ -1429,12 +1470,12 @@ class Simulation(fargopy.Fargobj):
 
         self.field_handler = fargopy.FieldsHandler(
             sim=self,
-            fields=fields, 
-            slice=slice, 
-            snapshot=snapshot, 
-            type=type, 
-            coords=coords, 
-            cut=cut
+            fields=fields,
+            slice=slice,
+            snapshot=snapshot,
+            type=type,
+            coords=coords,
+            cut=cut,
         )
         fields = self.field_handler.get_interpolator()
         return fields

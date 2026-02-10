@@ -163,8 +163,7 @@ Import the package:
 import fargopy as fp
 ```
 
-    Configuring FARGOpy for the first time
-    Running FARGOpy version 1.0.9
+    Running FARGOpy version X.Y.Z
 
 ### Density map
 
@@ -179,7 +178,7 @@ fp.Simulation.download_precomputed('p3disoj')
     Downloading...
     From: https://docs.google.com/uc?export=download&id=1Xzgk9qatZPNX8mLmB58R9NIi_YQUrHz9
     To: /tmp/p3disoj.tgz
-    100%|██████████| 84.2M/84.2M [00:02<00:00, 28.2MB/s]
+    100%|██████████| 84.2M/84.2M [00:03<00:00, 26.2MB/s]
 
     Uncompressing p3disoj.tgz into /tmp/p3disoj
     Done.
@@ -192,7 +191,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/p3disoj')
 ```
 
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -260,12 +259,10 @@ fp.Plot.fargopy_mark(ax, frac=1/4)
 
 axc = fig.colorbar(c)
 axc.set_label("$\Sigma$ [g/cm$^2$]")
-plt.savefig('gallery/fargopy-tutorial-animations_0.png') # Save figure
-
 plt.savefig('gallery/readme-gasdens.png')
 ```
 
-<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-gasdens.png" alt="png">
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/readme-gasdens.png" alt="png">
 
 ### Streamlines
 
@@ -279,7 +276,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 ```
 
     Precomputed output directory '/tmp/p3disoj' already exist
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -354,7 +351,7 @@ fp.Plot.fargopy_mark(axs)
 plt.savefig('gallery/readme-streamlines.png') # Save figure
 ```
 
-<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-streamlines.png" alt="png">
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/readme-streamlines.png" alt="png">
 
 ### Accretion rate (mass flux)
 
@@ -393,7 +390,7 @@ The computation is performed with `follow_planet=True`, ensuring that the integr
 acc_rate = sphere.mass_flux(sim=sim, snapshot=[0,snap], follow_planet=True) 
 ```
 
-    Calculating mass flux: 100%|██████████| 11/11 [00:35<00:00,  3.24s/it]
+    Calculating mass flux: 100%|██████████| 11/11 [00:37<00:00,  3.42s/it]
 
 And we can plot it:
 
@@ -410,7 +407,7 @@ plt.savefig('gallery/readme-accretion.png')
 
 ```
 
-<img src="https://raw.githubusercontent.com/seap-udea/fargopy/refactor/gallery/readme-accretion.png" alt="png">
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/readme-accretion.png" alt="png">
 
 ## Graphical interface for FARGOpy
 
@@ -471,9 +468,4 @@ If you use `FARGOpy` in your research, please cite:
   url = {https://github.com/seap-udea/fargopy}
 }
 ``` -->
-
----
-*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
-
-Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 
