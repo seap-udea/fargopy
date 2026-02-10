@@ -1,4 +1,9 @@
 ###############################################################
+# FARGOpy interdependencies
+###############################################################
+import fargopy
+
+###############################################################
 # Package documentation
 ###############################################################
 """
@@ -12,8 +17,10 @@ It is separated from __init__.py to avoid circular import issues with other modu
 import warnings
 import os
 import json
+import pickle
 import sys
 import numpy as np
+import inspect
 
 # Version
 __version__ = '1.0.9'
@@ -23,6 +30,7 @@ __all__ = [
     "Debug",
     "Dictobj",
     "Fargobj",
+    "FieldsHandler",
     "Conf",
     "initialize",
     "DEG",
@@ -30,6 +38,55 @@ __all__ = [
     "IN_COLAB",
     "_welcome",
 ]
+
+def _docstring_summary(doc):
+    """
+    Extract the first line or paragraph of a docstring as summary.
+
+    Stops at common section headers (Parameters, Returns, etc.)
+    so that the description does not include parameter lists.
+
+    Parameters
+    ----------
+    doc : str or None
+        The docstring.
+
+    Returns
+    -------
+    str
+        One-line summary or empty string if no docstring.
+    """
+    if not doc or not doc.strip():
+        return ""
+    doc = doc.strip()
+    section_markers = (
+        "Parameters",
+        "Returns",
+        "Examples",
+        "Attributes",
+        "Notes",
+        "Methods",
+        "Raises",
+        "See Also",
+        "Warnings",
+    )
+    lines = doc.splitlines()
+    summary_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            break
+        if any(
+            stripped == marker
+            or stripped.startswith(marker + " ")
+            or stripped == marker + ":"
+            for marker in section_markers
+        ):
+            break
+        if stripped.endswith("---") or stripped.endswith("===="):
+            break
+        summary_lines.append(stripped)
+    return " ".join(summary_lines).strip() if summary_lines else ""
 
 ###############################################################
 # Constants
@@ -148,6 +205,91 @@ class Fargobj(object):
             )
             file_object.close()
 
+    def save_object_pkl(self, filename=None, verbose=False):
+        """Save Fargobj into a pickle file (.pkl)
+        
+        Parameters
+        ----------
+        filename : str, optional
+            Path to save the pickle file. If None, creates a temporary file.
+        verbose : bool, optional
+            If True, print saving message. Default is False.
+            
+        Examples
+        --------
+        >>> obj.save_object_pkl('myobject.pkl')
+        >>> sim.save_object_pkl('simulation.pkl', verbose=True)
+        """
+        if filename is None:
+            object_hash = str(abs(hash(str(self.__dict__))))
+            filename = f"/tmp/fargobj_{object_hash}.pkl"
+        if verbose:
+            print(f"Saving object to {filename}...")
+        with open(filename, 'wb') as file_object:
+            pickle.dump(self, file_object)
+        return filename
+
+    @classmethod
+    def read_object(cls, filename, verbose=False):
+        """Read a Fargobj from a pickle (.pkl) or JSON file
+        
+        This method automatically detects the file format and loads accordingly.
+        It first tries to load as pickle, and if that fails, tries JSON format.
+        
+        Parameters
+        ----------
+        filename : str
+            Path to the file to load (.pkl or .json)
+        verbose : bool, optional
+            If True, print loading message. Default is False.
+            
+        Returns
+        -------
+        object
+            The loaded Fargobj or its subclass instance
+            
+        Examples
+        --------
+        >>> obj = fargopy.Fargobj.read_object('myobject.pkl')
+        >>> sim = fargopy.Simulation.read_object('simulation.pkl')
+        
+        Notes
+        -----
+        JSON files saved with save_object() can be loaded, but they will only
+        restore the object's __dict__ attributes, not the full object state.
+        For full object serialization, use save_object_pkl() and .pkl files.
+        """
+        if verbose:
+            print(f"Loading object from {filename}...")
+        
+        # Try pickle format first
+        try:
+            with open(filename, 'rb') as file_object:
+                obj = pickle.load(file_object)
+            return obj
+        except (pickle.UnpicklingError, UnicodeDecodeError):
+            # If pickle fails, try JSON format
+            if verbose:
+                print("Pickle format failed, trying JSON format...")
+            try:
+                with open(filename, 'r') as file_object:
+                    data = json.load(file_object)
+                # Create instance without calling __init__ to avoid constructor issues
+                obj = object.__new__(cls)
+                # Restore all attributes from JSON data
+                obj.__dict__.update(data)
+                
+                # Check if object has corrupted serialization markers
+                for key, value in obj.__dict__.items():
+                    if value == "<not serializable>":
+                        print(f"WARNING: Attribute '{key}' was not properly serialized.")
+                        print(f"This object was saved with save_object() which uses JSON and cannot")
+                        print(f"serialize complex objects. Use save_object_pkl() instead for full serialization.")
+                
+                return obj
+            except json.JSONDecodeError as e:
+                raise ValueError(f"File '{filename}' is neither a valid pickle nor JSON file: {e}")
+
     def set_property(self, property, default, method=lambda prop: prop):
         """Set a property of object using a given method"""
         if property in self.kwargs.keys():
@@ -165,6 +307,43 @@ class Fargobj(object):
             return True
         else:
             return False
+        
+    @classmethod
+    def methods(cls):
+        """
+        Show the list of public methods for this instance's class with their
+        short description taken from each method's docstring.
+
+        Can be called on an instance (e.g. obj.describe()) or on the class
+        (e.g. mn.DensityPlot.describe()). Intended for discovery of available
+        functionality on any FargoPyBase subclass (e.g. DensityPlot, CMND).
+        """
+        methods = []
+        for name in dir(cls):
+            if name.startswith("_"):
+                continue
+            obj = getattr(cls, name)
+            if not callable(obj):
+                continue
+            methods.append((name, obj))
+        methods.sort(key=lambda x: x[0])
+        lines = [
+            f"\nAvailable methods for this object/class",
+            "=" * (30 + len(cls.__name__)),
+        ]
+        for name, meth in methods:
+            if name == "describe":
+                continue
+            doc = inspect.getdoc(meth)
+            summary = _docstring_summary(doc) if doc else "(sin descripción)"
+            summary = summary.replace("\n", " ").strip()
+            # if len(summary) > 70:
+            #     summary = summary[:67] + "..."
+            lines.append(f"  {name}()")
+            lines.append(f"    {summary}")
+            lines.append("")
+        print("\n".join(lines))
+
 
 
 ###############################################################
@@ -375,3 +554,88 @@ if Conf.FP_VERSION != __version__:
                 initialize("configure", force=True)
     except Exception:
         pass
+
+class FieldsHandler(Fargobj):
+    """Base class for handling fields in FARGOpy.
+    """ 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def get_interpolator(self):
+        # Check if sim is properly loaded
+        if not hasattr(self, 'sim') or self.sim == "<not serializable>" or isinstance(self.sim, str):
+            raise AttributeError(
+                "FieldsHandler.sim is not properly initialized. "
+                "This typically happens when the object was loaded from a JSON file (saved with save_object()). "
+                "FieldsHandler requires the full Simulation object which can only be preserved with pickle. "
+                "Please save with save_object_pkl() instead and reload."
+            )
+        
+        handler = fargopy.FieldInterpolator(self.sim)
+        handler.load_data(
+            fields=self.fields, slice=self.slice, snapshots=self.snapshot, cut=self.cut, coords=self.coords
+        )
+        return handler
+
+    def get_raw_data(self):
+        # Check if sim is properly loaded
+        if not hasattr(self, 'sim') or self.sim == "<not serializable>" or isinstance(self.sim, str):
+            raise AttributeError(
+                "FieldsHandler.sim is not properly initialized. "
+                "This typically happens when the object was loaded from a JSON file (saved with save_object()). "
+                "FieldsHandler requires the full Simulation object which can only be preserved with pickle. "
+                "Please save with save_object_pkl() instead and reload."
+            )
+        
+        if not self.sim.has("vars"):
+            dims, vars, domains = self.sim.load_properties()
+
+        snapshot = 0 if self.snapshot is None else self.snapshot
+        loaded_fields = []
+
+        for field in self.fields:
+            # Infer field type unless provided
+            field_type = self.type
+            if field_type is None:
+                if field in ["gasdens", "gasenergy"]:
+                    field_type = "scalar"
+                elif field == "gasv":
+                    field_type = "vector"
+                else:
+                    raise ValueError(f"Field type for '{field}' could not be inferred.")
+
+            # Load scalar
+            if field_type == "scalar":
+                file_name = f"{field}{snapshot}.dat"
+                file_field = os.path.join(self.sim.output_dir, file_name)
+                data = self.sim._load_field_scalar(file_field)
+
+            # Load vector
+            elif field_type == "vector":
+                data = []
+                components = ["x", "y"] + (["z"] if self.sim.vars.DIM == 3 else [])
+                for comp in components:
+                    file_name = f"{field}{comp}{snapshot}.dat"
+                    file_field = os.path.join(self.sim.output_dir, file_name)
+                    data.append(self.sim._load_field_scalar(file_field))
+                data = np.array(data)
+
+            # Create Field
+            loaded_field = fargopy.Field(
+                data=np.array(data),
+                coordinates=self.sim.vars.COORDINATES,
+                domains=self.sim.domains,
+                type=field_type,
+            )
+
+            # Apply slicing
+            if self.slice:
+                sliced_data, mesh = loaded_field.meshslice(slice=self.slice)
+                loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
+
+            loaded_fields.append(loaded_field)
+
+        result = loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
+        return result

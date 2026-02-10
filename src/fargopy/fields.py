@@ -372,16 +372,14 @@ class Field(fargopy.Fargobj):
 # It provides methods to load data, create meshes, and perform interpolation.
 # It also handles 2D and 3D data loading based on the provided parameters.
 #################################################################
-
-
-class FieldInterpolator:
+class FieldInterpolator(fargopy.Fargobj):
     """Loads and interpolates fields from a FARGO3D simulation.
     
     The ``FieldInterpolator`` facilitates loading, slicing, and interpolating
     simulation data across multiple snapshots and fields. It handles coordinate
     transformations and dimensionality reduction based on slice definitions.
 
-    Attributes
+    Attributesde
     ----------
     sim : Simulation
         The simulation object.
@@ -574,9 +572,18 @@ class FieldInterpolator:
         self.fields = fields
         self.slice = slice
 
-        # Convert snapshot into list
-        if isinstance(snapshots, int):
-            snapshots = [snapshots]
+        # Convert snapshot into list - handle int, numpy types, and iterables
+        if snapshots is None:
+            snapshots = [0]
+        elif isinstance(snapshots, (int, np.integer)):
+            snapshots = [int(snapshots)]
+        elif not isinstance(snapshots, list):
+            # Convert arrays, tuples, etc. to list
+            try:
+                snapshots = list(snapshots)
+            except TypeError:
+                snapshots = [int(snapshots)]
+        
         self.snapshot = snapshots
 
         # Detect dimensionality from the sliced data (if a slice is provided)
@@ -1163,7 +1170,7 @@ class FieldInterpolator:
             return mask
 
     def evaluate(
-            self, time, var1, var2=None, var3=None, dataframe=None,
+            self, var1, snapshot=None, time=None, var2=None, var3=None, dataframe=None,
             interpolator="griddata", method="linear",
             rbf_kwargs=None, griddata_kwargs=None, idw_kwargs=None,
             sigma_smooth=None, field=None, reflect=False
@@ -1202,7 +1209,14 @@ class FieldInterpolator:
         ndarray or float
             Interpolated value(s). Vector fields return shape (3,N) or (3,...).
         """
-
+        # ===============================================================
+        # Time or snap
+        # ===============================================================
+        if time is None:
+            if snapshot is None:
+                raise ValueError("Must provide either 'time' or 'snapshot'.")
+            time = snapshot
+        
         # ===============================================================
         # Basic validation
         # ===============================================================

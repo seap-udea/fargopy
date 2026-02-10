@@ -17,10 +17,9 @@ def test_interpolacion_1d_point(sim):
         fields="gasdens",
         slice="phi=0,theta=1.56",
         snapshot=(1, 2),
-        interpolate=True,
     )
     x = 1.2
-    valor = data.evaluate(1.2, var1=x)
+    valor = data.evaluate(var1=x, snapshot=1.2)
     # If it returns a 0-d array or a scalar, both are acceptable; it must be finite
     assert np.isfinite(valor).all(), "1D interpolation must return a finite value"
 
@@ -30,10 +29,9 @@ def test_interpolacion_1d_array(sim):
         fields="gasdens",
         slice="phi=0,theta=1.56",
         snapshot=(1, 2),
-        interpolate=True,
     )
     x = np.array([1.2, 1.3, 1.4])
-    valor = data.evaluate(1.2, var1=x)
+    valor = data.evaluate(var1=x, snapshot=1.2)
     assert np.asarray(valor).shape == x.shape, (
         "1D interpolation must preserve the input shape"
     )
@@ -47,13 +45,12 @@ def test_interpolacion_2d_point(sim):
         fields="gasdens",
         slice="theta=1.56",
         snapshot=(1, 2),
-        interpolate=True,
     )
     # Conservative point (typically inside the domain)
     x = 1.2
     y = 0.14
     valor = data.evaluate(
-        1.2, var1=x, var2=y, interpolator="griddata", method="nearest"
+        var1=x, var2=y, snapshot=1.2, interpolator="griddata", method="nearest"
     )
     assert np.isscalar(valor) or np.asarray(valor).shape == (), (
         "2D point interpolation must return a scalar/0-d value"
@@ -68,7 +65,6 @@ def test_interpolacion_2d_array(sim):
         fields="gasdens",
         slice="theta=1.56",
         snapshot=(1, 2),
-        interpolate=True,
     )
 
     # Your y=[1.3,1.4,1.5] values are very likely outside the domain -> NaNs (linear) or spurious values.
@@ -78,7 +74,7 @@ def test_interpolacion_2d_array(sim):
     y = np.array([0.05, 0.10, 0.15])
 
     valor = data.evaluate(
-        1.2, var1=x, var2=y, interpolator="griddata", method="nearest"
+        var1=x, var2=y, snapshot=1.2, interpolator="griddata", method="nearest"
     )
     valor = np.asarray(valor)
 
@@ -95,11 +91,10 @@ def test_interpolacion_3d_point(sim):
     data = sim.load_field(
         fields="gasdens",
         snapshot=(1, 2),
-        interpolate=True,
     )
     x, y, z = 1.2, 1.3, 1.4
     valor = data.evaluate(
-        1.2, var1=x, var2=y, var3=z, interpolator="griddata", method="nearest"
+        var1=x, var2=y, var3=z, snapshot=1.2, interpolator="griddata", method="nearest"
     )
     assert np.isscalar(valor) or np.asarray(valor).shape == (), (
         "3D point interpolation must return a scalar/0-d value"
@@ -113,14 +108,13 @@ def test_interpolacion_3d_array(sim):
     data = sim.load_field(
         fields="gasdens",
         snapshot=(1, 2),
-        interpolate=True,
     )
     x = np.array([1.2, 1.3, 1.4])
     y = np.array([1.3, 1.4, 1.5])
     z = np.array([0.024, 0.14, 0.2])
 
     valor = data.evaluate(
-        1.2, var1=x, var2=y, var3=z, interpolator="griddata", method="nearest"
+        var1=x, var2=y, var3=z, snapshot=1.2, interpolator="griddata", method="nearest"
     )
     valor = np.asarray(valor)
 
