@@ -1,0 +1,1 @@
+{"fobject": true, "kwargs": {"sim": "<not serializable>", "fields": ["gasdens"], "slice": "r=[0.8,1.2],phi=[-25 deg,25 deg],theta=1.56", "snapshot": 4, "type": null, "coords": "cartesian", "cut": null}, "sim": "<not serializable>", "fields": ["gasdens"], "slice": "r=[0.8,1.2],phi=[-25 deg,25 deg],theta=1.56", "snapshot": 4, "type": null, "coords": "cartesian", "cut": null}

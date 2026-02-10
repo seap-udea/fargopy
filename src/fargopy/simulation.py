@@ -1403,7 +1403,7 @@ class Simulation(fargopy.Fargobj):
         slice=None,
         snapshot=None,
         type=None,
-        interpolate=None,
+        #interpolate=None,
         coords="cartesian",
         cut=None,
     ):
@@ -1424,68 +1424,20 @@ class Simulation(fargopy.Fargobj):
         #  - interpolate=None  -> treated as True -> return FieldInterpolator
         #  - interpolate=False -> return legacy Field or list of Fields
 
-        if interpolate is None:
-            interpolate = True
+        # if interpolate is None:
+        #     interpolate = True
 
-        # --- INTERPOLATE == True : return FieldInterpolator ---
-        if interpolate is True:
-            handler = fargopy.FieldInterpolator(self)
-            handler.load_data(
-                fields=fields, slice=slice, snapshots=snapshot, cut=cut, coords=coords
-            )
-            return handler
-
-        # --- INTERPOLATE == False : legacy single-field behavior ---
-        if not self.has("vars"):
-            dims, vars, domains = self.load_properties()
-
-        snapshot = 0 if snapshot is None else snapshot
-        loaded_fields = []
-
-        for field in fields:
-            # Infer field type unless provided
-            field_type = type
-            if field_type is None:
-                if field in ["gasdens", "gasenergy"]:
-                    field_type = "scalar"
-                elif field == "gasv":
-                    field_type = "vector"
-                else:
-                    raise ValueError(f"Field type for '{field}' could not be inferred.")
-
-            # Load scalar
-            if field_type == "scalar":
-                file_name = f"{field}{snapshot}.dat"
-                file_field = os.path.join(self.output_dir, file_name)
-                data = self._load_field_scalar(file_field)
-
-            # Load vector
-            elif field_type == "vector":
-                data = []
-                components = ["x", "y"] + (["z"] if self.vars.DIM == 3 else [])
-                for comp in components:
-                    file_name = f"{field}{comp}{snapshot}.dat"
-                    file_field = os.path.join(self.output_dir, file_name)
-                    data.append(self._load_field_scalar(file_field))
-                data = np.array(data)
-
-            # Create Field
-            loaded_field = fargopy.Field(
-                data=np.array(data),
-                coordinates=self.vars.COORDINATES,
-                domains=self.domains,
-                type=field_type,
-            )
-
-            # Apply slicing
-            if slice:
-                sliced_data, mesh = loaded_field.meshslice(slice=slice)
-                loaded_field = fargopy.Dictobj(dict=dict(data=sliced_data, mesh=mesh))
-
-            loaded_fields.append(loaded_field)
-
-        result = loaded_fields if len(loaded_fields) > 1 else loaded_fields[0]
-        return result
+        self.field_handler = fargopy.FieldsHandler(
+            sim=self,
+            fields=fields, 
+            slice=slice, 
+            snapshot=snapshot, 
+            type=type, 
+            coords=coords, 
+            cut=cut
+        )
+        fields = self.field_handler.get_interpolator()
+        return fields
 
     def _load_field_scalar(self, file):
         """
@@ -1548,114 +1500,6 @@ class Simulation(fargopy.Fargobj):
             domains=self.domains,
             type=field_type,
         )
-
-    def load_allfields(self, fluid, snapshot=None, type="scalar"):
-        """
-        Load all fields in the output directory for a given fluid.
-
-        Parameters
-        ----------
-        fluid : str
-            Name of the fluid (e.g., 'gas').
-        snapshot : int, optional
-            Snapshot index to load. If None, loads all snapshots.
-        type : str, optional
-            Field type ('scalar' or 'vector').
-
-        Returns
-        -------
-        fargopy.Dictobj
-            Object containing all loaded fields.
-        """
-        qall = False
-        if snapshot is None:
-            qall = True
-            fields = fargopy.Dictobj()
-        else:
-            fields = fargopy.Dictobj()
-
-        # Search for field files
-        pattern = os.path.join(self.output_dir, f"{fluid}*.dat")
-        import glob
-
-        files_found = sorted(glob.glob(pattern))
-
-        if files_found:
-            size = 0
-            for file_field in files_found:
-                comps = Simulation._parse_file_field(file_field)
-                if comps:
-                    if qall:
-                        # Store all snapshots
-                        field_name = comps[0]
-                        field_snap = int(comps[1])
-
-                        if type == "scalar":
-                            field_data = self._load_field_scalar(file_field)
-                        elif type == "vector":
-                            field_data = []
-                            variables = ["x", "y"]
-                            if self.vars.DIM == 3:
-                                variables += ["z"]
-                            for i, variable in enumerate(variables):
-                                file_name = f"{fluid}{variable}{str(field_snap)}.dat"
-                                file_field = os.path.join(self.output_dir, file_name)
-                                field_data += [self._load_field_scalar(file_field)]
-                            field_data = np.array(field_data)
-                            field_name = field_name[:-1]
-
-                        if str(field_snap) not in fields.keys():
-                            fields.__dict__[str(field_snap)] = fargopy.Dictobj()
-                        size += field_data.nbytes
-                        (fields.__dict__[str(field_snap)]).__dict__[f"{field_name}"] = (
-                            fargopy.Field(
-                                data=field_data,
-                                coordinates=self.vars.COORDINATES,
-                                domains=self.domains,
-                                type=type,
-                            )
-                        )
-
-                    else:
-                        # Store a specific snapshot
-                        if int(comps[1]) == snapshot:
-                            field_name = comps[0]
-
-                            if type == "scalar":
-                                field_data = self._load_field_scalar(file_field)
-                            elif type == "vector":
-                                field_data = []
-                                variables = ["x", "y"]
-                                if self.vars.DIM == 3:
-                                    variables += ["z"]
-                                for i, variable in enumerate(variables):
-                                    file_name = (
-                                        f"{fluid}{variable}{str(field_snap)}.dat"
-                                    )
-                                    file_field = os.path.join(
-                                        self.output_dir, file_name
-                                    )
-                                    field_data += [self._load_field_scalar(file_field)]
-                                field_data = np.array(field_data)
-                                field_name = field_name[:-1]
-
-                            size += field_data.nbytes
-                            fields.__dict__[f"{field_name}"] = fargopy.Field(
-                                data=field_data,
-                                coordinates=self.vars.COORDINATES,
-                                domains=self.domains,
-                                type=type,
-                            )
-
-        else:
-            raise ValueError(
-                f"No field found with pattern '{pattern}'. Change the fluid"
-            )
-
-        if qall:
-            fields.snapshots = sorted([int(s) for s in fields.keys() if s != "size"])
-        fields.size = size / 1024**2
-        return fields
 
     @staticmethod
     def _parse_file_field(file_field):

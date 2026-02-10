@@ -784,10 +784,9 @@ class Surface:
         # ----------------------------
         # Load grid info once
         # ----------------------------
-        gas0 = sim.load_field(field, snapshot=times[0], interpolate=False)
-        r_arr  = gas0.domains.r
-        th_arr = gas0.domains.theta
-        ph_arr = gas0.domains.phi
+        r_arr  = sim.domains.r
+        th_arr = sim.domains.theta
+        ph_arr = sim.domains.phi
 
         TH, RR, PH = np.meshgrid(th_arr, r_arr, ph_arr, indexing='ij')
 
@@ -864,12 +863,12 @@ class Surface:
             # ---------------------------------------
             # Load density for this snapshot
             # ---------------------------------------
-            rho = sim.load_field(field, snapshot=t, interpolate=False).data
-
+            rho = sim.load_field(field, snapshot=t).gasdens_mesh[0]
+            
             # Enclosed mass
             M = np.sum(rho[mask] * dV[mask])
             masses.append(M)
-
+            
             # Resolution info
             if return_resolution:
                 idx_th, idx_r, idx_ph = np.where(mask)
