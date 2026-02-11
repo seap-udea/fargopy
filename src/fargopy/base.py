@@ -23,7 +23,7 @@ import numpy as np
 import inspect
 
 # Version
-__version__ = '1.0.9'
+__version__ = "1.1.0"
 
 __all__ = [
     "__version__",
@@ -38,6 +38,7 @@ __all__ = [
     "IN_COLAB",
     "_welcome",
 ]
+
 
 def _docstring_summary(doc):
     """
@@ -87,6 +88,7 @@ def _docstring_summary(doc):
             break
         summary_lines.append(stripped)
     return " ".join(summary_lines).strip() if summary_lines else ""
+
 
 ###############################################################
 # Constants
@@ -207,14 +209,14 @@ class Fargobj(object):
 
     def save_object_pkl(self, filename=None, verbose=False):
         """Save Fargobj into a pickle file (.pkl)
-        
+
         Parameters
         ----------
         filename : str, optional
             Path to save the pickle file. If None, creates a temporary file.
         verbose : bool, optional
             If True, print saving message. Default is False.
-            
+
         Examples
         --------
         >>> obj.save_object_pkl('myobject.pkl')
@@ -225,34 +227,34 @@ class Fargobj(object):
             filename = f"/tmp/fargobj_{object_hash}.pkl"
         if verbose:
             print(f"Saving object to {filename}...")
-        with open(filename, 'wb') as file_object:
+        with open(filename, "wb") as file_object:
             pickle.dump(self, file_object)
         return filename
 
     @classmethod
     def read_object(cls, filename, verbose=False):
         """Read a Fargobj from a pickle (.pkl) or JSON file
-        
+
         This method automatically detects the file format and loads accordingly.
         It first tries to load as pickle, and if that fails, tries JSON format.
-        
+
         Parameters
         ----------
         filename : str
             Path to the file to load (.pkl or .json)
         verbose : bool, optional
             If True, print loading message. Default is False.
-            
+
         Returns
         -------
         object
             The loaded Fargobj or its subclass instance
-            
+
         Examples
         --------
         >>> obj = fargopy.Fargobj.read_object('myobject.pkl')
         >>> sim = fargopy.Simulation.read_object('simulation.pkl')
-        
+
         Notes
         -----
         JSON files saved with save_object() can be loaded, but they will only
@@ -261,10 +263,10 @@ class Fargobj(object):
         """
         if verbose:
             print(f"Loading object from {filename}...")
-        
+
         # Try pickle format first
         try:
-            with open(filename, 'rb') as file_object:
+            with open(filename, "rb") as file_object:
                 obj = pickle.load(file_object)
             return obj
         except (pickle.UnpicklingError, UnicodeDecodeError):
@@ -272,23 +274,31 @@ class Fargobj(object):
             if verbose:
                 print("Pickle format failed, trying JSON format...")
             try:
-                with open(filename, 'r') as file_object:
+                with open(filename, "r") as file_object:
                     data = json.load(file_object)
                 # Create instance without calling __init__ to avoid constructor issues
                 obj = object.__new__(cls)
                 # Restore all attributes from JSON data
                 obj.__dict__.update(data)
-                
+
                 # Check if object has corrupted serialization markers
                 for key, value in obj.__dict__.items():
                     if value == "<not serializable>":
-                        print(f"WARNING: Attribute '{key}' was not properly serialized.")
-                        print(f"This object was saved with save_object() which uses JSON and cannot")
-                        print(f"serialize complex objects. Use save_object_pkl() instead for full serialization.")
-                
+                        print(
+                            f"WARNING: Attribute '{key}' was not properly serialized."
+                        )
+                        print(
+                            f"This object was saved with save_object() which uses JSON and cannot"
+                        )
+                        print(
+                            f"serialize complex objects. Use save_object_pkl() instead for full serialization."
+                        )
+
                 return obj
             except json.JSONDecodeError as e:
-                raise ValueError(f"File '{filename}' is neither a valid pickle nor JSON file: {e}")
+                raise ValueError(
+                    f"File '{filename}' is neither a valid pickle nor JSON file: {e}"
+                )
 
     def set_property(self, property, default, method=lambda prop: prop):
         """Set a property of object using a given method"""
@@ -307,7 +317,7 @@ class Fargobj(object):
             return True
         else:
             return False
-        
+
     @classmethod
     def methods(cls):
         """
@@ -343,7 +353,6 @@ class Fargobj(object):
             lines.append(f"    {summary}")
             lines.append("")
         print("\n".join(lines))
-
 
 
 ###############################################################
@@ -503,7 +512,9 @@ def initialize(options="", force=False, **kwargs):
 # Showing version
 def _welcome():
     """Welcome message"""
-    print(f"Running FARGOpy version {__version__}")
+    print(
+        f"Running FARGOpy version {__version__}. A major refactor has been done in versions 1.1.X. Please check the documentation for more information."
+    )
 
 
 ###############################################################
@@ -555,9 +566,10 @@ if Conf.FP_VERSION != __version__:
     except Exception:
         pass
 
+
 class FieldsHandler(Fargobj):
-    """Base class for handling fields in FARGOpy.
-    """ 
+    """Base class for handling fields in FARGOpy."""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         for key, value in kwargs.items():
@@ -565,30 +577,42 @@ class FieldsHandler(Fargobj):
 
     def get_interpolator(self):
         # Check if sim is properly loaded
-        if not hasattr(self, 'sim') or self.sim == "<not serializable>" or isinstance(self.sim, str):
+        if (
+            not hasattr(self, "sim")
+            or self.sim == "<not serializable>"
+            or isinstance(self.sim, str)
+        ):
             raise AttributeError(
                 "FieldsHandler.sim is not properly initialized. "
                 "This typically happens when the object was loaded from a JSON file (saved with save_object()). "
                 "FieldsHandler requires the full Simulation object which can only be preserved with pickle. "
                 "Please save with save_object_pkl() instead and reload."
             )
-        
+
         handler = fargopy.FieldInterpolator(self.sim)
         handler.load_data(
-            fields=self.fields, slice=self.slice, snapshots=self.snapshot, cut=self.cut, coords=self.coords
+            fields=self.fields,
+            slice=self.slice,
+            snapshots=self.snapshot,
+            cut=self.cut,
+            coords=self.coords,
         )
         return handler
 
     def get_raw_data(self):
         # Check if sim is properly loaded
-        if not hasattr(self, 'sim') or self.sim == "<not serializable>" or isinstance(self.sim, str):
+        if (
+            not hasattr(self, "sim")
+            or self.sim == "<not serializable>"
+            or isinstance(self.sim, str)
+        ):
             raise AttributeError(
                 "FieldsHandler.sim is not properly initialized. "
                 "This typically happens when the object was loaded from a JSON file (saved with save_object()). "
                 "FieldsHandler requires the full Simulation object which can only be preserved with pickle. "
                 "Please save with save_object_pkl() instead and reload."
             )
-        
+
         if not self.sim.has("vars"):
             dims, vars, domains = self.sim.load_properties()
 

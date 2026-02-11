@@ -49,7 +49,7 @@ A complete list of resources and further information about the package and the s
 
 ## Authors and Licensing
 
-This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valdivia, Chile. The main developers are:
+This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valparaíso, Chile. The main developers are:
 
 - **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
 - **Alejandro Murillo-González** (SEAP/FACom/UdeA) - alejandro.murillo1@udea.edu.co
