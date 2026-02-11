@@ -261,18 +261,41 @@ class Plot(object):
             vel_comp = vel_dropdown.value
 
             # --- Ejes y nombres de malla ---
-            if is_fixed("theta", slice_str):
-                xlabel, ylabel = "X", "Y"
-                mesh_x_name = "var1_mesh"
-                mesh_y_name = "var2_mesh"
-            elif is_fixed("phi", slice_str):
-                xlabel, ylabel = "X", "Z"
-                mesh_x_name = "var1_mesh"
-                mesh_y_name = "var3_mesh"
+            # Detect coordinate system
+            coords = sim.vars.COORDINATES if hasattr(sim, 'vars') else 'spherical'
+            
+            if coords == 'spherical':
+                # Spherical coordinate logic
+                if is_fixed("theta", slice_str):
+                    xlabel, ylabel = "X", "Y"
+                    mesh_x_name = "var1_mesh"
+                    mesh_y_name = "var2_mesh"
+                elif is_fixed("phi", slice_str):
+                    xlabel, ylabel = "X", "Z"
+                    mesh_x_name = "var1_mesh"
+                    mesh_y_name = "var3_mesh"
+                else:
+                    print(
+                        "Warning: Please fix either theta or phi for a valid 2D slice (XY or XZ plane)."
+                    )
+                    return
+            elif coords == 'cylindrical':
+                # Cylindrical coordinate logic
+                if is_fixed("z", slice_str):
+                    xlabel, ylabel = "X", "Y"
+                    mesh_x_name = "var1_mesh"
+                    mesh_y_name = "var2_mesh"
+                elif is_fixed("phi", slice_str):
+                    xlabel, ylabel = "R", "Z"
+                    mesh_x_name = "var1_mesh"
+                    mesh_y_name = "var3_mesh"
+                else:
+                    print(
+                        "Warning: Please fix either z or phi for a valid 2D slice (XY or RZ plane)."
+                    )
+                    return
             else:
-                print(
-                    "Warning: Please fix either theta or phi for a valid 2D slice (XY or XZ plane)."
-                )
+                print(f"Warning: Unsupported coordinate system: {coords}")
                 return
 
             n = time_slider.value

@@ -595,6 +595,13 @@ class Surface:
         >>> mdot = surface.mass_flux(sim, field_density='gasdens', field_velocity='gasv', follow_planet=True)
         >>> plt.plot(mdot)
         """
+        
+        # Check if simulation is 3D (required for flux calculations)
+        if hasattr(sim, 'vars') and sim.vars.DIM == 2:
+            raise ValueError(
+                "mass_flux() requires a 3D simulation. "
+                "Your simulation is 2D. Flux calculations through 3D surfaces cannot be performed in 2D domains."
+            )
 
         steps = snapshot[1] - snapshot[0] + 1
         times = np.linspace(snapshot[0], snapshot[1], steps)
@@ -731,9 +738,10 @@ class Surface:
         """Compute enclosed mass by direct grid integration.
 
         The method integrates the requested density field on the simulation
-        spherical-polar grid accounting for the region geometry defined by
-        this Surface instance. ``self.type`` must be either ``'sphere'`` or
-        ``'cylinder'``; the integration mask is constructed accordingly.
+        grid accounting for the region geometry defined by this Surface instance.
+        Supports both spherical and cylindrical coordinate systems.
+        ``self.type`` must be either ``'sphere'`` or ``'cylinder'``; the 
+        integration mask is constructed accordingly.
 
         Parameters
         ----------
@@ -782,34 +790,69 @@ class Surface:
         resolutions = []
 
         # ----------------------------
-        # Load grid info once
+        # Detect coordinate system from simulation
         # ----------------------------
-        r_arr  = sim.domains.r
-        th_arr = sim.domains.theta
+        coords = sim.vars.COORDINATES if hasattr(sim, 'vars') else 'spherical'
+        
+        # Check if simulation is 3D (required for volume integration)
+        if hasattr(sim, 'vars') and sim.vars.DIM == 2:
+            raise ValueError(
+                "total_mass() requires a 3D simulation. "
+                "Your simulation is 2D. Volume integration cannot be performed in 2D domains."
+            )
+
+        # ----------------------------
+        # Load grid info based on coordinate system
+        # ----------------------------
+        r_arr = sim.domains.r
         ph_arr = sim.domains.phi
-
-        TH, RR, PH = np.meshgrid(th_arr, r_arr, ph_arr, indexing='ij')
-
-        X = RR * np.sin(TH) * np.cos(PH)
-        Y = RR * np.sin(TH) * np.sin(PH)
-        Z = RR * np.cos(TH)
-
-        # ----------------------------------------
-        # Precompute cell volumes (FARGO3D metric)
-        # ----------------------------------------
-        dr  = np.diff(r_arr)
-        dth = np.diff(th_arr)
-        dph = np.diff(ph_arr)
-
-        dr_full  = np.empty_like(r_arr);     dr_full[:-1]  = dr;  dr_full[-1]  = dr[-1]
-        dth_full = np.empty_like(th_arr);    dth_full[:-1] = dth; dth_full[-1] = dth[-1]
-        dph_full = np.empty_like(ph_arr);    dph_full[:-1] = dph; dph_full[-1] = dph[-1]
-
-        DR  = dr_full[np.newaxis, :, np.newaxis]
-        DTH = dth_full[:, np.newaxis, np.newaxis]
-        DPH = dph_full[np.newaxis, np.newaxis, :]
-
-        dV = (RR**2) * np.sin(TH) * DR * DTH * DPH
+        
+        if coords == 'spherical':
+            th_arr = sim.domains.theta
+            TH, RR, PH = np.meshgrid(th_arr, r_arr, ph_arr, indexing='ij')
+            X = RR * np.sin(TH) * np.cos(PH)
+            Y = RR * np.sin(TH) * np.sin(PH)
+            Z = RR * np.cos(TH)
+            
+            # Precompute cell volumes (spherical metric)
+            dr = np.diff(r_arr)
+            dth = np.diff(th_arr)
+            dph = np.diff(ph_arr)
+            
+            dr_full = np.empty_like(r_arr); dr_full[:-1] = dr; dr_full[-1] = dr[-1]
+            dth_full = np.empty_like(th_arr); dth_full[:-1] = dth; dth_full[-1] = dth[-1]
+            dph_full = np.empty_like(ph_arr); dph_full[:-1] = dph; dph_full[-1] = dph[-1]
+            
+            DR = dr_full[np.newaxis, :, np.newaxis]
+            DTH = dth_full[:, np.newaxis, np.newaxis]
+            DPH = dph_full[np.newaxis, np.newaxis, :]
+            
+            dV = (RR**2) * np.sin(TH) * DR * DTH * DPH
+            
+        elif coords == 'cylindrical':
+            z_arr = sim.domains.z
+            ZZ, RR, PH = np.meshgrid(z_arr, r_arr, ph_arr, indexing='ij')
+            X = RR * np.cos(PH)
+            Y = RR * np.sin(PH)
+            Z = ZZ
+            
+            # Precompute cell volumes (cylindrical metric)
+            dr = np.diff(r_arr)
+            dz = np.diff(z_arr)
+            dph = np.diff(ph_arr)
+            
+            dr_full = np.empty_like(r_arr); dr_full[:-1] = dr; dr_full[-1] = dr[-1]
+            dz_full = np.empty_like(z_arr); dz_full[:-1] = dz; dz_full[-1] = dz[-1]
+            dph_full = np.empty_like(ph_arr); dph_full[:-1] = dph; dph_full[-1] = dph[-1]
+            
+            DR = dr_full[np.newaxis, :, np.newaxis]
+            DZ = dz_full[:, np.newaxis, np.newaxis]
+            DPH = dph_full[np.newaxis, np.newaxis, :]
+            
+            dV = RR * DR * DZ * DPH
+        
+        else:
+            raise ValueError(f"Unsupported coordinate system: {coords}")
 
         # ----------------------------------------
         # Detect geometry
@@ -871,7 +914,9 @@ class Surface:
             
             # Resolution info
             if return_resolution:
-                idx_th, idx_r, idx_ph = np.where(mask)
+                idx_dim1, idx_r, idx_ph = np.where(mask)
+                
+                dim1_name = 'N_theta' if coords == 'spherical' else 'N_z'
 
                 resolutions.append({
                     "snapshot": t,
@@ -879,7 +924,7 @@ class Surface:
                     "geometry": geom,
                     "R_extent": Rlim,
                     "H_extent": Hlim,
-                    "N_theta": len(np.unique(idx_th)),
+                    dim1_name: len(np.unique(idx_dim1)),
                     "N_r":     len(np.unique(idx_r)),
                     "N_phi":   len(np.unique(idx_ph)),
                     "N_total": mask.sum()

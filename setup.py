@@ -64,6 +64,7 @@ setuptools.setup(
         "pandas",
         "plotly",
         "pytest",
+        "nbformat>=4.2.0",
     ],
     python_requires=">=3.7",
     # ######################################################################
