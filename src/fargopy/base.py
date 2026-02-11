@@ -23,7 +23,7 @@ import numpy as np
 import inspect
 
 # Version
-__version__ = '1.1.1'
+__version__ = "1.1.1"
 
 __all__ = [
     "__version__",
@@ -513,7 +513,9 @@ def initialize(options="", force=False, **kwargs):
 def _welcome():
     """Welcome message"""
     print(
-        f"Running FARGOpy version {__version__}. A major refactor has been done in versions 1.1.X. Please check the documentation for more information."
+        f"Running FARGOpy version {__version__}.\n"
+        "NOTE: Since alpha versions (<=0.X.X) a major refactor has been done in versions 1.1.X.\n"
+        "Please check the documentation for more information."
     )
 
 

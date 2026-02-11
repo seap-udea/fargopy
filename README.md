@@ -163,63 +163,66 @@ Import the package:
 import fargopy as fp
 ```
 
-    Running FARGOpy version X.Y.Z
+    Configuring FARGOpy for the first time
+    Running FARGOpy version X.Y.Z.
+    NOTE: Since alpha versions (<=0.X.X) a major refactor has been done in versions 1.1.X.
+    Please check the documentation for more information.
 
 ### Density map
 
 Download a precomputed simulation to test the package:
 
 ```python
-fp.Simulation.download_precomputed('p3disoj')
+fp.Simulation.download_precomputed('fargo')
 ```
 
-    Downloading p3disoj.tgz from cloud (compressed size around 84 MB) into /tmp
+    Downloading fargo.tgz from cloud (compressed size around 55 MB) into /tmp
 
     Downloading...
-    From: https://docs.google.com/uc?export=download&id=1Xzgk9qatZPNX8mLmB58R9NIi_YQUrHz9
-    To: /tmp/p3disoj.tgz
-    100%|██████████| 84.2M/84.2M [00:03<00:00, 26.2MB/s]
+    From: https://docs.google.com/uc?export=download&id=1YXLKlf9fCGHgLej2fSOHgStD05uFB2C3
+    To: /tmp/fargo.tgz
+    100%|██████████| 54.7M/54.7M [00:01<00:00, 53.6MB/s]
 
-    Uncompressing p3disoj.tgz into /tmp/p3disoj
+    Uncompressing fargo.tgz into /tmp/fargo
     Done.
 
-    '/tmp/p3disoj'
+    '/tmp/fargo'
 
 Connect to the simulation output directory:
 
 ```python
-sim = fp.Simulation(output_dir='/tmp/p3disoj')
+sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
     Your simulation is now connected with '/local_directory/fargo3d/'
-    Now you are connected with output directory '/tmp/p3disoj'
-    Found a variables.par file in '/tmp/p3disoj', loading properties
+    Now you are connected with output directory '/tmp/fargo'
+    Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
-    85 variables loaded
-    Simulation in 3 dimensions
-    Loading domain in spherical coordinates:
-    	Variable phi: 128 [[0, np.float64(-3.117048960983623)], [-1, np.float64(3.117048960983623)]]
-    	Variable r: 64 [[0, np.float64(0.5078125)], [-1, np.float64(1.4921875)]]
-    	Variable theta: 32 [[0, np.float64(1.4231400767948967)], [-1, np.float64(1.5684525767948965)]]
-    Number of snapshots in output directory: 11
-    Planets found in summary.dat:
+    84 variables loaded
+    Simulation in 2 dimensions
+    Loading domain in cylindrical coordinates:
+    	Variable phi: 384 [[0, np.float64(-3.1334114227210694)], [-1, np.float64(3.1334114227210694)]]
+    	Variable r: 128 [[0, np.float64(0.408203125)], [-1, np.float64(2.491796875)]]
+    	Variable z: 1 [[0, np.float64(0.0)], [-1, np.float64(0.0)]]
+    Number of snapshots in output directory: 51
+    Planets found in summary.dat
       Name: Jupiter, Initial pos: [1.0, 0.001, 0.0], Mass: 0.001
 
 Load a field (e.g., gas density) from a specific snapshot:
 
 ```python
-fields_spherical = sim.load_field(
+fields_cyl = sim.load_field(
     fields='gasdens',
     snapshot=[1, sim.nsnaps-1],
-    coords='spherical',
-    slice='theta=1.56'
+    coords='cyllindrical',
+    slice='z=0'
 )
 
 fields_cartesian = sim.load_field(
     fields='gasdens',
     snapshot=[1, sim.nsnaps-1],
     coords='cartesian',
-    slice='theta=1.56'
+    slice='z=0'
 )
 ```
 
@@ -228,8 +231,8 @@ Load the coordinate and field meshes:
 ```python
 snapshot = 5
 
-phi = fields_spherical.var1_mesh[snapshot]
-r = fields_spherical.var2_mesh[snapshot]
+phi = fields_cyl.var1_mesh[snapshot]
+r = fields_cyl.var2_mesh[snapshot]
 
 x = fields_cartesian.var1_mesh[snapshot]
 y = fields_cartesian.var2_mesh[snapshot]
@@ -243,7 +246,7 @@ Plot the fields of the FARGO simulation using a `colormesh` plot:
 import matplotlib.pyplot as plt
 plt.close('all')
 fig,axs = plt.subplots(1,2,figsize=(12,6))
-cmap = 'turbo'
+cmap = 'prism_r'
 
 ax = axs[0]
 ax.pcolormesh(phi*fp.RAD,r*sim.UL/fp.AU,gasdens_plane*sim.USIGMA,cmap=cmap)
@@ -259,10 +262,10 @@ fp.Plot.fargopy_mark(ax, frac=1/4)
 
 axc = fig.colorbar(c)
 axc.set_label("$\Sigma$ [g/cm$^2$]")
-plt.savefig('gallery/readme-gasdens.png')
+plt.savefig('gallery/fargopy-tutorial-animations_0.png') # Save figure
 ```
 
-<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/readme-gasdens.png" alt="png">
+<img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/fargopy-tutorial-animations_0.png" alt="png">
 
 ### Streamlines
 
@@ -275,7 +278,15 @@ fp.Simulation.download_precomputed('p3disoj')
 sim = fp.Simulation(output_dir='/tmp/p3disoj')
 ```
 
-    Precomputed output directory '/tmp/p3disoj' already exist
+    Downloading p3disoj.tgz from cloud (compressed size around 84 MB) into /tmp
+
+    Downloading...
+    From: https://docs.google.com/uc?export=download&id=1Xzgk9qatZPNX8mLmB58R9NIi_YQUrHz9
+    To: /tmp/p3disoj.tgz
+    100%|██████████| 84.2M/84.2M [00:02<00:00, 33.3MB/s]
+
+    Uncompressing p3disoj.tgz into /tmp/p3disoj
+    Done.
     Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
@@ -287,7 +298,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
     	Variable r: 64 [[0, np.float64(0.5078125)], [-1, np.float64(1.4921875)]]
     	Variable theta: 32 [[0, np.float64(1.4231400767948967)], [-1, np.float64(1.5684525767948965)]]
     Number of snapshots in output directory: 11
-    Planets found in summary.dat:
+    Planets found in summary.dat
       Name: Jupiter, Initial pos: [1.0, 0.001, 0.0], Mass: 0.001
 
 First load the density and velocity fields at snapshot 6:
@@ -380,7 +391,7 @@ Now we define the surface over which you want to compute the fluxes:
 sphere = fp.Surface(
     type='sphere',
     radius=r_hill,
-    subdivisions=6,
+    subdivisions=3,
 )
 ```
 
@@ -390,7 +401,7 @@ The computation is performed with `follow_planet=True`, ensuring that the integr
 acc_rate = sphere.mass_flux(sim=sim, snapshot=[0,snap], follow_planet=True) 
 ```
 
-    Calculating mass flux: 100%|██████████| 11/11 [00:37<00:00,  3.42s/it]
+    Calculating mass flux: 100%|██████████| 11/11 [00:02<00:00,  3.96it/s]
 
 And we can plot it:
 
