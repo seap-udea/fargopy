@@ -19,6 +19,7 @@ setuptools.setup(
     # ######################################################################
     # CLASSIFIER
     # ######################################################################
+    # For Development status see: https://martin-thoma.com/software-development-stages/
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
@@ -27,7 +28,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Astronomy",
         "Topic :: Scientific/Engineering :: Physics",
     ],
-    version='1.1.0',
+    version="1.1.1",
     # ######################################################################
     # FILES
     # ######################################################################
