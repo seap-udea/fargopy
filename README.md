@@ -47,6 +47,10 @@ A complete list of resources and further information about the package and the s
 - **Documentation**: [https://fargopy.readthedocs.io](https://fargopy.readthedocs.io)
 - **PyPI Page**: [https://pypi.org/project/fargopy/](https://pypi.org/project/fargopy/)
 
+## Code of Conduct
+
+FARGOpy follows the [Astropy Code of Conduct](https://www.astropy.org/about.html#codeofconduct) and strives to provide a welcoming community to all of its users and developers.
+
 ## Authors and Licensing
 
 This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Medellín, Colombia and the the **Department of Physics** of the Universidad Técnica Federico Santa María, Valparaíso, Chile. The main developers are:
@@ -164,7 +168,7 @@ import fargopy as fp
 ```
 
     Configuring FARGOpy for the first time
-    Running FARGOpy version X.Y.Z.
+    Running FARGOpy version 1.1.1.
     NOTE: Since alpha versions (<=0.X.X) a major refactor has been done in versions 1.1.X.
     Please check the documentation for more information.
 
@@ -194,7 +198,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -287,7 +291,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 
     Uncompressing p3disoj.tgz into /tmp/p3disoj
     Done.
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -479,4 +483,9 @@ If you use `FARGOpy` in your research, please cite:
   url = {https://github.com/seap-udea/fargopy}
 }
 ``` -->
+
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
+
+Jorge I. Zuluaga, Alejandro Murillo-González and Matías Montesinos © 2023-present
 
