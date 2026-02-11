@@ -96,6 +96,7 @@ push:
 	@git push -u origin HEAD
 
 # Example: make release RELMODE=release VERSION=0.2.0.2
+# Preferred command: make readme docs release push VERSION=1.1.0 COMMIT_MSG="[REL] New version released"
 release: clean readme push
 	@test -n "$(VERSION)" || (echo "ERROR: VERSION is required. Example: make release RELMODE=release VERSION=0.2.0" && exit 1)
 	@echo "Releasing a new version..."
