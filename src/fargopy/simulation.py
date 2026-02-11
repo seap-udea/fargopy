@@ -1186,12 +1186,13 @@ class Simulation(fargopy.Fargobj):
         if self.output_dir is None:
             msg = f"You have to set first the outputs directory with <sim>.set_outputs('<directory>')"
             print(msg)
-            return msg
+            return None
 
         # Read variables
         vars = self._load_variables(varfile)
         if not vars:
-            return "No variables found."
+            print("No variables found.")
+            return None
         info.append(f"Simulation in {vars.DIM} dimensions")
         print(f"Simulation in {vars.DIM} dimensions")
 
@@ -1215,18 +1216,18 @@ class Simulation(fargopy.Fargobj):
         # Read planets from summary.dat using load_planet_states
         self.planets = self.load_planets(snapshot=0, summaryfile=summaryfile)
         if self.planets:
-            info.append("Planets found in summary.dat:")
-            print("Planets found in summary.dat:")
+            info.append("Planets found in summary.dat")
+            print("Planets found in summary.dat")
             for planet in self.planets:
                 planet_info = f"  Name: {planet.name}, Initial pos: {planet.posi}, Mass: {planet.mass}"
                 info.append(planet_info)
                 print(planet_info)
         else:
-            info.append("No planet data found in summary.dat.")
-            print("No planet data found in summary.dat.")
+            info.append("No planet data found in summary.dat")
+            print("No planet data found in summary.dat")
 
-        # Devuelve el string para mostrar en el cuadro de diálogo
-        return "\n".join(info)
+        # No devolver string para evitar mostrar \n literales en notebooks
+        return None
 
     def _get_nsnaps(self):
         """
@@ -1790,6 +1791,7 @@ class Simulation(fargopy.Fargobj):
         """
         Export a snapshot to a VTU (UnstructuredGrid) file with physical XYZ coordinates
         and point data arrays for density and Cartesian velocity.
+        Supports both spherical and cylindrical coordinate systems.
 
         Parameters
         ----------
@@ -1806,9 +1808,9 @@ class Simulation(fargopy.Fargobj):
         - Requires the 'vtk' Python package (and vtk.util.numpy_support).
         - Expects self.load_field('gasdens') and self.load_field('gasv') to return
           fargopy.Field-like objects where .data is a numpy array with shapes:
-            rho: (nt, nr, nphi)
-            vel: either (3, nt, nr, nphi) or (nt, nr, nphi, 3)
-        - Domains expected in self.domains as theta, r, phi arrays.
+            For spherical: rho: (ntheta, nr, nphi), vel: (3, ntheta, nr, nphi) or (ntheta, nr, nphi, 3)
+            For cylindrical: rho: (nz, nr, nphi), vel: (3, nz, nr, nphi) or (nz, nr, nphi, 3)
+        - Domains expected in self.domains as theta/z, r, phi arrays.
         - Output is a single .vtu unstructured grid with VTK_VOXEL cells and point data arrays:
             - "rho" (scalar)
             - "vel_cart" (3-component vector)
@@ -1823,6 +1825,13 @@ class Simulation(fargopy.Fargobj):
             raise RuntimeError(
                 "VTK is required for to_paraview. Install the 'vtk' package."
             ) from e
+        
+        # Check if simulation is 3D (required for VTU export)
+        if hasattr(self, 'vars') and self.vars.DIM == 2:
+            raise ValueError(
+                "to_paraview() requires a 3D simulation. "
+                "Your simulation is 2D. VTU export is only available for 3D domains."
+            )
 
         # prepare output path
         os.makedirs(dir, exist_ok=True)
@@ -1848,74 +1857,114 @@ class Simulation(fargopy.Fargobj):
             rho = rho[0]
         if rho.ndim != 3:
             raise ValueError(
-                f"Unexpected rho shape: {rho.shape}. Expected (nt,nr,nphi)."
+                f"Unexpected rho shape: {rho.shape}. Expected (n1,nr,nphi) where n1 is ntheta or nz."
             )
 
-        # velocity can be (3,nt,nr,nphi) or (nt,nr,nphi,3)
+        # velocity can be (3,n1,nr,nphi) or (n1,nr,nphi,3)
         if vel.ndim == 4 and vel.shape[0] == 3:
             vel_components = vel
         elif vel.ndim == 4 and vel.shape[-1] == 3:
             vel_components = np.moveaxis(vel, -1, 0)
         else:
             raise ValueError(
-                f"Unexpected vel shape: {vel.shape}. Expected (3,nt,nr,nphi) or (nt,nr,nphi,3)."
+                f"Unexpected vel shape: {vel.shape}. Expected (3,n1,nr,nphi) or (n1,nr,nphi,3)."
             )
 
-        # Get spherical coordinate grids from self.domains
-        try:
-            theta = self.domains.theta
-            r = self.domains.r * self.UL / self.AU
-            phi = self.domains.phi
-        except Exception:
-            # If domain attribute names differ, try common alternatives
+        # Detect coordinate system
+        coords = self.vars.COORDINATES if hasattr(self, 'vars') else 'spherical'
+        
+        # Get coordinate grids from self.domains
+        r = self.domains.r * self.UL / self.AU
+        phi = self.domains.phi
+        
+        if coords == 'spherical':
+            # Spherical coordinates
             try:
                 theta = self.domains.theta
-                r = self.domains.r * self.UL / self.AU
-                phi = self.domains.phi
             except Exception as e:
                 raise RuntimeError(
-                    "Could not find theta, r, phi in self.domains"
+                    "Could not find theta in self.domains for spherical coordinates"
                 ) from e
 
-        # Create meshgrid (vectorized)
-        TT, RR, PP = np.meshgrid(theta, r, phi, indexing="ij")  # shape (nt,nr,nphi)
+            # Create meshgrid (vectorized)
+            TT, RR, PP = np.meshgrid(theta, r, phi, indexing="ij")  # shape (ntheta,nr,nphi)
 
-        # Coordinates in Cartesian
-        X = (RR * np.sin(TT) * np.cos(PP)).ravel(order="C").astype(np.float64)
-        Y = (RR * np.sin(TT) * np.sin(PP)).ravel(order="C").astype(np.float64)
-        Z = (RR * np.cos(TT)).ravel(order="C").astype(np.float64)
-        pts = np.column_stack([X, Y, Z])
+            # Coordinates in Cartesian
+            X = (RR * np.sin(TT) * np.cos(PP)).ravel(order="C").astype(np.float64)
+            Y = (RR * np.sin(TT) * np.sin(PP)).ravel(order="C").astype(np.float64)
+            Z = (RR * np.cos(TT)).ravel(order="C").astype(np.float64)
+            pts = np.column_stack([X, Y, Z])
 
-        # Cartesian velocity components (vectorized)
-        v_theta = vel_components[0]
-        v_r = vel_components[1]
-        v_phi = vel_components[2]
+            # Cartesian velocity components (vectorized)
+            v_phi = vel_components[0]
+            v_r = vel_components[1]
+            v_theta = vel_components[2]
 
-        v_x = (
-            (
-                v_r * np.sin(TT) * np.cos(PP)
-                + v_theta * np.cos(TT) * np.cos(PP)
-                - v_phi * np.sin(PP)
+            v_x = (
+                (
+                    v_r * np.sin(TT) * np.cos(PP)
+                    + v_theta * np.cos(TT) * np.cos(PP)
+                    - v_phi * np.sin(PP)
+                )
+                .ravel(order="C")
+                .astype(np.float64)
             )
-            .ravel(order="C")
-            .astype(np.float64)
-        )
 
-        v_y = (
-            (
-                v_r * np.sin(TT) * np.sin(PP)
-                + v_theta * np.cos(TT) * np.sin(PP)
-                + v_phi * np.cos(PP)
+            v_y = (
+                (
+                    v_r * np.sin(TT) * np.sin(PP)
+                    + v_theta * np.cos(TT) * np.sin(PP)
+                    + v_phi * np.cos(PP)
+                )
+                .ravel(order="C")
+                .astype(np.float64)
             )
-            .ravel(order="C")
-            .astype(np.float64)
-        )
 
-        v_z = (
-            (v_r * np.cos(TT) - v_theta * np.sin(TT))
-            .ravel(order="C")
-            .astype(np.float64)
-        )
+            v_z = (
+                (v_r * np.cos(TT) - v_theta * np.sin(TT))
+                .ravel(order="C")
+                .astype(np.float64)
+            )
+            
+        elif coords == 'cylindrical':
+            # Cylindrical coordinates
+            try:
+                z = self.domains.z * self.UL / self.AU
+            except Exception as e:
+                raise RuntimeError(
+                    "Could not find z in self.domains for cylindrical coordinates"
+                ) from e
+
+            # Create meshgrid (vectorized)
+            ZZ, RR, PP = np.meshgrid(z, r, phi, indexing="ij")  # shape (nz,nr,nphi)
+
+            # Coordinates in Cartesian
+            X = (RR * np.cos(PP)).ravel(order="C").astype(np.float64)
+            Y = (RR * np.sin(PP)).ravel(order="C").astype(np.float64)
+            Z = ZZ.ravel(order="C").astype(np.float64)
+            pts = np.column_stack([X, Y, Z])
+
+            # Cartesian velocity components (vectorized)
+            v_phi = vel_components[0]
+            v_r = vel_components[1]
+            v_z = vel_components[2] if vel_components.shape[0] > 2 else np.zeros_like(v_r)
+
+            v_x = (
+                (v_r * np.cos(PP) - v_phi * np.sin(PP))
+                .ravel(order="C")
+                .astype(np.float64)
+            )
+
+            v_y = (
+                (v_r * np.sin(PP) + v_phi * np.cos(PP))
+                .ravel(order="C")
+                .astype(np.float64)
+            )
+
+            v_z = v_z.ravel(order="C").astype(np.float64)
+        
+        else:
+            raise ValueError(f"Unsupported coordinate system: {coords}")
 
         vel_cart = np.column_stack([v_x, v_y, v_z])
 
@@ -1927,19 +1976,19 @@ class Simulation(fargopy.Fargobj):
         vtk_points.SetData(ns.numpy_to_vtk(pts, deep=True))
 
         # Build VOXEL connectivity (vectorized)
-        nt, nr, nphi = rho.shape
-        ntm = nt - 1
+        n1, nr, nphi = rho.shape  # n1 is ntheta (spherical) or nz (cylindrical)
+        n1m = n1 - 1
         nrm = nr - 1
         npm = nphi - 1
-        ncells = ntm * nrm * npm
+        ncells = n1m * nrm * npm
 
-        it, ir_, ip = np.meshgrid(
-            np.arange(ntm), np.arange(nrm), np.arange(npm), indexing="ij"
+        i1, ir_, ip = np.meshgrid(
+            np.arange(n1m), np.arange(nrm), np.arange(npm), indexing="ij"
         )
-        it = it.ravel()
+        i1 = i1.ravel()
         ir_ = ir_.ravel()
         ip = ip.ravel()
-        base = it * nr * nphi + ir_ * nphi + ip
+        base = i1 * nr * nphi + ir_ * nphi + ip
 
         p000 = base
         p001 = base + 1

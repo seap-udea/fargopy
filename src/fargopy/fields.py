@@ -270,11 +270,13 @@ class Field(fargopy.Fargobj):
             slice = eval(slice_cmd)
 
         elif self.type == 'vector':
-            slice = np.array(
-                [eval(f"self.data[0,{pattern_str}]"),
-                 eval(f"self.data[1,{pattern_str}]"),
-                 eval(f"self.data[2,{pattern_str}]")]
-            )
+            # Handle variable number of components (2 for 2D, 3 for 3D)
+            ncomponents = self.data.shape[0]
+            slice_components = []
+            for i in range(ncomponents):
+                component_cmd = f"self.data[{i},{pattern_str}]"
+                slice_components.append(eval(component_cmd, {"self": self, "np": np}))
+            slice = np.array(slice_components)
 
         if pattern:
             return slice,pattern_str
@@ -434,29 +436,86 @@ class FieldInterpolator(fargopy.Fargobj):
         self._slice_ranges = None
 
     def _cache_domain_limits(self):
-        """Cache domain extrema for r, theta, and phi to avoid repeated property access."""
+        """Cache domain extrema for r, theta, phi, and z to avoid repeated property access."""
         if self._domain_limits is not None:
             return
         dom = self.sim.domains
-        self._domain_limits = dict(
-            r=(dom.r.min(), dom.r.max()),
-            theta=(dom.theta.min(), dom.theta.max()),
-            phi=(dom.phi.min(), dom.phi.max())
-        )
+        coords = self.sim.vars.COORDINATES
+        
+        if coords == 'spherical':
+            self._domain_limits = dict(
+                r=(dom.r.min(), dom.r.max()),
+                theta=(dom.theta.min(), dom.theta.max()),
+                phi=(dom.phi.min(), dom.phi.max()),
+                z=(None, None)
+            )
+        elif coords == 'cylindrical':
+            self._domain_limits = dict(
+                r=(dom.r.min(), dom.r.max()),
+                z=(dom.z.min(), dom.z.max()),
+                phi=(dom.phi.min(), dom.phi.max()),
+                theta=(None, None)
+            )
+        else:  # cartesian
+            self._domain_limits = dict(
+                x=(dom.x.min(), dom.x.max()),
+                y=(dom.y.min(), dom.y.max()),
+                z=(dom.z.min(), dom.z.max()),
+                r=(None, None),
+                theta=(None, None),
+                phi=(None, None)
+            )
 
     def _detect_slice_type(self, slice_str):
-        """Return the canonical slice type ('theta', 'phi', 'r', or None) inferred from the user string."""
+        """Return the canonical slice type ('theta', 'phi', 'r', 'z', or None) inferred from the user string.
+        
+        For spherical coordinates:
+            - theta=constant -> XY plane slice
+            - phi=constant -> XZ plane slice  
+            - r=constant -> spherical shell
+            
+        For cylindrical coordinates:
+            - z=constant -> XY plane slice (horizontal)
+            - phi=constant -> RZ plane slice (vertical)
+            - r=constant -> cylindrical surface
+        """
         if not slice_str:
             return None
         txt = slice_str.replace(" ", "").lower()
-        m_theta = re.search(r"theta=([^\[\],]+)(?![\]])", txt)
-        m_phi = re.search(r"phi=([^\[\],]+)(?![\]])", txt)
-        if m_theta and not re.search(r"theta=\[", txt) and m_phi and not re.search(r"phi=\[", txt):
-            return "r"
-        if m_theta and not re.search(r"theta=\[", txt):
-            return "theta"
-        if m_phi and not re.search(r"phi=\[", txt):
-            return "phi"
+        
+        # Detect coordinate system
+        coords = self.sim.vars.COORDINATES if hasattr(self.sim, 'vars') else 'spherical'
+        
+        if coords == 'cylindrical':
+            # For cylindrical coordinates, check for z, phi, r
+            m_z = re.search(r"z=([^\[\],]+)(?![\]])", txt)
+            m_phi = re.search(r"phi=([^\[\],]+)(?![\]])", txt)
+            m_r = re.search(r"r=([^\[\],]+)(?![\]])", txt)
+            
+            # If both phi and r are fixed, we have a line along z
+            if m_phi and not re.search(r"phi=\[", txt) and m_r and not re.search(r"r=\[", txt):
+                return "z"
+            # If z is fixed, we have XY plane (r-phi slice)
+            if m_z and not re.search(r"z=\[", txt):
+                return "z"
+            # If phi is fixed, we have RZ plane
+            if m_phi and not re.search(r"phi=\[", txt):
+                return "phi"
+            # If r is fixed, we have cylindrical surface
+            if m_r and not re.search(r"r=\[", txt):
+                return "r"
+                
+        elif coords == 'spherical':
+            # Original spherical coordinate logic
+            m_theta = re.search(r"theta=([^\[\],]+)(?![\]])", txt)
+            m_phi = re.search(r"phi=([^\[\],]+)(?![\]])", txt)
+            if m_theta and not re.search(r"theta=\[", txt) and m_phi and not re.search(r"phi=\[", txt):
+                return "r"
+            if m_theta and not re.search(r"theta=\[", txt):
+                return "theta"
+            if m_phi and not re.search(r"phi=\[", txt):
+                return "phi"
+        
         return None
 
     def _parse_slice_ranges(self, slice_str):
@@ -700,14 +759,25 @@ class FieldInterpolator(fargopy.Fargobj):
                             row['gasv_mesh'] = np.array([v1, v2, v3])
                         else:
                             v_slice, mesh = gasv_raw.meshslice(slice=slice)
-                            v1, v2, v3 = v_slice[0], v_slice[1], v_slice[2]
-                            if not coords_assigned:
-                                vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
-                                row['var1_mesh'] = getattr(mesh, vnames[0])
-                                row['var2_mesh'] = getattr(mesh, vnames[1])
-                                row['var3_mesh'] = getattr(mesh, vnames[2])
-                                coords_assigned = True
-                            row['gasv_mesh'] = np.array([v1, v2, v3])
+                            # Handle 2D (2 components) or 3D (3 components)
+                            ncomponents = len(v_slice)
+                            if ncomponents == 2:
+                                v1, v2 = v_slice[0], v_slice[1]
+                                if not coords_assigned:
+                                    vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
+                                    row['var1_mesh'] = getattr(mesh, vnames[0])
+                                    row['var2_mesh'] = getattr(mesh, vnames[1])
+                                    coords_assigned = True
+                                row['gasv_mesh'] = np.array([v1, v2])
+                            else:  # 3D
+                                v1, v2, v3 = v_slice[0], v_slice[1], v_slice[2]
+                                if not coords_assigned:
+                                    vnames = getattr(self.sim.vars, 'VARIABLES', ['x', 'y', 'z'])
+                                    row['var1_mesh'] = getattr(mesh, vnames[0])
+                                    row['var2_mesh'] = getattr(mesh, vnames[1])
+                                    row['var3_mesh'] = getattr(mesh, vnames[2])
+                                    coords_assigned = True
+                                row['gasv_mesh'] = np.array([v1, v2, v3])
 
                     # -----------------
                     # GASENERGY 2D
@@ -924,22 +994,27 @@ class FieldInterpolator(fargopy.Fargobj):
         slice=None,
         nr=50,
         ntheta=50,
-        nphi=50
+        nphi=50,
+        nz=50
     ):
         """
         Create a mesh grid based on the slice definition provided by the user.
         If no slice is provided, create a full 3D mesh within the simulation domain.
+        Supports both spherical and cylindrical coordinate systems.
 
         Parameters
         ----------
         slice : str, optional
-            The slice definition string (e.g., "r=[0.8,1.2],phi=0,theta=[0 deg,90 deg]").
+            The slice definition string (e.g., "r=[0.8,1.2],phi=0,theta=[0 deg,90 deg]" for spherical
+            or "r=[0.8,1.2],phi=0,z=[0,0.5]" for cylindrical).
         nr : int
             Number of divisions in r.
         ntheta : int
-            Number of divisions in theta.
+            Number of divisions in theta (spherical only).
         nphi : int
             Number of divisions in phi.
+        nz : int
+            Number of divisions in z (cylindrical only).
 
         Returns
         -------
@@ -949,22 +1024,39 @@ class FieldInterpolator(fargopy.Fargobj):
         import numpy as np
         import re
 
+        # Get coordinate system
+        coords = self.sim.vars.COORDINATES if hasattr(self.sim, 'vars') else 'spherical'
+
         # If no slice is provided, create a full 3D mesh using the simulation domains
         if not slice:
-            r = np.linspace(self.sim.domains.r.min(), self.sim.domains.r.max(), nr)
-            theta = np.linspace(self.sim.domains.theta.min(), self.sim.domains.theta.max(), ntheta)
-            phi = np.linspace(self.sim.domains.phi.min(), self.sim.domains.phi.max(), nphi)
-            theta_grid, r_grid, phi_grid = np.meshgrid(theta, r, phi, indexing='ij')
-            x = r_grid * np.sin(theta_grid) * np.cos(phi_grid)
-            y = r_grid * np.sin(theta_grid) * np.sin(phi_grid)
-            z = r_grid * np.cos(theta_grid)
-            return x, y, z
+            if coords == 'spherical':
+                r = np.linspace(self.sim.domains.r.min(), self.sim.domains.r.max(), nr)
+                theta = np.linspace(self.sim.domains.theta.min(), self.sim.domains.theta.max(), ntheta)
+                phi = np.linspace(self.sim.domains.phi.min(), self.sim.domains.phi.max(), nphi)
+                theta_grid, r_grid, phi_grid = np.meshgrid(theta, r, phi, indexing='ij')
+                x = r_grid * np.sin(theta_grid) * np.cos(phi_grid)
+                y = r_grid * np.sin(theta_grid) * np.sin(phi_grid)
+                z = r_grid * np.cos(theta_grid)
+                return x, y, z
+            elif coords == 'cylindrical':
+                r = np.linspace(self.sim.domains.r.min(), self.sim.domains.r.max(), nr)
+                z = np.linspace(self.sim.domains.z.min(), self.sim.domains.z.max(), nz)
+                phi = np.linspace(self.sim.domains.phi.min(), self.sim.domains.phi.max(), nphi)
+                z_grid, r_grid, phi_grid = np.meshgrid(z, r, phi, indexing='ij')
+                x = r_grid * np.cos(phi_grid)
+                y = r_grid * np.sin(phi_grid)
+                return x, y, z_grid
 
-        # Initialize default ranges
+        # Initialize default ranges based on coordinate system
         r_range = [self.sim.domains.r.min(), self.sim.domains.r.max()]
-        theta_range = [self.sim.domains.theta.min(), self.sim.domains.theta.max()]
         phi_range = [self.sim.domains.phi.min(), self.sim.domains.phi.max()]
-        z_value = None
+        
+        if coords == 'spherical':
+            theta_range = [self.sim.domains.theta.min(), self.sim.domains.theta.max()]
+            z_range = None
+        else:  # cylindrical
+            theta_range = None
+            z_range = [self.sim.domains.z.min(), self.sim.domains.z.max()]
 
         # Regular expressions to extract parameters
         range_pattern = re.compile(r"(\w+)=\[(.+?)\]")  # Matches ranges like r=[0.8,1.2]
@@ -980,79 +1072,141 @@ class FieldInterpolator(fargopy.Fargobj):
             elif key == 'phi':
                 phi_range = values
             elif key == 'theta':
-                theta_range = values
+                theta_range = values if coords == 'spherical' else theta_range
+            elif key == 'z':
+                z_range = values if coords == 'cylindrical' else z_range
 
         # Process single values
+        z_value = None
+        theta_value = None
         for match in value_pattern.finditer(slice):
             key, value = match.groups()
             value = float(degree_pattern.sub(lambda m: str(float(m.group(1)) * np.pi / 180), value))
             if key == 'z':
                 z_value = value
+                if coords == 'cylindrical':
+                    z_range = [value, value]
             elif key == 'phi':
                 phi_range = [value, value]
             elif key == 'theta':
-                theta_range = [value, value]
+                theta_value = value
+                if coords == 'spherical':
+                    theta_range = [value, value]
 
-        # 3D mesh: all ranges are intervals
-        if (phi_range[0] != phi_range[1]) and (theta_range[0] != theta_range[1]):
-            r = np.linspace(r_range[0], r_range[1], nr)
-            theta = np.linspace(theta_range[0], theta_range[1], ntheta)
-            phi = np.linspace(phi_range[0], phi_range[1], nphi)
-            theta_grid, r_grid, phi_grid = np.meshgrid(theta, r, phi, indexing='ij')
-            x = r_grid * np.sin(theta_grid) * np.cos(phi_grid)
-            y = r_grid * np.sin(theta_grid) * np.sin(phi_grid)
-            z = r_grid * np.cos(theta_grid)
-            return x, y, z
+        # SPHERICAL COORDINATES
+        if coords == 'spherical':
+            # 3D mesh: all ranges are intervals
+            if (phi_range[0] != phi_range[1]) and (theta_range[0] != theta_range[1]):
+                r = np.linspace(r_range[0], r_range[1], nr)
+                theta = np.linspace(theta_range[0], theta_range[1], ntheta)
+                phi = np.linspace(phi_range[0], phi_range[1], nphi)
+                theta_grid, r_grid, phi_grid = np.meshgrid(theta, r, phi, indexing='ij')
+                x = r_grid * np.sin(theta_grid) * np.cos(phi_grid)
+                y = r_grid * np.sin(theta_grid) * np.sin(phi_grid)
+                z = r_grid * np.cos(theta_grid)
+                return x, y, z
 
-        # 2D mesh: one angle is fixed (slice)
-        elif phi_range[0] == phi_range[1]:  # Slice at constant phi (XZ plane)
-            r = np.linspace(r_range[0], r_range[1], nr)
-            theta = np.linspace(theta_range[0], theta_range[1], ntheta)
-            phi = phi_range[0]
-            theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij')
-            x = r_grid * np.sin(theta_grid) * np.cos(phi)
-            y = r_grid * np.sin(theta_grid) * np.sin(phi)
-            z = r_grid * np.cos(theta_grid)
-            return x, y, z
+            # 2D mesh: one angle is fixed (slice)
+            elif phi_range[0] == phi_range[1]:  # Slice at constant phi (XZ plane)
+                r = np.linspace(r_range[0], r_range[1], nr)
+                theta = np.linspace(theta_range[0], theta_range[1], ntheta)
+                phi = phi_range[0]
+                theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij')
+                x = r_grid * np.sin(theta_grid) * np.cos(phi)
+                y = r_grid * np.sin(theta_grid) * np.sin(phi)
+                z = r_grid * np.cos(theta_grid)
+                return x, y, z
 
-        elif theta_range[0] == theta_range[1]:  # Slice at constant theta (XY plane)
-            r = np.linspace(r_range[0], r_range[1], nr)
-            phi = np.linspace(phi_range[0], phi_range[1], nphi)
-            theta = theta_range[0]
-            phi_grid, r_grid = np.meshgrid(phi, r, indexing='ij')
-            x = r_grid * np.sin(theta) * np.cos(phi_grid)
-            y = r_grid * np.sin(theta) * np.sin(phi_grid)
-            z = r_grid * np.cos(theta)
-            return x, y, z
+            elif theta_range[0] == theta_range[1]:  # Slice at constant theta (XY plane)
+                r = np.linspace(r_range[0], r_range[1], nr)
+                phi = np.linspace(phi_range[0], phi_range[1], nphi)
+                theta = theta_range[0]
+                phi_grid, r_grid = np.meshgrid(phi, r, indexing='ij')
+                x = r_grid * np.sin(theta) * np.cos(phi_grid)
+                y = r_grid * np.sin(theta) * np.sin(phi_grid)
+                z = r_grid * np.cos(theta)
+                return x, y, z
 
-        elif z_value is not None:  # Slice at constant z (XY plane in cartesian)
-            r = np.linspace(r_range[0], r_range[1], nr)
-            phi = np.linspace(phi_range[0], phi_range[1], nphi)
-            r_grid, phi_grid = np.meshgrid(r, phi, indexing='ij')
-            x = r_grid * np.cos(phi_grid)
-            y = r_grid * np.sin(phi_grid)
-            z = np.full_like(x, z_value)
-            return x, y, z
+            elif z_value is not None:  # Slice at constant z (XY plane in Cartesian)
+                r = np.linspace(r_range[0], r_range[1], nr)
+                phi = np.linspace(phi_range[0], phi_range[1], nphi)
+                r_grid, phi_grid = np.meshgrid(r, phi, indexing='ij')
+                x = r_grid * np.cos(phi_grid)
+                y = r_grid * np.sin(phi_grid)
+                z = np.full_like(x, z_value)
+                return x, y, z
+            else:
+                raise ValueError("Slice definition for spherical coordinates must include either 'z', 'phi', or 'theta'.")
 
+        # CYLINDRICAL COORDINATES
+        elif coords == 'cylindrical':
+            # 3D mesh: all ranges are intervals
+            if (phi_range[0] != phi_range[1]) and (z_range[0] != z_range[1]):
+                r = np.linspace(r_range[0], r_range[1], nr)
+                z = np.linspace(z_range[0], z_range[1], nz)
+                phi = np.linspace(phi_range[0], phi_range[1], nphi)
+                z_grid, r_grid, phi_grid = np.meshgrid(z, r, phi, indexing='ij')
+                x = r_grid * np.cos(phi_grid)
+                y = r_grid * np.sin(phi_grid)
+                return x, y, z_grid
+
+            # 2D mesh: one coordinate is fixed (slice)
+            elif phi_range[0] == phi_range[1]:  # Slice at constant phi (RZ plane)
+                r = np.linspace(r_range[0], r_range[1], nr)
+                z = np.linspace(z_range[0], z_range[1], nz)
+                phi = phi_range[0]
+                z_grid, r_grid = np.meshgrid(z, r, indexing='ij')
+                x = r_grid * np.cos(phi)
+                y = r_grid * np.sin(phi)
+                return x, y, z_grid
+
+            elif z_range[0] == z_range[1]:  # Slice at constant z (XY plane)
+                r = np.linspace(r_range[0], r_range[1], nr)
+                phi = np.linspace(phi_range[0], phi_range[1], nphi)
+                z = z_range[0]
+                phi_grid, r_grid = np.meshgrid(phi, r, indexing='ij')
+                x = r_grid * np.cos(phi_grid)
+                y = r_grid * np.sin(phi_grid)
+                z_out = np.full_like(x, z)
+                return x, y, z_out
+                
+            else:
+                raise ValueError("Slice definition for cylindrical coordinates must include either 'z', 'phi', or 'r'.")
+        
         else:
-            raise ValueError("Slice definition must include either 'z', 'phi', or 'theta'.")
+            raise ValueError(f"Unsupported coordinate system: {coords}")
 
 
 
     def _domain_mask(self, xi, slice=None):
         """
         Build a boolean mask that keeps only coordinates within the simulation domain and
-        enforces any user-specified radial/angle limits for XY (theta) or XZ (phi) slices.
+        enforces any user-specified radial/angle/z limits for various slice types.
+        Supports both spherical and cylindrical coordinate systems.
         """
         self._cache_domain_limits()
         slice = slice or self.slice
         slice_ranges = self._slice_ranges or self._parse_slice_ranges(slice)
+        
+        # Get coordinate system
+        coords = self.sim.vars.COORDINATES if hasattr(self.sim, 'vars') else 'spherical'
+        
         r_bounds = slice_ranges.get('r')
         theta_bounds = slice_ranges.get('theta')
         phi_bounds = slice_ranges.get('phi')
+        z_bounds = slice_ranges.get('z')
+        
         r_min, r_max = self._domain_limits['r']
-        theta_min, theta_max = self._domain_limits['theta']
         phi_min, phi_max = self._domain_limits['phi']
+        
+        # Get theta or z limits depending on coordinate system
+        if coords == 'spherical':
+            theta_min, theta_max = self._domain_limits['theta']
+            z_min, z_max = None, None
+        else:  # cylindrical
+            theta_min, theta_max = None, None
+            z_min, z_max = self._domain_limits['z']
+        
         eps = 1e-7
         xi = np.asarray(xi)
         ndim = xi.shape[1] if xi.ndim > 1 else 1
@@ -1072,53 +1226,84 @@ class FieldInterpolator(fargopy.Fargobj):
             return (phi_vals >= lo - eps) | (phi_vals <= hi + eps)
 
         if ndim == 2:
-            # XY plane: theta fixed
-            if slice is not None and 'theta' in slice:
-                # XY plane: z = 0, theta fixed, filter by r and phi
-                x, y = xi[:, 0], xi[:, 1]
-                r = np.sqrt(x**2 + y**2)
-                phi = np.arctan2(y, x)
-                r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
-                mask = r_ge & r_le & _phi_in_bounds(phi)
-                return mask
-            
-            # XZ plane: phi fixed
-            elif slice is not None and 'phi' in slice:
-                # XZ plane: y = 0, phi fixed, filter by r and theta
-                x, z = xi[:, 0], xi[:, 1]
-                r = np.sqrt(x**2 + z**2)
-                theta = np.arccos(z / np.clip(r, 1e-14, None))
-                r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
-                if theta_bounds:
-                    lo, hi = theta_bounds
-                    theta_mask = (theta >= lo - eps) & (theta <= hi + eps)
+            # Handle 2D slices based on coordinate system
+            if coords == 'spherical':
+                # XY plane: theta fixed
+                if slice is not None and 'theta' in slice:
+                    # XY plane: z = 0, theta fixed, filter by r and phi
+                    x, y = xi[:, 0], xi[:, 1]
+                    r = np.sqrt(x**2 + y**2)
+                    phi = np.arctan2(y, x)
+                    r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
+                    mask = r_ge & r_le & _phi_in_bounds(phi)
+                    return mask
+                
+                # XZ plane: phi fixed
+                elif slice is not None and 'phi' in slice:
+                    # XZ plane: y = 0, phi fixed, filter by r and theta
+                    x, z = xi[:, 0], xi[:, 1]
+                    r = np.sqrt(x**2 + z**2)
+                    theta = np.arccos(z / np.clip(r, 1e-14, None))
+                    r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
+                    if theta_bounds:
+                        lo, hi = theta_bounds
+                        theta_mask = (theta >= lo - eps) & (theta <= hi + eps)
+                    else:
+                        theta_mask = (
+                            ((theta > theta_min) | np.isclose(theta, theta_min, atol=eps)) &
+                            ((theta < theta_max) | np.isclose(theta, theta_max, atol=eps))
+                        )
+                    return r_ge & r_le & theta_mask
                 else:
-                    theta_mask = (
-                        ((theta > theta_min) | np.isclose(theta, theta_min, atol=eps)) &
-                        ((theta < theta_max) | np.isclose(theta, theta_max, atol=eps))
-                    )
-                return r_ge & r_le & theta_mask
-            else:
-                # Default: treat as XY (theta fixed)
-                x, y = xi[:, 0], xi[:, 1]
-                z = np.zeros_like(x)
-                r = np.sqrt(x**2 + y**2 + z**2)
-                phi = np.arctan2(y, x)
-                mask = (
-                    (r > r_min) &
-                    (r < r_max) )
-                return mask
+                    # Default: treat as XY (theta fixed)
+                    x, y = xi[:, 0], xi[:, 1]
+                    r = np.sqrt(x**2 + y**2)
+                    phi = np.arctan2(y, x)
+                    mask = (r > r_min) & (r < r_max)
+                    return mask
+                    
+            else:  # cylindrical
+                # XY plane: z fixed
+                if slice is not None and 'z' in slice:
+                    # XY plane: z fixed, filter by r and phi
+                    x, y = xi[:, 0], xi[:, 1]
+                    r = np.sqrt(x**2 + y**2)
+                    phi = np.arctan2(y, x)
+                    r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
+                    mask = r_ge & r_le & _phi_in_bounds(phi)
+                    return mask
+                
+                # RZ plane: phi fixed
+                elif slice is not None and 'phi' in slice:
+                    # RZ plane: phi fixed, filter by r and z
+                    # Assuming xi[:, 0] is r-like and xi[:, 1] is z-like
+                    x, y = xi[:, 0], xi[:, 1]
+                    # Convert to cylindrical r, z
+                    r = np.sqrt(x**2 + y**2)
+                    # For phi-slice in cylindrical, we may receive (x,z) coordinates
+                    # Need to determine which is which based on the slice
+                    z_ge, z_le = _bounded(y, z_bounds, (z_min, z_max))
+                    r_ge, r_le = _bounded(r, r_bounds, (r_min, r_max))
+                    return r_ge & r_le & z_ge & z_le
+                else:
+                    # Default: treat as XY (z fixed)
+                    x, y = xi[:, 0], xi[:, 1]
+                    r = np.sqrt(x**2 + y**2)
+                    phi = np.arctan2(y, x)
+                    mask = (r > r_min) & (r < r_max)
+                    return mask
 
         elif ndim == 1:
-            # 1D input: could be r, theta, or phi
+            # 1D input: could be r, theta, phi (spherical) or r, z, phi (cylindrical)
             xi_1d = np.asarray(xi).ravel()
 
             # Decide which variable is the "free" one in the 1D cut.
-            # Prefer explicit ranges (r=[...], theta=[...], phi=[...]); otherwise,
+            # Prefer explicit ranges (r=[...], theta=[...], phi=[...], z=[...]); otherwise,
             # the free variable is the one that does NOT appear as a scalar in the slice.
             r_b = r_bounds
             th_b = theta_bounds
             ph_b = phi_bounds
+            z_b = z_bounds
 
             def _is_range(b):
                 return (b is not None) and (abs(b[1] - b[0]) > 1e-12)
@@ -1129,21 +1314,34 @@ class FieldInterpolator(fargopy.Fargobj):
                 free = 'theta'
             elif _is_range(ph_b):
                 free = 'phi'
+            elif _is_range(z_b):
+                free = 'z'
             else:
                 s = (slice or self.slice) or ""
                 s_low = s.lower()
                 has_r = re.search(r"\br\s*=", s_low) is not None
                 has_th = re.search(r"\btheta\s*=", s_low) is not None
                 has_ph = re.search(r"\bphi\s*=", s_low) is not None
+                has_z = re.search(r"\bz\s*=", s_low) is not None
                 # the free variable is the one not present in the slice specification
-                if not has_r:
-                    free = 'r'
-                elif not has_th:
-                    free = 'theta'
-                elif not has_ph:
-                    free = 'phi'
-                else:
-                    free = 'r'
+                if coords == 'cylindrical':
+                    if not has_r:
+                        free = 'r'
+                    elif not has_z:
+                        free = 'z'
+                    elif not has_ph:
+                        free = 'phi'
+                    else:
+                        free = 'r'
+                else:  # spherical
+                    if not has_r:
+                        free = 'r'
+                    elif not has_th:
+                        free = 'theta'
+                    elif not has_ph:
+                        free = 'phi'
+                    else:
+                        free = 'r'
 
             # Build mask depending on which variable is free
             if free == 'r':
@@ -1152,9 +1350,20 @@ class FieldInterpolator(fargopy.Fargobj):
                 return mask
 
             if free == 'theta':
-                lo, hi = (th_b if th_b is not None else (theta_min, theta_max))
-                mask = (xi_1d >= lo - eps) & (xi_1d <= hi + eps)
-                return mask
+                if theta_min is not None and theta_max is not None:
+                    lo, hi = (th_b if th_b is not None else (theta_min, theta_max))
+                    mask = (xi_1d >= lo - eps) & (xi_1d <= hi + eps)
+                    return mask
+                else:
+                    return np.ones_like(xi_1d, dtype=bool)
+
+            if free == 'z':
+                if z_min is not None and z_max is not None:
+                    lo, hi = (z_b if z_b is not None else (z_min, z_max))
+                    mask = (xi_1d >= lo - eps) & (xi_1d <= hi + eps)
+                    return mask
+                else:
+                    return np.ones_like(xi_1d, dtype=bool)
 
             # free == 'phi'
             lo, hi = (ph_b if ph_b is not None else (phi_min, phi_max))
@@ -1276,14 +1485,24 @@ class FieldInterpolator(fargopy.Fargobj):
         if np.isscalar(var3): var3 = np.array([var3])
 
         # Convenience: allow calling evaluate(var1=..., var2=...) for
-        # 2D XZ slices where the expected coordinates are (var1,var3).
-        # If the slice type is not 'theta' (i.e. XZ) and the user passed
-        # a value for var2 but left var3=None, treat var2 as var3.
+        # 2D XZ or RZ slices where the expected coordinates are (var1,var3).
+        # If the slice is XZ/RZ (not XY) and user passed var2 but left var3=None,
+        # treat var2 as var3.
         try:
             slice_type_tmp = self._slice_type or self._detect_slice_type(self.slice)
+            coords_sys = self.sim.vars.COORDINATES if hasattr(self.sim, 'vars') else 'spherical'
         except Exception:
             slice_type_tmp = None
-        if self.dim == 2 and slice_type_tmp is not None and slice_type_tmp != 'theta':
+            coords_sys = 'spherical'
+        
+        # Determine if this is an XY plane or XZ/RZ plane
+        is_xy_plane = False
+        if coords_sys == 'spherical':
+            is_xy_plane = (slice_type_tmp == 'theta')
+        else:  # cylindrical
+            is_xy_plane = (slice_type_tmp == 'z')
+        
+        if self.dim == 2 and slice_type_tmp is not None and not is_xy_plane:
             if var3 is None and var2 is not None:
                 var3 = var2
                 var2 = None
@@ -1426,12 +1645,26 @@ class FieldInterpolator(fargopy.Fargobj):
                 coords = np.column_stack((cx.ravel(), cy.ravel(), cz.ravel()))
                 xi = np.column_stack((var1.ravel(), var2.ravel(), var3.ravel()))
             elif self.dim == 2:
-                if slice_type == "theta":
-                    coords = np.column_stack((cx.ravel(), cy.ravel()))
-                    xi = np.column_stack((var1.ravel(), var2.ravel()))
-                else:
-                    coords = np.column_stack((cx.ravel(), cz.ravel()))
-                    xi = np.column_stack((var1.ravel(), var3.ravel()))
+                # Detect coordinate system
+                coords_sys = self.sim.vars.COORDINATES if hasattr(self.sim, 'vars') else 'spherical'
+                
+                # Determine which plane we're working with
+                # Spherical: theta=const → XY plane, phi=const → XZ plane
+                # Cylindrical: z=const → XY plane, phi=const → RZ plane
+                if coords_sys == 'spherical':
+                    if slice_type == "theta":
+                        coords = np.column_stack((cx.ravel(), cy.ravel()))
+                        xi = np.column_stack((var1.ravel(), var2.ravel()))
+                    else:  # phi or r
+                        coords = np.column_stack((cx.ravel(), cz.ravel()))
+                        xi = np.column_stack((var1.ravel(), var3.ravel()))
+                else:  # cylindrical
+                    if slice_type == "z":
+                        coords = np.column_stack((cx.ravel(), cy.ravel()))
+                        xi = np.column_stack((var1.ravel(), var2.ravel()))
+                    else:  # phi or r
+                        coords = np.column_stack((cx.ravel(), cz.ravel()))
+                        xi = np.column_stack((var1.ravel(), var3.ravel()))
             elif self.dim == 1:
                 coords = np.sqrt(cx**2 + cy**2 + cz**2)
                 xi = np.asarray(var1)

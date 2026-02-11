@@ -268,12 +268,20 @@ class SimInfoDialog(QDialog):
                 domain_info += f"r domain: [{rmin:.3g}, {rmax:.3g}]\n"
             except Exception:
                 domain_info += "r domain: not available\n"
+            
+            # Try theta (spherical) or z (cylindrical)
             try:
                 thetamin = self.sim.domains.theta.min()
                 thetamax = self.sim.domains.theta.max()
                 domain_info += f"theta domain: [{thetamin:.3g}, {thetamax:.3g}]\n"
             except Exception:
-                domain_info += "theta domain: not available\n"
+                try:
+                    zmin = self.sim.domains.z.min()
+                    zmax = self.sim.domains.z.max()
+                    domain_info += f"z domain: [{zmin:.3g}, {zmax:.3g}]\n"
+                except Exception:
+                    domain_info += "theta/z domain: not available\n"
+            
             try:
                 phimin = self.sim.domains.phi.min()
                 phimax = self.sim.domains.phi.max()
@@ -673,6 +681,9 @@ class PlotInteractiveWindow(QWidget):
         # --- Reflection overlay state ---
         self.reflect_enabled = False
         self.reflect_axis = "X-axis"
+        
+        # --- Coordinate system (default to spherical until simulation is loaded) ---
+        self.coord_system = 'spherical'
 
         self.init_ui()
         self.slice_type = "theta"
@@ -874,19 +885,24 @@ class PlotInteractiveWindow(QWidget):
             edit.setMaximumHeight(32)
             edit.setEnabled(False)
 
-        slice_grid.addWidget(QLabel("r:"), 1, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        # Create dynamic labels for coordinate system
+        self.r_label = QLabel("r:")
+        self.theta_label = QLabel("θ:")  # Will change to "z:" for cylindrical
+        self.phi_label = QLabel("φ:")
+        
+        slice_grid.addWidget(self.r_label, 1, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
         slice_grid.addWidget(self.r_min, 1, 1)
         slice_grid.addWidget(self.r_max, 1, 2)
-        slice_grid.addWidget(QLabel("θ:"), 2, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        slice_grid.addWidget(self.theta_label, 2, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
         slice_grid.addWidget(self.theta_min, 2, 1)
         slice_grid.addWidget(self.theta_max, 2, 2)
-        slice_grid.addWidget(QLabel("φ:"), 3, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        slice_grid.addWidget(self.phi_label, 3, 0, alignment=Qt.AlignRight | Qt.AlignVCenter)
         slice_grid.addWidget(self.phi_min, 3, 1)
         slice_grid.addWidget(self.phi_max, 3, 2)
 
         # --- Slice type selector inside the slice box ---
         self.slice_type_combo = QComboBox()
-        self.slice_type_combo.addItems(['theta', 'phi'])
+        self.slice_type_combo.addItems(['theta', 'phi'])  # Will be updated based on coordinate system
         self.slice_type_combo.setCurrentText('theta')
         self.slice_type_combo.currentTextChanged.connect(self.on_slice_type_change)
         slice_grid.addWidget(QLabel("Slice type:"), 4, 0)
@@ -1214,13 +1230,42 @@ class PlotInteractiveWindow(QWidget):
     def load_simulation(self, path):
         self.sim = fp.Simulation(output_dir=path)
         # self.sim.units('CGS')  # <-- Remove this line, respeta las unidades originales
+        
+        # Detect coordinate system
+        self.coord_system = getattr(self.sim.vars, 'COORDINATES', 'spherical').lower()
+        
+        # Update UI based on coordinate system
+        if self.coord_system == 'cylindrical':
+            self.theta_label.setText("z:")
+            self.slice_type_combo.clear()
+            self.slice_type_combo.addItems(['z', 'phi'])
+            self.slice_type_combo.setCurrentText('z')
+            self.slice_type = 'z'
+        else:  # spherical
+            self.theta_label.setText("θ:")
+            self.slice_type_combo.clear()
+            self.slice_type_combo.addItems(['theta', 'phi'])
+            self.slice_type_combo.setCurrentText('theta')
+            self.slice_type = 'theta'
+        
         self.time_slider.setEnabled(True)
         self.time_slider.setMinimum(0)
         self.time_slider.setMaximum(self.sim._get_nsnaps()-1)
         self.time_slider.setValue(1)
         self.r_min.setText("")
         self.r_max.setText("")
-        self.theta_min.setText(self._format_angle(self.sim.domains.theta.max()))
+        
+        # Set initial theta/z value based on coordinate system
+        if self.coord_system == 'cylindrical':
+            # For cylindrical, z defaults to 0 or middle of domain
+            try:
+                z_val = self._format_angle(0.0)
+                self.theta_min.setText(z_val)
+            except:
+                self.theta_min.setText("0.0")
+        else:  # spherical
+            self.theta_min.setText(self._format_angle(self.sim.domains.theta.max()))
+        
         self.theta_max.setText('')
         self.phi_min.setText("")
         self.phi_max.setText("")
@@ -1259,13 +1304,22 @@ class PlotInteractiveWindow(QWidget):
     def on_slice_type_change(self, text):
         self.slice_type = text
         # When changing slice type, reset fields according to convention
-        if self.slice_type == "theta":
-            theta_val = self._format_angle(self.sim.domains.theta.max())
-            self.theta_min.setText(theta_val)
+        coord_system = getattr(self, 'coord_system', 'spherical')
+        
+        if self.slice_type in ["theta", "z"]:
+            # Constant theta (spherical) or constant z (cylindrical)
+            if coord_system == 'cylindrical':
+                # For cylindrical, default z=0
+                z_val = self._format_angle(0.0)
+                self.theta_min.setText(z_val)
+            else:
+                # For spherical, default theta=max
+                theta_val = self._format_angle(self.sim.domains.theta.max())
+                self.theta_min.setText(theta_val)
             self.theta_max.setText('')
             self.phi_min.setText("")
             self.phi_max.setText("")
-        else:
+        else:  # phi slice
             zero = self._format_angle(0.0)
             self.phi_min.setText(zero)
             self.phi_max.setText(zero)
@@ -1310,36 +1364,61 @@ class PlotInteractiveWindow(QWidget):
             (x_max_ul, y_max_ul)
         ]
 
+        coord_system = getattr(self, 'coord_system', 'spherical')
         r_list = []
-        theta_list = []
+        theta_list = []  # or z_list for cylindrical
         phi_list = []
+        
         for x, y in corners:
-            if self.slice_type == "theta":
-                z = 0.0
-                r = np.sqrt(x**2 + y**2 + z**2)
-                theta = np.arccos(z / r) if r != 0 else 0.0
-                phi = np.arctan2(y, x)
-            else:
-                y_ = 0.0
-                z = y
-                r = np.sqrt(x**2 + y_**2 + z**2)
-                theta = np.arccos(z / r) if r != 0 else 0.0
-                phi = np.arctan2(y_, x)
+            if self.slice_type in ["theta", "z"]:
+                # Constant theta (spherical) or constant z (cylindrical)
+                if coord_system == 'cylindrical':
+                    # XY plane, z is constant
+                    r = np.sqrt(x**2 + y**2)
+                    z = 0.0  # Will be set from UI
+                    phi = np.arctan2(y, x)
+                    theta_list.append(z)  # Using theta_list to store z values
+                else:
+                    # Spherical XY plane
+                    z = 0.0
+                    r = np.sqrt(x**2 + y**2 + z**2)
+                    theta = np.arccos(z / r) if r != 0 else 0.0
+                    phi = np.arctan2(y, x)
+                    theta_list.append(theta)
+            else:  # phi slice
+                if coord_system == 'cylindrical':
+                    # RZ plane
+                    r = x
+                    z = y
+                    phi = 0.0  # Will be set from UI
+                    theta_list.append(z)
+                else:
+                    # Spherical RZ plane
+                    y_ = 0.0
+                    z = y
+                    r = np.sqrt(x**2 + y_**2 + z**2)
+                    theta = np.arccos(z / r) if r != 0 else 0.0
+                    phi = np.arctan2(y_, x)
+                    theta_list.append(theta)
             r_list.append(r)
-            theta_list.append(theta)
             phi_list.append(phi)
 
-
-            r_min = np.min(r_list)
-            r_max = np.max(r_list)
-
+        r_min = np.min(r_list)
+        r_max = np.max(r_list)
         theta_min = np.min(theta_list)
         theta_max = np.max(theta_list)
         phi_min = np.min(phi_list)
         phi_max = np.max(phi_list)
+        
+        # Determine coordinate name
+        theta_coord_name = 'z' if coord_system == 'cylindrical' else 'theta'
 
-        if self.slice_type == "theta":
-            theta_val = self._format_angle(self.sim.domains.theta.max())
+        if self.slice_type in ["theta", "z"]:
+            # Constant theta or z slice
+            if coord_system == 'cylindrical':
+                theta_val = self._format_angle(0.0)  # Default z=0
+            else:
+                theta_val = self._format_angle(self.sim.domains.theta.max())
             self.theta_min.setText(theta_val)
             self.theta_max.setText(theta_val)
             self.r_min.setText(self._sim_length_to_display(r_min))
@@ -1347,25 +1426,31 @@ class PlotInteractiveWindow(QWidget):
             self.phi_min.setText(self._format_angle(phi_min))
             self.phi_max.setText(self._format_angle(phi_max))
             slice_str = (
-                f"theta={theta_val},"
+                f"{theta_coord_name}={theta_val},"
                 f"r=[{r_min:.3f},{r_max:.3f}],"
                 f"phi=[{phi_min:.3f},{phi_max:.3f}]"
             )
         else:
+            # phi slice - keep phi fixed, update r range only
             phi_val = self.phi_min.text() if self.phi_min.text() != "" else self._format_angle(0.0)
             self.phi_min.setText(phi_val)
             self.phi_max.setText(phi_val)
             self.r_min.setText(self._sim_length_to_display(r_min))
             self.r_max.setText(self._sim_length_to_display(r_max))
-            self.theta_min.setText(self._format_angle(theta_min))
-            self.theta_max.setText(self._format_angle(theta_max))
+            # Keep theta/z range but don't set it in UI to avoid confusion
+            # The slice should be: phi=const, r=[min,max], theta/z=[min,max]
             slice_str = (
                 f"phi={phi_val},"
                 f"r=[{r_min:.3f},{r_max:.3f}],"
-                f"theta=[{theta_min:.3f},{theta_max:.3f}]"
+                f"{theta_coord_name}=[{theta_min:.3f},{theta_max:.3f}]"
             )
         self.last_slice_str = slice_str
         self._fields_edited = False
+        
+        # Recalculate fixed colorbar limits if enabled (fix colorbar bug in phi slices)
+        if self.fixed_cbar_enabled:
+            self.update_fixed_cbar_limits()
+        
         # DO NOT call self.plot_density() here
 
     def build_slice_str(self):
@@ -1399,12 +1484,22 @@ class PlotInteractiveWindow(QWidget):
 
         r_min_val = self._length_input_to_sim_units(r_min_val)
         r_max_val = self._length_input_to_sim_units(r_max_val)
+        
+        # Determine coordinate name for theta/z based on coordinate system
+        coord_system = getattr(self, 'coord_system', 'spherical')
+        theta_coord_name = 'z' if coord_system == 'cylindrical' else 'theta'
 
         slice_parts = []
-        # If both r_min and r_max are empty, and both phi_min and phi_max are empty, and theta is set, treat as a theta slice
+        # Determine slice type based on which coordinate is fixed
+        # Priority: phi > theta/z (if both phi_min==phi_max, it's a phi slice)
+        is_phi_slice = phi_min_val and phi_max_val and values_equal(phi_min_val, phi_max_val)
+        is_theta_slice = theta_min_val and (not theta_max_val or values_equal(theta_min_val, theta_max_val))
+        
+        # If both r_min and r_max are empty, and both phi_min and phi_max are empty, and theta is set, treat as a theta/z slice
         if not r_min_val and not r_max_val and not phi_min_val and not phi_max_val and theta_min_val:
-            slice_parts.append(f"theta={theta_min_val}")
+            slice_parts.append(f"{theta_coord_name}={theta_min_val}")
         else:
+            # Handle r coordinate
             if r_min_val and r_max_val:
                 if values_equal(r_min_val, r_max_val):
                     slice_parts.append(f"r={r_min_val}")
@@ -1414,24 +1509,33 @@ class PlotInteractiveWindow(QWidget):
                 slice_parts.append(f"r={r_min_val}")
             elif r_max_val:
                 slice_parts.append(f"r={r_max_val}")
-            if theta_min_val and theta_max_val:
-                if values_equal(theta_min_val, theta_max_val):
-                    slice_parts.append(f"theta={theta_min_val}")
-                else:
-                    slice_parts.append(f"theta=[{theta_min_val},{theta_max_val}]")
-            elif theta_min_val:
-                slice_parts.append(f"theta={theta_min_val}")
-            elif theta_max_val:
-                slice_parts.append(f"theta={theta_max_val}")
+            
+            # Handle phi coordinate (check first to determine slice type)
             if phi_min_val and phi_max_val:
                 if values_equal(phi_min_val, phi_max_val):
                     slice_parts.append(f"phi={phi_min_val}")
+                    # For phi slice, add theta/z range if available
+                    if theta_min_val and theta_max_val and not values_equal(theta_min_val, theta_max_val):
+                        slice_parts.append(f"{theta_coord_name}=[{theta_min_val},{theta_max_val}]")
                 else:
                     slice_parts.append(f"phi=[{phi_min_val},{phi_max_val}]")
             elif phi_min_val:
                 slice_parts.append(f"phi={phi_min_val}")
             elif phi_max_val:
                 slice_parts.append(f"phi={phi_max_val}")
+            
+            # Handle theta/z coordinate only if not a phi slice with range
+            if not is_phi_slice:
+                if theta_min_val and theta_max_val:
+                    if values_equal(theta_min_val, theta_max_val):
+                        slice_parts.append(f"{theta_coord_name}={theta_min_val}")
+                    else:
+                        slice_parts.append(f"{theta_coord_name}=[{theta_min_val},{theta_max_val}]")
+                elif theta_min_val:
+                    slice_parts.append(f"{theta_coord_name}={theta_min_val}")
+                elif theta_max_val:
+                    slice_parts.append(f"{theta_coord_name}={theta_max_val}")
+        
         return ",".join(slice_parts)
 
     def on_slice_change(self):
@@ -1488,7 +1592,8 @@ class PlotInteractiveWindow(QWidget):
                     pass
             return False
 
-        if is_fixed('theta', slice_str):
+        # Check for theta (spherical) or z (cylindrical) being fixed
+        if is_fixed('theta', slice_str) or is_fixed('z', slice_str):
             mesh_x_name = 'var1_mesh'
             mesh_y_name = 'var2_mesh'
             use_var3 = False
@@ -1507,8 +1612,7 @@ class PlotInteractiveWindow(QWidget):
                     data = self.sim.load_field(
                         fields=['gasdens', 'gasv'],
                         slice=slice_str,
-                        snapshot=snap,
-                        interpolate=True
+                        snapshot=snap
                     )
                     if hasattr(data, 'evaluate'):
                         xmin, xmax = getattr(data, mesh_x_name)[0].min(), getattr(data, mesh_x_name)[0].max()
@@ -1530,8 +1634,7 @@ class PlotInteractiveWindow(QWidget):
                     gasv = self.sim.load_field(
                         fields='gasv',
                         slice=slice_str,
-                        snapshot=snap,
-                        interpolate=True
+                        snapshot=snap
                     )
                     
                     if hasattr(gasv, 'evaluate'):
@@ -1562,8 +1665,7 @@ class PlotInteractiveWindow(QWidget):
                     gasenergy = self.sim.load_field(
                         fields='gasenergy',
                         slice=slice_str,
-                        snapshot=snap,
-                        interpolate=True
+                        snapshot=snap
                     )
                     if hasattr(gasenergy, 'evaluate'):
                         xmin, xmax = getattr(gasenergy, mesh_x_name)[0].min(), getattr(gasenergy, mesh_x_name)[0].max()
@@ -1717,7 +1819,8 @@ class PlotInteractiveWindow(QWidget):
                     pass
             return False
 
-        if is_fixed('theta', slice_str):
+        # Check for theta (spherical) or z (cylindrical) being fixed
+        if is_fixed('theta', slice_str) or is_fixed('z', slice_str):
             mesh_x_name = 'var1_mesh'
             mesh_y_name = 'var2_mesh'
             self._set_velocity_options(['vx', 'vy'])
@@ -1735,28 +1838,24 @@ class PlotInteractiveWindow(QWidget):
             data = self.sim.load_field(
                 fields=['gasdens', 'gasv'],
                 slice=slice_str,
-                snapshot=n,
-                interpolate=True
+                snapshot=n
             )
         elif map_type == 'Energy':
             gasenergy = self.sim.load_field(
                 fields='gasenergy',
                 slice=slice_str,
-                snapshot=n,
-                interpolate=True
+                snapshot=n
             )
             gasv = self.sim.load_field(
                 fields='gasv',
                 slice=slice_str,
-                snapshot=n,
-                interpolate=True
+                snapshot=n
             )
         elif map_type == 'Velocity':
             gasv = self.sim.load_field(
                 fields='gasv',
                 slice=slice_str,
-                snapshot=n,
-                interpolate=True
+                snapshot=n
             )
 
         # Select the object that provides the mesh arrays (used for xmin/xmax/ymin/ymax)
@@ -2231,7 +2330,8 @@ class PlotInteractiveWindow(QWidget):
 
         hill_color = getattr(self, "hill_color", "red")
         if show_circle:
-            if is_fixed('theta', slice_str):
+            # Check for theta (spherical) or z (cylindrical) being fixed
+            if is_fixed('theta', slice_str) or is_fixed('z', slice_str):
                 from matplotlib.patches import Circle
                 circle = Circle((center_x, center_y), radius, color=hill_color, fill=False, linestyle='--', linewidth=3,label=fr'${hill_frac:.1f}\,R_H$')
                 ax.add_patch(circle)

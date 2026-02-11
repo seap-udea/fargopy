@@ -13,3 +13,4 @@ gdown
 pandas
 plotly
 pytest
+nbformat
