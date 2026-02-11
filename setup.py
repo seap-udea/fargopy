@@ -28,7 +28,7 @@ setuptools.setup(
         "Topic :: Scientific/Engineering :: Astronomy",
         "Topic :: Scientific/Engineering :: Physics",
     ],
-    version="1.1.1",
+    version='1.1.2',
     # ######################################################################
     # FILES
     # ######################################################################
