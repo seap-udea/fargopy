@@ -1834,15 +1834,15 @@ class Simulation(fargopy.Fargobj):
         filename = os.path.join(dir, basename)
 
         # Load fields (tolerant to different return types)
-        gasdens = self.load_field(
-            fields="gasdens", snapshot=snapshot
+        gasdens = self._load_field_raw(
+            field="gasdens", snapshot=snapshot, field_type="scalar"
         )
-        gasv = self.load_field(fields="gasv", snapshot=snapshot)
+        gasv = self._load_field_raw(field="gasv", snapshot=snapshot, field_type="vector")
 
         rho = np.log10(
-            getattr(gasdens, "data", gasdens) * self.URHO
+            gasdens.data * self.URHO
         )  # convert to physical units and log10
-        vel = getattr(gasv, "data", gasv) * self.UL / self.UT * 1e-5
+        vel = gasv.data * self.UL / self.UT * 1e-5
 
         # Normalize shapes
         if rho.ndim == 4 and rho.shape[0] == 1:
