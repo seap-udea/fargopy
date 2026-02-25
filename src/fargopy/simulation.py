@@ -1459,15 +1459,7 @@ class Simulation(fargopy.Fargobj):
             single_input = True
             fields = [fields]
 
-        # Default behavior: when interpolate is None, treat it as True
-        # to preserve the FieldInterpolator-based API by default.
-        # Backward compatibility:
-        #  - interpolate=True  -> return FieldInterpolator (explicit)
-        #  - interpolate=None  -> treated as True -> return FieldInterpolator
-        #  - interpolate=False -> return legacy Field or list of Fields
 
-        # if interpolate is None:
-        #     interpolate = True
 
         self.field_handler = fargopy.FieldsHandler(
             sim=self,
@@ -1843,9 +1835,9 @@ class Simulation(fargopy.Fargobj):
 
         # Load fields (tolerant to different return types)
         gasdens = self.load_field(
-            fields="gasdens", snapshot=snapshot, interpolate=False
+            fields="gasdens", snapshot=snapshot
         )
-        gasv = self.load_field(fields="gasv", snapshot=snapshot, interpolate=False)
+        gasv = self.load_field(fields="gasv", snapshot=snapshot)
 
         rho = np.log10(
             getattr(gasdens, "data", gasdens) * self.URHO
