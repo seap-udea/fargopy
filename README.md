@@ -15,9 +15,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19430857.svg)](https://doi.org/10.5281/zenodo.19430857)
 [![Documentation Status](https://readthedocs.org/projects/fargopy/badge/?version=latest)](https://fargopy.readthedocs.io/en/latest/?badge=latest)
 [![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)
-<a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-</a>
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb)
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/seap-udea/fargopy/main/gallery/pds-70c-disk_densiy-200_orbits_high_resolution.gif" alt="PDS 70c disk density" width="60%"/>
@@ -107,9 +105,7 @@ pip install -e .
 
 Since `FARGOpy` is a python wrap for `FARGO3D` the ideal environment to work with the package is `IPython`/`Jupyter`. It works really fine in `Google Colab` ensuing training and demonstration purposes. This README, for instance, can be ran in `Google Colab`:
 
-<a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-</a>
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb)
 
 This code only works in Colab and it is intended to install the latest version of `FARGOpy`
 
@@ -170,7 +166,7 @@ import fargopy as fp
 ```
 
     Configuring FARGOpy for the first time
-    Running FARGOpy version 1.1.1.
+    Running FARGOpy version X.Y.Z.
     NOTE: Since alpha versions (<=0.X.X) a major refactor has been done in versions 1.1.X.
     Please check the documentation for more information.
 
@@ -200,7 +196,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -293,7 +289,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 
     Uncompressing p3disoj.tgz into /tmp/p3disoj
     Done.
-    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
+    Your simulation is now connected with '/local_directory/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -489,9 +485,4 @@ If you use `FARGOpy` in your research, please cite:
 ```
 
 Replace `0000.00000` once the arXiv identifier is assigned.
-
----
-*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
-
-Alejandro Murillo-González, Jorge I. Zuluaga and Matías Montesinos © 2023-present
 
