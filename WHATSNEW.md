@@ -2,6 +2,16 @@
 
 ## What's new
 
+- **Version 1.2.***:
+  - Added a new `coords` module (`src/fargopy/coords.py`) to improve coordinate handling workflows.
+  - Improved 3D interpolation and related field-processing routines.
+  - Updated core modules for analysis and post-processing: `fields`, `flux`, `plot`, `simulation`, and package initialization.
+  - Added dedicated tests for coordinates/flux workflows (`test_coords_flux.py`).
+  - Fixed ParaView export and ParaView data loading issues.
+  - Refreshed tutorial notebooks and gallery assets for interpolation/flux examples.
+  - Updated project metadata for release and citation (`.zenodo.json`, `CITATION.cff`) and refreshed README citation/badges.
+  - Removed obsolete gallery assets and deprecated development notebook artifacts.
+
 - **Version 1.0.***:
   - Refactoring of the code to make it more user-friendly.
   - Graphical interface for FARGOpy (using PyQt5).
