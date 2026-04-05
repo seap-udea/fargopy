@@ -1,0 +1,26 @@
+{
+  "title": "fargopy",
+  "description": "Python interface and tools for working with FARGO3D simulations.",
+  "creators": [
+    {
+      "name": "Zuluaga, Jorge I.",
+      "affiliation": "Universidad de Antioquia"
+    },
+    {
+      "name": "Murillo-Gonzalez, Alejandro"
+    },
+    {
+      "name": "Montesinos, Matias"
+    }
+  ],
+  "keywords": [
+    "astrophysics",
+    "hydrodynamics",
+    "fargo3d",
+    "python",
+    "simulation"
+  ],
+  "license": "AGPL-3.0-only",
+  "upload_type": "software",
+  "access_right": "open"
+}

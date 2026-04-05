@@ -6,13 +6,15 @@
 
 <h2 align="center">A FARGO3D wrapper and more</h2>
 
-<!-- This are visual tags that you may add to your package at the beginning with useful information on your package -->
+<!-- Badges -->
 [![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/) 
 [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/) 
 [![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/seap-udea/fargopy/blob/master/LICENSE) 
 [![python](https://img.shields.io/badge/python-3-grey)](https://pypi.org/project/fargopy/) 
 [![Powered by FARGO3D](https://img.shields.io/badge/Powered%20by-FARGO3D-blue)](https://fargo3d.bitbucket.io/)
-<!--[![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)-->
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.TBD.svg)](https://doi.org/10.5281/zenodo.TBD)
+[![Documentation Status](https://readthedocs.org/projects/fargopy/badge/?version=latest)](https://fargopy.readthedocs.io/en/latest/?badge=latest)
+[![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
@@ -456,21 +458,35 @@ Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
 If you use `FARGOpy` in your research, please cite:
 
 ```bibtex
-@software{FARGOpy2026,
-  author = {Zuluaga, Jorge I., Murillo-González, Alejandro and Montesinos, Matías},
-  title = {FARGOpy: A python wrapper for FARGO3D and more},
-  year = {2026},
-  url = {https://github.com/seap-udea/fargopy}
+@software{FARGOpy2026Zenodo,
+  author       = {Zuluaga, Jorge I. and Murillo-Gonz{\'a}lez, Alejandro and Montesinos, Mat{\'i}as},
+  title        = {FARGOpy: A python wrapper for FARGO3D and more},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.TBD},
+  url          = {https://doi.org/10.5281/zenodo.TBD}
+}
+
+@misc{FARGOpyArXiv2026,
+  author       = {Zuluaga, Jorge I. and Murillo-Gonz{\'a}lez, Alejandro and Montesinos, Mat{\'i}as},
+  title        = {FARGOpy: A Python Package for Post-processing and Analyzing FARGO3D Hydrodynamical Simulations},
+  year         = {2026},
+  eprint       = {0000.00000},
+  archivePrefix= {arXiv},
+  primaryClass = {astro-ph.EP},
+  url          = {https://arxiv.org/abs/0000.00000}
 }
 
 @misc{MurilloGonzalez2026,
-    author       = {Murillo-Gonzalez, Alejandro and Zuluaga, Jorge I. and Montesinos, Matias},
-    title        = {{FARGOpy}: A {Python} Package for Post-processing and Analyzing {FARGO3D} Hydrodynamical Simulations},
-    year         = {2026},
-    howpublished = {\url{https://github.com/seap-udea/fargopy/blob/main/science/introducing-fargopy/MurilloZuluagaMontesinos2026-IntroducingFARGOpy.pdf}},
-    note         = {Manuscript hosted on GitHub},
+  author       = {Murillo-Gonzalez, Alejandro and Zuluaga, Jorge I. and Montesinos, Matias},
+  title        = {{FARGOpy}: A {Python} Package for Post-processing and Analyzing {FARGO3D} Hydrodynamical Simulations},
+  year         = {2026},
+  howpublished = {\url{https://github.com/seap-udea/fargopy/blob/main/science/introducing-fargopy/MurilloZuluagaMontesinos2026-IntroducingFARGOpy.pdf}},
+  note         = {Manuscript hosted on GitHub}
 }
 ```
+
+Replace `zenodo.TBD` and `0000.00000` once the Zenodo DOI and arXiv identifier are assigned.
 
 <!-- You may also cite our first science paper using the package:
 
