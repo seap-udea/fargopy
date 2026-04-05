@@ -7,12 +7,12 @@
 <h2 align="center">A FARGO3D wrapper and more</h2>
 
 <!-- Badges -->
-[![version](https://img.shields.io/pypi/v/fargopy?color=blue)](https://pypi.org/project/fargopy/) 
+[![version](https://img.shields.io/badge/PyPI-v1.2.0-blue)](https://pypi.org/project/fargopy/) 
 [![downloads](https://img.shields.io/pypi/dw/fargopy)](https://pypi.org/project/fargopy/) 
 [![License](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://github.com/seap-udea/fargopy/blob/master/LICENSE) 
 [![python](https://img.shields.io/badge/python-3-grey)](https://pypi.org/project/fargopy/) 
 [![Powered by FARGO3D](https://img.shields.io/badge/Powered%20by-FARGO3D-blue)](https://fargo3d.bitbucket.io/)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.TBD.svg)](https://doi.org/10.5281/zenodo.TBD)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19430857.svg)](https://doi.org/10.5281/zenodo.19430857)
 [![Documentation Status](https://readthedocs.org/projects/fargopy/badge/?version=latest)](https://fargopy.readthedocs.io/en/latest/?badge=latest)
 [![arXiv](https://img.shields.io/badge/arXiv-0000.00000-orange.svg?style=flat)](https://arxiv.org/abs/0000.00000)
 <a target="_blank" href="https://colab.research.google.com/github/seap-udea/fargopy/blob/main/README.ipynb">
@@ -57,8 +57,8 @@ FARGOpy follows the [Astropy Code of Conduct](https://www.astropy.org/about.html
 
 This project is developed by members the **Solar, Earth and Planetary Physics Group (SEAP)** at Universidad de Antioquia, Colombia and the the **Department of Physics of the Universidad Técnica Federico Santa María (USM)**, Chile. The main developers are:
 
-- **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
 - **Alejandro Murillo-González** (SEAP/FACom/UdeA) - alejandro.murillo1@udea.edu.co
+- **Jorge I. Zuluaga** (SEAP/FACom/UdeA) - jorge.zuluaga@udea.edu.co
 - **Matías Montesinos** (Physics/USM) - matias.montesinosa@usm.cl
 
 This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0) - see the [LICENSE](LICENSE) file for details.
@@ -170,7 +170,7 @@ import fargopy as fp
 ```
 
     Configuring FARGOpy for the first time
-    Running FARGOpy version X.Y.Z.
+    Running FARGOpy version 1.1.1.
     NOTE: Since alpha versions (<=0.X.X) a major refactor has been done in versions 1.1.X.
     Please check the documentation for more information.
 
@@ -200,7 +200,7 @@ Connect to the simulation output directory:
 sim = fp.Simulation(output_dir='/tmp/fargo')
 ```
 
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/fargo'
     Found a variables.par file in '/tmp/fargo', loading properties
     Loading variables
@@ -293,7 +293,7 @@ sim = fp.Simulation(output_dir='/tmp/p3disoj')
 
     Uncompressing p3disoj.tgz into /tmp/p3disoj
     Done.
-    Your simulation is now connected with '/local_directory/fargo3d/'
+    Your simulation is now connected with '/Users/jzuluaga/fargo3d/'
     Now you are connected with output directory '/tmp/p3disoj'
     Found a variables.par file in '/tmp/p3disoj', loading properties
     Loading variables
@@ -458,23 +458,25 @@ Please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for more information.
 If you use `FARGOpy` in your research, please cite:
 
 ```bibtex
-@software{FARGOpy2026Zenodo,
-  author       = {Zuluaga, Jorge I. and Murillo-Gonz{\'a}lez, Alejandro and Montesinos, Mat{\'i}as},
-  title        = {FARGOpy: A python wrapper for FARGO3D and more},
+@software{fargopy_zenodo_2026,
+  author       = {Murillo-Gonzalez, Alejandro and Zuluaga, Jorge I. and Montesinos, Matias},
+  title        = {fargopy},
   year         = {2026},
+  version      = {1.2.0},
   publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.TBD},
-  url          = {https://doi.org/10.5281/zenodo.TBD}
+  doi          = {10.5281/zenodo.19430858},
+  url          = {https://doi.org/10.5281/zenodo.19430858},
+  note         = {Concept DOI: 10.5281/zenodo.19430857}
 }
 
-@misc{FARGOpyArXiv2026,
-  author       = {Zuluaga, Jorge I. and Murillo-Gonz{\'a}lez, Alejandro and Montesinos, Mat{\'i}as},
-  title        = {FARGOpy: A Python Package for Post-processing and Analyzing FARGO3D Hydrodynamical Simulations},
-  year         = {2026},
-  eprint       = {0000.00000},
-  archivePrefix= {arXiv},
-  primaryClass = {astro-ph.EP},
-  url          = {https://arxiv.org/abs/0000.00000}
+@misc{MurilloGonzalezZuluagaMontesinos2026,
+  author        = {Murillo-Gonzalez, Alejandro and Zuluaga, Jorge I. and Montesinos, Matias},
+  title         = {Three-dimensional circumplanetary flows in a PDS 70c-inspired system: hydrodynamic simulations with FARGO3D and analysis with FARGOpy},
+  year          = {2026},
+  eprint        = {0000.00000},
+  archivePrefix = {arXiv},
+  primaryClass  = {astro-ph.EP},
+  url           = {https://arxiv.org/abs/0000.00000}
 }
 
 @misc{MurilloGonzalez2026,
@@ -486,17 +488,10 @@ If you use `FARGOpy` in your research, please cite:
 }
 ```
 
-Replace `zenodo.TBD` and `0000.00000` once the Zenodo DOI and arXiv identifier are assigned.
+Replace `0000.00000` once the arXiv identifier is assigned.
 
-<!-- You may also cite our first science paper using the package:
+---
+*Powered by fargopy*. For more examples see [fargopy GitHub repo](https://github.com/seap-udea/fargopy/tree/main/examples). 
 
-```bibtex
-@article{Zuluaga2026,
-  author = {Murillo-González, Alejandro, Zuluaga, Jorge I. and Montesinos, Matías},
-  title = {Characterizing the PDS 70c Circumplanetary Disk: High-Resolution 3D Simulations and Analysis with FARGO3D and FARGOpy},
-  year = {2026},
-  journal = {In preparation},
-  url = {https://github.com/seap-udea/fargopy}
-}
-``` -->
+Alejandro Murillo-González, Jorge I. Zuluaga and Matías Montesinos © 2023-present
 
