@@ -23,7 +23,7 @@ import numpy as np
 import inspect
 
 # Version
-__version__ = '1.1.2'
+__version__ = '1.2.0'
 
 __all__ = [
     "__version__",
