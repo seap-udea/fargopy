@@ -48,7 +48,7 @@ class Surface:
 
     def __init__(self, type="sphere", radius=1.0, height=None, subdivisions=1,
                  center=(0.0, 0.0, 0.0), z_cut=None, x_axis=1, y_axis=0, z_axis=0,
-                 width=None, length=None):
+                 width=None, length=None, coords='cartesian'):
         """Initialize a Surface instance.
 
         Parameters
@@ -74,6 +74,12 @@ class Surface:
         width, length : float, optional
             Explicit span of the plane along the two in-plane axes. If
             omitted, each defaults to ``2 * radius``.
+        coords : str, optional
+            Default coordinate system for surface geometry ('cartesian', 'cylindrical', 
+            or 'spherical'). This affects the output of properties like 
+            ``centers_in_coords`` and ``normals_in_coords``. The tessellation is 
+            always computed in Cartesian coordinates internally, but results can be 
+            automatically converted to the specified system. Default is 'cartesian'.
         """
         self.type = type
         self.radius = radius
@@ -90,10 +96,15 @@ class Surface:
         if self.width <= 0 or self.length <= 0:
             raise ValueError("width and length must be positive numbers")
         self.volume = None
+        
+        # Coordinate system for output
+        self.coords = coords.lower()
+        if self.coords not in ['cartesian', 'cylindrical', 'spherical']:
+            raise ValueError(f"Invalid coords '{coords}'. Must be 'cartesian', 'cylindrical', or 'spherical'.")
 
-        # Attributes for tessellation
-        self.centers = None
-        self.normals = None
+        # Attributes for tessellation (internal storage always in cartesian)
+        self._centers = None
+        self._normals = None
         self.areas = None
         self.triangles = None
         self.num_triangles = 0
@@ -102,7 +113,7 @@ class Surface:
         if self.type == "sphere":
             self.num_triangles = 20 * (4 ** self.subdivisions)
             self.triangles = np.zeros((self.num_triangles, 3, 3))
-            self.centers = np.zeros((self.num_triangles, 3))
+            self._centers = np.zeros((self.num_triangles, 3))
             self.areas = np.zeros(self.num_triangles)
             self._tessellate_sphere()
         elif self.type == "cylinder":
@@ -138,7 +149,7 @@ class Surface:
         self.num_triangles = 20 * (4 ** self.subdivisions)
         self.triangle_index = 0
         self.triangles = np.zeros((self.num_triangles, 3, 3))
-        self.centers = np.zeros((self.num_triangles, 3))
+        self._centers = np.zeros((self.num_triangles, 3))
         self.areas = np.zeros(self.num_triangles)
 
         for face in faces:
@@ -207,7 +218,7 @@ class Surface:
                 new_triangles.extend(clipped)
             self.triangles = np.array(new_triangles)
             self.num_triangles = len(self.triangles)
-            self.centers = np.mean(self.triangles, axis=1)
+            self._centers = np.mean(self.triangles, axis=1)
             self.areas = np.array([self._calculate_triangle_area(*tri) for tri in self.triangles])
             self._calculate_normals()
         else:
@@ -296,10 +307,10 @@ class Surface:
         centers[:, plane_axes[0]] = grid_a.ravel() + self.center[plane_axes[0]]
         centers[:, plane_axes[1]] = grid_b.ravel() + self.center[plane_axes[1]]
         centers[:, normal_axis] = self.center[normal_axis]
-        self.centers = centers
+        self._centers = centers
         normal_vector = np.zeros(3)
         normal_vector[normal_axis] = 1.0
-        self.normals = np.tile(normal_vector, (num_cells, 1))
+        self._normals = np.tile(normal_vector, (num_cells, 1))
         cell_edge_a = (self.width) / self.subdivisions
         cell_edge_b = (self.length) / self.subdivisions
         self.areas = np.full(num_cells, cell_edge_a * cell_edge_b)
@@ -349,9 +360,9 @@ class Surface:
     def _calculate_polygon_centers(self):
         """Compute and cache centroids for all stored triangles.
 
-        The computed centroids are assigned to ``self.centers``.
+        The computed centroids are assigned to ``self._centers``.
         """
-        self.centers = np.mean(self.triangles, axis=1)
+        self._centers = np.mean(self.triangles, axis=1)
 
     @staticmethod
     def _calculate_triangle_area(v1, v2, v3):
@@ -386,9 +397,9 @@ class Surface:
 
         The method enforces that each normal points away from ``self.center``;
         if the computed normal points inward it is flipped.
-        Results are stored in ``self.normals``.
+        Results are stored in ``self._normals``.
         """
-        self.normals = np.zeros((self.num_triangles, 3))
+        self._normals = np.zeros((self.num_triangles, 3))
         for i, tri in enumerate(self.triangles):
             AB = tri[1] - tri[0]
             AC = tri[2] - tri[0]
@@ -398,7 +409,7 @@ class Surface:
             to_centroid = centroid - self.center
             if np.dot(normal, to_centroid) < 0:
                 normal = -normal
-            self.normals[i] = normal
+            self._normals[i] = normal
 
     def tessellate(self):
         """Recompute the tessellation from current instance parameters.
@@ -415,6 +426,309 @@ class Surface:
             self._tessellate_plane()
         else:
             raise ValueError("Unsupported surface type. Use 'sphere', 'cylinder', or 'plane'.")
+
+    def get_centers_in_coords(self, coords_system='cartesian'):
+        """
+        Get surface centers in the specified coordinate system.
+        
+        This method converts the tessellation centers from Cartesian coordinates
+        to the requested coordinate system. This is essential for fast interpolation
+        when the simulation data is stored in spherical or cylindrical coordinates,
+        as it allows using RegularGridInterpolator instead of slow unstructured methods.
+        
+        Parameters
+        ----------
+        coords_system : str, optional
+            Target coordinate system: 'cartesian', 'spherical', or 'cylindrical'.
+            Default is 'cartesian'.
+            
+        Returns
+        -------
+        tuple of np.ndarray
+            For cartesian: (x, y, z)
+            For spherical: (phi, r, theta)
+            For cylindrical: (phi, r, z)
+            Each array has shape (n_points,) corresponding to surface centers.
+            
+        Notes
+        -----
+        The coordinate transformations are:
+        - Spherical: phi = arctan2(y, x), r = sqrt(x² + y² + z²), theta = arccos(z/r)
+        - Cylindrical: phi = arctan2(y, x), r = sqrt(x² + y²), z = z
+        
+        Examples
+        --------
+        >>> surface = Surface(type='sphere', radius=1.0, subdivisions=2)
+        >>> phi, r, theta = surface.get_centers_in_coords('spherical')
+        >>> # Use these for fast interpolation with spherical simulation data
+        """
+        if self.type == "sphere":
+            centers = self._centers
+        elif self.type == "cylinder":
+            if not hasattr(self, 'top_centers'):
+                raise ValueError("Cylinder not tessellated. Call tessellate() first.")
+            centers = np.concatenate([self.top_centers, self.bottom_centers, self.lateral_centers], axis=0)
+        elif self.type == "plane":
+            if self._centers is None:
+                raise ValueError("Plane not tessellated. Call tessellate() first.")
+            centers = self._centers
+        else:
+            raise ValueError(f"Unsupported surface type: {self.type}")
+        
+        x = centers[:, 0]
+        y = centers[:, 1]
+        z = centers[:, 2]
+        
+        if coords_system == 'cartesian':
+            return x, y, z
+        elif coords_system == 'spherical':
+            r = np.sqrt(x**2 + y**2 + z**2)
+            # Avoid division by zero for points at origin
+            r_safe = np.where(r > 1e-15, r, 1e-15)
+            theta = np.arccos(np.clip(z / r_safe, -1, 1))
+            phi = np.arctan2(y, x)
+            return phi, r, theta
+        elif coords_system == 'cylindrical':
+            r_cyl = np.sqrt(x**2 + y**2)
+            phi = np.arctan2(y, x)
+            return phi, r_cyl, z
+        else:
+            raise ValueError(f"Unknown coordinate system: {coords_system}")
+    
+    def get_normals_in_coords(self, coords_system='cartesian'):
+        """
+        Get surface normals in the specified coordinate system.
+        
+        Transforms the unit normal vectors from Cartesian to the requested
+        coordinate system. This is useful for flux calculations when working
+        in native simulation coordinates.
+        
+        Parameters
+        ----------
+        coords_system : str, optional
+            Target coordinate system: 'cartesian', 'spherical', or 'cylindrical'.
+            
+        Returns
+        -------
+        tuple of np.ndarray
+            For cartesian: (nx, ny, nz)
+            For spherical: (n_phi, n_r, n_theta)
+            For cylindrical: (n_phi, n_r, n_z)
+            Each array has shape (n_points,).
+            
+        Notes
+        -----
+        The transformation uses Jacobian matrices for the coordinate change.
+        For spherical: [n_phi, n_r, n_theta]^T = J^T [nx, ny, nz]^T
+        For cylindrical: [n_phi, n_r, n_z]^T = J^T [nx, ny, nz]^T
+        """
+        if self.type == "sphere":
+            normals = self._normals
+            centers = self._centers
+        elif self.type == "cylinder":
+            if not hasattr(self, 'top_normals'):
+                raise ValueError("Cylinder not tessellated. Call tessellate() first.")
+            normals = np.concatenate([self.top_normals, self.bottom_normals, self.lateral_normals], axis=0)
+            centers = np.concatenate([self.top_centers, self.bottom_centers, self.lateral_centers], axis=0)
+        elif self.type == "plane":
+            if self._normals is None:
+                raise ValueError("Plane not tessellated. Call tessellate() first.")
+            normals = self._normals
+            centers = self._centers
+        else:
+            raise ValueError(f"Unsupported surface type: {self.type}")
+        
+        nx = normals[:, 0]
+        ny = normals[:, 1]
+        nz = normals[:, 2]
+        
+        if coords_system == 'cartesian':
+            return nx, ny, nz
+        elif coords_system == 'spherical':
+            # Get position coordinates for Jacobian
+            x = centers[:, 0]
+            y = centers[:, 1]
+            z = centers[:, 2]
+            r = np.sqrt(x**2 + y**2 + z**2)
+            r_safe = np.where(r > 1e-15, r, 1e-15)
+            r_xy = np.sqrt(x**2 + y**2)
+            r_xy_safe = np.where(r_xy > 1e-15, r_xy, 1e-15)
+            
+            # Transform: n_i = (∂x^j/∂q^i) n_j where q = (phi, r, theta)
+            # For spherical: x = r sin(theta) cos(phi), y = r sin(theta) sin(phi), z = r cos(theta)
+            sin_theta = r_xy / r_safe
+            cos_theta = z / r_safe
+            sin_phi = y / r_xy_safe
+            cos_phi = x / r_xy_safe
+            
+            # Jacobian transpose (transforms contravariant vectors)
+            n_phi = -r_safe * sin_theta * sin_phi * nx + r_safe * sin_theta * cos_phi * ny
+            n_r = sin_theta * cos_phi * nx + sin_theta * sin_phi * ny + cos_theta * nz
+            n_theta = r_safe * cos_theta * cos_phi * nx + r_safe * cos_theta * sin_phi * ny - r_safe * sin_theta * nz
+            
+            return n_phi, n_r, n_theta
+        elif coords_system == 'cylindrical':
+            # Get position coordinates
+            x = centers[:, 0]
+            y = centers[:, 1]
+            r_cyl = np.sqrt(x**2 + y**2)
+            r_cyl_safe = np.where(r_cyl > 1e-15, r_cyl, 1e-15)
+            sin_phi = y / r_cyl_safe
+            cos_phi = x / r_cyl_safe
+            
+            # Transform for cylindrical
+            n_phi = -r_cyl_safe * sin_phi * nx + r_cyl_safe * cos_phi * ny
+            n_r = cos_phi * nx + sin_phi * ny
+            n_z = nz
+            
+            return n_phi, n_r, n_z
+        else:
+            raise ValueError(f"Unknown coordinate system: {coords_system}")
+
+    @property
+    def centers(self):
+        """
+        Get surface centers in the coordinate system specified by self.coords.
+        
+        This property automatically returns coordinates in the system specified
+        during Surface initialization. For Cartesian, returns shape (N, 3) array.
+        For cylindrical/spherical, returns shape (N, 3) array with columns
+        representing (phi, r, z/theta).
+        
+        Returns
+        -------
+        np.ndarray
+            Array of shape (N, 3) where N is the number of surface patches.
+            - If coords='cartesian': columns are (x, y, z)
+            - If coords='cylindrical': columns are (phi, r, z)
+            - If coords='spherical': columns are (phi, r, theta)
+            
+        Examples
+        --------
+        >>> sphere = fp.flux.Surface(type='sphere', radius=1.0, subdivisions=2, coords='spherical')
+        >>> centers = sphere.centers  # Returns (N, 3) array with (phi, r, theta) columns
+        >>> phi = centers[:, 0]
+        >>> r = centers[:, 1]
+        >>> theta = centers[:, 2]
+        
+        Notes
+        -----
+        Internally, coordinates are always stored in Cartesian form. This property
+        performs the coordinate transformation on-the-fly based on self.coords.
+        """
+        if self.coords == 'cartesian':
+            # Return internal storage directly for cartesian
+            if self.type == "sphere":
+                return self._centers
+            elif self.type == "cylinder":
+                return np.concatenate([self.top_centers, self.bottom_centers, self.lateral_centers], axis=0)
+            elif self.type == "plane":
+                return self._centers
+        else:
+            # Transform to requested coordinate system
+            return np.column_stack(self.get_centers_in_coords(self.coords))
+    
+    @property
+    def normals(self):
+        """
+        Get surface normals in the coordinate system specified by self.coords.
+        
+        This property automatically returns normal vectors in the system specified
+        during Surface initialization. For Cartesian, returns shape (N, 3) array.
+        For cylindrical/spherical, returns shape (N, 3) array with columns
+        representing (n_phi, n_r, n_z/n_theta).
+        
+        Returns
+        -------
+        np.ndarray
+            Array of shape (N, 3) where N is the number of surface patches.
+            - If coords='cartesian': columns are (nx, ny, nz)
+            - If coords='cylindrical': columns are (n_phi, n_r, n_z)
+            - If coords='spherical': columns are (n_phi, n_r, n_theta)
+            
+        Examples
+        --------
+        >>> sphere = fp.flux.Surface(type='sphere', radius=1.0, coords='spherical')
+        >>> normals = sphere.normals  # Returns (N, 3) array with (n_phi, n_r, n_theta) columns
+        >>> n_r = normals[:, 1]  # Radial component (should be ~1 for sphere)
+        
+        Notes
+        -----
+        Internally, normals are always stored in Cartesian form. This property
+        performs the coordinate transformation on-the-fly based on self.coords.
+        Normals are always unit vectors regardless of coordinate system.
+        """
+        if self.coords == 'cartesian':
+            # Return internal storage directly for cartesian
+            if self.type == "sphere":
+                return self._normals
+            elif self.type == "cylinder":
+                return np.concatenate([self.top_normals, self.bottom_normals, self.lateral_normals], axis=0)
+            elif self.type == "plane":
+                return self._normals
+        else:
+            # Transform to requested coordinate system
+            return np.column_stack(self.get_normals_in_coords(self.coords))
+
+    @property
+    def centers_in_coords(self):
+        """
+        Get surface centers in the default coordinate system specified by self.coords.
+        
+        This property provides a convenient way to access surface centers without
+        manually calling get_centers_in_coords(). The coordinate system is determined
+        by the ``coords`` attribute set during initialization or modified later.
+        
+        Returns
+        -------
+        tuple of np.ndarray
+            Coordinates in the system specified by self.coords:
+            - Cartesian: (x, y, z)
+            - Spherical: (phi, r, theta) 
+            - Cylindrical: (phi, r, z)
+            
+        Examples
+        --------
+        >>> surface = fp.Flux.Surface(type='sphere', radius=1.0, subdivisions=2, coords='spherical')
+        >>> phi, r, theta = surface.centers_in_coords
+        >>> # Use directly for interpolation
+        >>> rho = fields.evaluate(var1=phi, var2=r, var3=theta, field='gasdens')
+        
+        Notes
+        -----
+        This is equivalent to calling get_centers_in_coords(self.coords) but more concise.
+        Change self.coords to switch the output coordinate system dynamically.
+        """
+        return self.get_centers_in_coords(self.coords)
+    
+    @property
+    def normals_in_coords(self):
+        """
+        Get surface normals in the default coordinate system specified by self.coords.
+        
+        This property provides a convenient way to access surface normals without
+        manually calling get_normals_in_coords(). The coordinate system is determined
+        by the ``coords`` attribute.
+        
+        Returns
+        -------
+        tuple of np.ndarray
+            Normal vector components in the system specified by self.coords:
+            - Cartesian: (nx, ny, nz)
+            - Spherical: (n_phi, n_r, n_theta)
+            - Cylindrical: (n_phi, n_r, n_z)
+            
+        Examples
+        --------
+        >>> surface = fp.Flux.Surface(type='sphere', radius=1.0, coords='cylindrical')
+        >>> n_phi, n_r, n_z = surface.normals_in_coords
+        
+        Notes
+        -----
+        This is equivalent to calling get_normals_in_coords(self.coords) but more concise.
+        Normals are always unit vectors regardless of coordinate system.
+        """
+        return self.get_normals_in_coords(self.coords)
 
     def generate_dataframe(self):
         """Return tessellation metadata as a pandas :class:`DataFrame`.
@@ -433,8 +747,8 @@ class Surface:
         return pd.DataFrame(data)
 
     def total_mass_mtc(self, sim, field='gasdens', n_samples=10000, snapshot=[0,1],
-                   interpolator='griddata', method='linear', cut_r=None,
-                   follow_planet=True, planet_index=0):
+                   interpolator='regular_grid', method='linear', cut_r=None,
+                   follow_planet=True, planet_index=0, random_seed=None, coords=None):
         """Estimate enclosed mass using Monte Carlo sampling.
 
         The method samples ``n_samples`` points uniformly within the
@@ -464,6 +778,15 @@ class Surface:
             Hill-sphere based regions).
         planet_index : int, optional
             Index of the planet to follow when ``follow_planet`` is True.
+        random_seed : int, optional
+            Random seed for reproducibility of Monte Carlo sampling.
+            If None (default), results will vary between runs.
+            Set to a fixed integer for reproducible results.
+        coords : str, optional
+            Coordinate system to use for field loading and interpolation.
+            If None, uses ``self.coords``. Options are 'cartesian', 'cylindrical', 
+            or 'spherical'. Using the simulation's native coordinate system 
+            enables faster RegularGridInterpolator.
 
         Returns
         -------
@@ -471,6 +794,11 @@ class Surface:
             Estimated enclosed mass. Returns a single float if a single
             snapshot is requested, otherwise an array of estimates.
         """
+        # Determine coordinate system to use
+        if coords is None:
+            coords = self.coords
+        coords = coords.lower()
+        
         if isinstance(snapshot, int):
             times = [snapshot]
         else:
@@ -478,9 +806,22 @@ class Surface:
         mass = np.zeros(len(times))
         
         planet = sim.load_planets(snapshot=0)[planet_index]
-        factor = self.radius/planet.hill_radius 
+        factor = self.radius/planet.hill_radius
+        
+        # Warn if n_samples is too low for accurate Monte Carlo estimates
+        if n_samples < 5000:
+            import warnings
+            warnings.warn(
+                f"Monte Carlo sampling with n_samples={n_samples} may produce noisy results. "
+                f"Consider increasing n_samples to 10000 or more for smoother estimates.",
+                UserWarning
+            )
+        
+        # Set random seed for reproducibility if requested
+        if random_seed is not None:
+            np.random.seed(random_seed)
 
-        for i, t in enumerate(tqdm(times, desc="Calculating total mass")):
+        for i, t in enumerate(tqdm(times, desc="Calculating total mass (Monte Carlo)")):
             # Update surface if following planet
             if follow_planet:
                 planet = sim.load_planets(snapshot=int(t))[planet_index]
@@ -489,23 +830,25 @@ class Surface:
                     self.radius = factor * planet.hill_radius
                 self.tessellate()
 
-            # Generate random points inside the sphere
+            # Generate random points inside the sphere (in spherical coordinates)
             u = np.random.uniform(0, 1, int(n_samples))
             v = np.random.uniform(0, 1, int(n_samples))
             w = np.random.uniform(0, 1, int(n_samples))
 
-            r = self.radius * np.cbrt(u)
-            theta = np.arccos(1 - 2 * v)
-            phi = 2 * np.pi * w
+            r_sph = self.radius * np.cbrt(u)
+            theta_sph = np.arccos(1 - 2 * v)
+            phi_sph = 2 * np.pi * w
 
-            x = r * np.sin(theta) * np.cos(phi) + self.center[0]
-            y = r * np.sin(theta) * np.sin(phi) + self.center[1]
-            z = r * np.cos(theta) + self.center[2]
+            # Convert to Cartesian for geometry checks
+            x = r_sph * np.sin(theta_sph) * np.cos(phi_sph) + self.center[0]
+            y = r_sph * np.sin(theta_sph) * np.sin(phi_sph) + self.center[1]
+            z = r_sph * np.cos(theta_sph) + self.center[2]
 
             # Apply z_cut if specified
             if self.z_cut is not None:
                 mask = z > self.z_cut
                 x, y, z = x[mask], y[mask], z[mask]
+                r_sph, theta_sph, phi_sph = r_sph[mask], theta_sph[mask], phi_sph[mask]
                 n_effective = len(x)
                 h = self.radius + self.center[2] - self.z_cut
                 h = np.clip(h, 0, 2*self.radius)
@@ -514,30 +857,54 @@ class Surface:
                 n_effective = int(n_samples)
                 volume = (4/3) * np.pi * self.radius**3
 
-            # Interpolate density at the random points
+            # Load field in the specified coordinate system for fast interpolation
             if cut_r is not None:
                 field_interp = sim.load_field(
                     fields=[field],
                     snapshot=[int(t)],
                     cut=(self.center[0], self.center[1], self.center[2], cut_r),
+                    coords=coords
                 )
             else:
                 field_interp = sim.load_field(
                     fields=[field],
                     snapshot=[int(t)],
                     cut=(self.center[0], self.center[1], self.center[2], self.radius*2),
+                    coords=coords
                 )
 
+            # Convert sample points to the specified coordinate system
+            if coords == 'spherical':
+                var1, var2, var3 = fp.transform_coords('cartesian', 'spherical', x, y, z)
+            elif coords == 'cylindrical':
+                var1, var2, var3 = fp.transform_coords('cartesian', 'cylindrical', x, y, z)
+            else:
+                # Cartesian
+                var1, var2, var3 = x, y, z
+
+            # Interpolate in native coordinates (uses fast RegularGridInterpolator)
             rho = field_interp.evaluate(
                 time=t,
-                var1=x,
-                var2=y,
-                var3=z,
+                var1=var1,
+                var2=var2,
+                var3=var3,
                 interpolator=interpolator,
                 method=method
             )
-            avg_rho = np.mean(rho[~np.isnan(rho)])
-            mass[i] = avg_rho * volume
+            
+            # Compute mass estimate
+            # Filter NaN values (points outside domain)
+            valid_rho = rho[~np.isnan(rho)]
+            
+            if len(valid_rho) == 0:
+                # All points are outside domain - mass is zero
+                mass[i] = 0.0
+            else:
+                # Monte Carlo estimator: V * mean(rho)
+                # If some points are NaN, we need to account for the fraction that's valid
+                fraction_valid = len(valid_rho) / n_effective
+                avg_rho = np.mean(valid_rho)
+                mass[i] = avg_rho * volume * fraction_valid
 
         if len(mass) == 1:
             return mass[0]
@@ -545,9 +912,9 @@ class Surface:
 
 
     def mass_flux(self, sim, field_density='gasdens', field_velocity='gasv',
-                snapshot=[0, 1], interpolator='griddata', method='linear',
+                snapshot=[0, 1], interpolator='regular_grid', method='linear',
                 follow_planet=True, planet_index=0,
-                correct_normals=True, relative_velocity=False):
+                correct_normals=True, relative_velocity=False, coords=None):
         """Compute mass flux through the surface patches.
 
         The instantaneous mass flux for each patch is computed as::
@@ -581,6 +948,12 @@ class Surface:
         relative_velocity : bool, optional
             If True subtract the planet velocity from the interpolated
             fluid velocity prior to flux computation.
+        coords : str, optional
+            Coordinate system to use for field loading and interpolation.
+            If None, uses ``self.coords`` (default coordinate system set during 
+            initialization). Options are 'cartesian', 'cylindrical', or 'spherical'.
+            Using the simulation's native coordinate system enables faster 
+            RegularGridInterpolator instead of unstructured griddata.
 
         Returns
         -------
@@ -591,7 +964,7 @@ class Surface:
         --------
         Compute accretion rate (mass flux) onto a planet:
         
-        >>> surface = fp.Flux.Surface(type='sphere', radius=0.5, subdivisions=3)
+        >>> surface = fp.Flux.Surface(type='sphere', radius=0.5, subdivisions=3, coords='spherical')
         >>> mdot = surface.mass_flux(sim, field_density='gasdens', field_velocity='gasv', follow_planet=True)
         >>> plt.plot(mdot)
         """
@@ -602,6 +975,15 @@ class Surface:
                 "mass_flux() requires a 3D simulation. "
                 "Your simulation is 2D. Flux calculations through 3D surfaces cannot be performed in 2D domains."
             )
+
+        # Determine coordinate system to use
+        if coords is None:
+            coords = self.coords
+        coords = coords.lower()
+        
+        # Validate coordinate system
+        if coords not in ['cartesian', 'cylindrical', 'spherical']:
+            raise ValueError(f"Invalid coords '{coords}'. Must be 'cartesian', 'cylindrical', or 'spherical'.")
 
         steps = snapshot[1] - snapshot[0] + 1
         times = np.linspace(snapshot[0], snapshot[1], steps)
@@ -614,7 +996,7 @@ class Surface:
         for i, t in enumerate(tqdm(times, desc="Calculating mass flux")):
 
             # -------------------------------------------------------------
-            # Update the surface position and scale if following the planet
+            #Update the surface position and scale if following the planet
             # -------------------------------------------------------------
             if follow_planet:
                 planet = sim.load_planets(snapshot=int(t))[planet_index]
@@ -624,16 +1006,23 @@ class Surface:
                     self.radius = factor * planet.hill_radius
 
                 self.tessellate()
+            elif relative_velocity:
+                # Need planet velocity but not position
+                planet = sim.load_planets(snapshot=int(t))[planet_index]
 
             # Planet velocity (for relative velocities)
-            vpx, vpy, vpz = planet.vel.x, planet.vel.y, planet.vel.z
+            if relative_velocity:
+                vpx, vpy, vpz = planet.vel.x, planet.vel.y, planet.vel.z
+            else:
+                vpx, vpy, vpz = 0.0, 0.0, 0.0
 
             # -------------------------------------------------------------
             # Select geometric properties of the surface
+            # Always use internal Cartesian coordinates for geometry
             # -------------------------------------------------------------
             if self.type == "sphere":
-                centers = self.centers
-                normals = self.normals
+                centers = self._centers  # Always use Cartesian for geometric calculations
+                normals = self._normals  # Always use Cartesian for dot products
                 areas = self.areas
                 surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius)
 
@@ -653,8 +1042,8 @@ class Surface:
                             2*self.radius, 2*self.height)
 
             elif self.type == "plane":
-                centers = self.centers
-                normals = self.normals
+                centers = self._centers  # Always use Cartesian for geometric calculations
+                normals = self._normals  # Always use Cartesian for dot products
                 areas = self.areas
                 surface_cut = (self.center[0], self.center[1], self.center[2], 2*self.radius)
 
@@ -663,35 +1052,39 @@ class Surface:
 
             # -------------------------------------------------------------
             # Load both fields simultaneously into a single DataFrame
+            # Use specified coordinate system for optimal interpolation
             # -------------------------------------------------------------
             fields = sim.load_field(
                 fields=[field_density, field_velocity],
                 snapshot=[int(t)],
-                cut=surface_cut
+                cut=surface_cut,
+                coords=coords  # Load in requested coords for fast RegularGridInterpolator
             )
-        
+            
+            # Convert surface centers to the specified coordinate system
+            var1_eval, var2_eval, var3_eval = self.get_centers_in_coords(coords)
 
             # -------------------------------------------------------------
             # Interpolate density
             # -------------------------------------------------------------
             rho = fields.evaluate(
                 time=t,
-                var1=centers[:, 0],
-                var2=centers[:, 1],
-                var3=centers[:, 2],
+                var1=var1_eval,
+                var2=var2_eval,
+                var3=var3_eval,
                 interpolator=interpolator,
                 method=method,
                 field="gasdens"
             )
 
             # -------------------------------------------------------------
-            # Interpolate velocity vector
+            # Interpolate velocity vector  
             # -------------------------------------------------------------
             vel = fields.evaluate(
                 time=t,
-                var1=centers[:, 0],
-                var2=centers[:, 1],
-                var3=centers[:, 2],
+                var1=var1_eval,
+                var2=var2_eval,
+                var3=var3_eval,
                 interpolator=interpolator,
                 method=method,
                 field="gasv"
@@ -700,6 +1093,31 @@ class Surface:
             # Shape fix (3,N → N,3)
             if vel.ndim == 2 and vel.shape[0] == 3:
                 vel = vel.T
+            
+            # -------------------------------------------------------------
+            # Convert velocity to Cartesian for dot product with normals
+            # Normals are always in Cartesian system
+            # -------------------------------------------------------------
+            if coords != 'cartesian':
+                # Use transform_velocity to convert from coords to cartesian
+                # vel is in the format expected by the coordinate system:
+                # - spherical: [v_phi, v_r, v_theta]
+                # - cylindrical: [v_phi, v_r, v_z]
+                
+                # Get position in the original coordinate system for transformation
+                pos_coords = self.get_centers_in_coords(coords)
+                
+                # Transform velocity components to Cartesian
+                if vel.shape[0] == len(centers):
+                    # vel has shape (N, 3)
+                    vel_tuple = (vel[:, 0], vel[:, 1], vel[:, 2])
+                    pos_tuple = pos_coords
+                    
+                    vx, vy, vz = fp.transform_velocity(coords, 'cartesian', vel_tuple, pos_tuple)
+                    vel = np.column_stack([vx, vy, vz])
+                else:
+                    raise ValueError(f"Unexpected velocity shape: {vel.shape}")
+
 
             # -------------------------------------------------------------
             # Ensure normals point outward
@@ -863,7 +1281,7 @@ class Surface:
             raise ValueError("Surface.type must be 'sphere' or 'cylinder'")
 
         # Loop over snapshots
-        for t in times:
+        for t in tqdm(times, desc="Calculating total mass"):
 
             # Follow planet
             if follow_planet:
