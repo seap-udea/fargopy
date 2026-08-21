@@ -104,3 +104,9 @@ release: clean readme push
 
 sleep:
 	sleep 1
+# --- dev/cleanall (auto) ---
+include .dev_common.mk
+
+.PHONY: cleanall
+
+cleanall: _dev_cleanall
